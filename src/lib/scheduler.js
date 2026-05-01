@@ -150,5 +150,5 @@ export function flattenResult(result, schoolId, gradeLunchSlot, totalSlots) {
     }
   }
 
-  return { rows, errors }
+  return { rows, errors: [] }
 }
