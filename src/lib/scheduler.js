@@ -14,7 +14,8 @@ export function buildSchedule(gradeConfigs, subjects, teachers, lunchConfig) {
   const maxPeriods = Math.max(...gradeConfigs.map(gc =>
     Math.max(gc.periods_mon, gc.periods_tue, gc.periods_wed, gc.periods_thu, gc.periods_fri)
   ))
-  const totalSlots = maxPeriods  // 점심 슬롯 별도 행 없음, 교시 수만큼만
+  // 분리 배정 시 점심 슬롯이 절대 슬롯 인덱스를 차지하므로 +1
+  const totalSlots = splitLunch ? maxPeriods + 1 : maxPeriods
 
   // 학년별 점심 슬롯 (0-based)
   // DB의 slot값은 교시번호(예: 3 = 3교시 후 점심 = slot index 3, 즉 4교시 자리)

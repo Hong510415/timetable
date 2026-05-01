@@ -64,7 +64,7 @@ export default function Timetable() {
         gradeLunchSlot[grade] = g.slot  // 교시번호 그대로 (3,4,5)
       }
     }
-    return { gradeLunchSlot, totalSlots: maxPeriods }
+    return { gradeLunchSlot, totalSlots: maxPeriods + 1 }
   }
 
   async function handleGenerate() {
@@ -169,8 +169,8 @@ export default function Timetable() {
   const numClasses = gradeConfigs.find(g => g.grade === selectedGrade)?.num_classes || 1
   const gradeLunchSlot = scheduleResult?.gradeLunchSlot || {}
   const totalSlots = scheduleResult?.totalSlots || 6
-  const classViewSlots = 6   // 학급별 보기: 6교시까지
-  const teacherViewSlots = 7 // 교사별 보기: 7교시까지
+  const classViewSlots = totalSlots
+  const teacherViewSlots = totalSlots
 
   const classSlots = getSlotsForClass(selectedGrade, selectedClass)
   const teacherSlots = selectedTeacher ? getSlotsForTeacher(selectedTeacher) : {}
