@@ -54,6 +54,7 @@ export default function Timetable() {
   }
 
   function computeSlotMeta(gc, lunch) {
+    if (!gc?.length) return { gradeLunchSlot: {}, totalSlots: 6 }
     const maxPeriods = Math.max(...gc.map(c => Math.max(c.periods_mon, c.periods_tue, c.periods_wed, c.periods_thu, c.periods_fri)))
     if (!lunch?.split_lunch || !lunch?.lunch_groups?.length) {
       return { gradeLunchSlot: {}, totalSlots: maxPeriods }
@@ -167,8 +168,7 @@ export default function Timetable() {
   }
 
   const numClasses = gradeConfigs.find(g => g.grade === selectedGrade)?.num_classes || 1
-  const gradeLunchSlot = scheduleResult?.gradeLunchSlot || {}
-  const totalSlots = scheduleResult?.totalSlots || 6
+  const { gradeLunchSlot, totalSlots } = computeSlotMeta(gradeConfigs, lunchConfig)
   const classViewSlots = totalSlots
   const teacherViewSlots = totalSlots
 
