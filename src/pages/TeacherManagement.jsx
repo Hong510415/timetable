@@ -198,7 +198,7 @@ export default function TeacherManagement() {
                     >
                       <option value="">과목 선택</option>
                       {subjects.map(s => (
-                        <option key={s.id} value={s.id}>{s.grade}학년 {s.name}</option>
+                        <option key={s.id} value={s.id}>{s.name}</option>
                       ))}
                     </select>
                     <select
