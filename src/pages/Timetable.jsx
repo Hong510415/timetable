@@ -61,10 +61,10 @@ export default function Timetable() {
     const gradeLunchSlot = {}
     for (const g of lunch.lunch_groups) {
       for (const grade of g.grades) {
-        gradeLunchSlot[grade] = g.slot
+        gradeLunchSlot[grade] = g.slot  // 교시번호 그대로 (3,4,5)
       }
     }
-    return { gradeLunchSlot, totalSlots: maxPeriods + 1 }
+    return { gradeLunchSlot, totalSlots: maxPeriods }
   }
 
   async function handleGenerate() {
@@ -169,13 +169,11 @@ export default function Timetable() {
   const numClasses = gradeConfigs.find(g => g.grade === selectedGrade)?.num_classes || 1
   const gradeLunchSlot = scheduleResult?.gradeLunchSlot || {}
   const totalSlots = scheduleResult?.totalSlots || 6
+  const classViewSlots = 6   // 학급별 보기: 6교시까지
+  const teacherViewSlots = 7 // 교사별 보기: 7교시까지
 
   const classSlots = getSlotsForClass(selectedGrade, selectedClass)
   const teacherSlots = selectedTeacher ? getSlotsForTeacher(selectedTeacher) : {}
-
-  const gradeLunchForSelected = tab === 'class'
-    ? (gradeLunchSlot[selectedGrade] !== undefined ? { [selectedGrade]: gradeLunchSlot[selectedGrade] } : {})
-    : gradeLunchSlot
 
   return (
     <div className="p-10 bg-gray-50 min-h-full">
@@ -252,8 +250,8 @@ export default function Timetable() {
               </div>
               <TimetableGrid
                 slots={classSlots}
-                totalSlots={totalSlots}
-                gradeLunchSlot={gradeLunchForSelected}
+                totalSlots={classViewSlots}
+                gradeLunchSlot={gradeLunchSlot}
                 teachers={teachers}
                 subjects={subjects}
                 onCellClick={(day, slot, cell) => openEditModal(day, slot, cell)}
@@ -275,7 +273,7 @@ export default function Timetable() {
               </div>
               <TeacherTimetableGrid
                 slots={teacherSlots}
-                totalSlots={totalSlots}
+                totalSlots={teacherViewSlots}
                 gradeLunchSlot={gradeLunchSlot}
               />
             </>
@@ -299,9 +297,8 @@ export default function Timetable() {
   )
 }
 
-function TeacherTimetableGrid({ slots, totalSlots, gradeLunchSlot }) {
+function TeacherTimetableGrid({ slots, totalSlots }) {
   const DAY_LABELS = ['월', '화', '수', '목', '금']
-  const allLunchSlots = Object.values(gradeLunchSlot)
 
   return (
     <div className="border border-gray-200 rounded-sm overflow-hidden bg-white">
@@ -311,33 +308,25 @@ function TeacherTimetableGrid({ slots, totalSlots, gradeLunchSlot }) {
           <div key={d} className="flex-1 h-9 flex items-center justify-center border-r border-gray-200 last:border-r-0 text-[11px] font-semibold text-gray-500">{d}</div>
         ))}
       </div>
-      {Array.from({ length: totalSlots }, (_, slot) => {
-        const isLunch = allLunchSlots.includes(slot) && allLunchSlots.length > 0
-        return (
-          <div key={slot} className={`flex border-t border-gray-100 ${isLunch ? 'h-8 bg-gray-50' : 'h-[62px]'}`}>
-            <div className="w-[72px] flex-shrink-0 border-r border-gray-200 flex items-center justify-center text-[11px] font-semibold text-gray-400 bg-gray-50">
-              {isLunch ? '점심' : `${slot + 1}교시`}
-            </div>
-            {Array.from({ length: 5 }, (_, day) => {
-              if (isLunch) {
-                return <div key={day} className="flex-1 border-r border-gray-100 last:border-r-0 flex items-center justify-center text-[11px] text-gray-300">점심시간</div>
-              }
-              const cell = slots?.[day]?.[slot]
-              return (
-                <div key={day} className="flex-1 border-r border-gray-100 last:border-r-0 flex flex-col items-center justify-center gap-0.5">
-                  {cell ? (
-                    <>
-                      <span className="text-[12px] font-semibold text-gray-900">{cell.label}</span>
-                    </>
-                  ) : (
-                    <span className="text-[12px] text-gray-200">—</span>
-                  )}
-                </div>
-              )
-            })}
+      {Array.from({ length: totalSlots }, (_, slot) => (
+        <div key={slot} className="flex border-t border-gray-100 h-[62px]">
+          <div className="w-[72px] flex-shrink-0 border-r border-gray-200 flex items-center justify-center text-[11px] font-semibold text-gray-400 bg-gray-50">
+            {slot + 1}교시
           </div>
-        )
-      })}
+          {Array.from({ length: 5 }, (_, day) => {
+            const cell = slots?.[day]?.[slot]
+            return (
+              <div key={day} className="flex-1 border-r border-gray-100 last:border-r-0 flex flex-col items-center justify-center gap-0.5">
+                {cell ? (
+                  <span className="text-[12px] font-semibold text-gray-900">{cell.label}</span>
+                ) : (
+                  <span className="text-[12px] text-gray-200">—</span>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      ))}
     </div>
   )
 }
