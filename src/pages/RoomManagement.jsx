@@ -1,0 +1,204 @@
+import { useEffect, useState } from 'react'
+import { Plus, X, Trash2, Edit2 } from 'lucide-react'
+import { supabase } from '../lib/supabase'
+
+const DAY_LABELS = ['월', '화', '수', '목', '금']
+
+export default function RoomManagement() {
+  const [schoolId, setSchoolId] = useState(null)
+  const [rooms, setRooms] = useState([])
+  const [totalSlots, setTotalSlots] = useState(6)
+  const [showModal, setShowModal] = useState(false)
+  const [editingRoom, setEditingRoom] = useState(null)
+  const [form, setForm] = useState({ name: '' })
+  const [blockedSlots, setBlockedSlots] = useState({}) // roomId -> Set of "day-slot"
+  const [savingBlocked, setSavingBlocked] = useState(false)
+
+  useEffect(() => { load() }, [])
+
+  async function load() {
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data: school } = await supabase.from('schools').select('id').eq('user_id', user.id).single()
+    if (!school) return
+    setSchoolId(school.id)
+
+    const [{ data: r }, { data: gc }, { data: lunch }, { data: blocked }] = await Promise.all([
+      supabase.from('rooms').select('*').eq('school_id', school.id).order('name'),
+      supabase.from('grade_configs').select('*').eq('school_id', school.id),
+      supabase.from('lunch_config').select('*').eq('school_id', school.id).single(),
+      supabase.from('room_blocked_slots').select('*').eq('school_id', school.id),
+    ])
+
+    setRooms(r || [])
+
+    // compute totalSlots
+    if (gc?.length) {
+      const maxP = Math.max(...gc.map(c => Math.max(c.periods_mon, c.periods_tue, c.periods_wed, c.periods_thu, c.periods_fri)))
+      const hasSplit = lunch?.split_lunch && lunch?.lunch_groups?.length > 0
+      setTotalSlots(hasSplit ? maxP + 1 : maxP)
+    }
+
+    // build blockedSlots map
+    const map = {}
+    for (const b of (blocked || [])) {
+      if (!map[b.room_id]) map[b.room_id] = new Set()
+      map[b.room_id].add(`${b.day_of_week}-${b.slot}`)
+    }
+    setBlockedSlots(map)
+  }
+
+  function openAdd() {
+    setEditingRoom(null)
+    setForm({ name: '' })
+    setShowModal(true)
+  }
+
+  function openEdit(room) {
+    setEditingRoom(room)
+    setForm({ name: room.name })
+    setShowModal(true)
+  }
+
+  async function handleDelete(roomId) {
+    if (!confirm('이 특별실을 삭제하시겠습니까?')) return
+    await supabase.from('rooms').delete().eq('id', roomId)
+    load()
+  }
+
+  async function handleSave() {
+    if (!form.name.trim()) return alert('특별실 이름을 입력하세요')
+    if (editingRoom) {
+      await supabase.from('rooms').update({ name: form.name }).eq('id', editingRoom.id)
+    } else {
+      await supabase.from('rooms').insert({ name: form.name, school_id: schoolId })
+    }
+    setShowModal(false)
+    load()
+  }
+
+  async function toggleBlocked(roomId, day, slot) {
+    const key = `${day}-${slot}`
+    const current = blockedSlots[roomId] || new Set()
+    const newSet = new Set(current)
+
+    if (newSet.has(key)) {
+      newSet.delete(key)
+      await supabase.from('room_blocked_slots').delete()
+        .eq('room_id', roomId).eq('day_of_week', day).eq('slot', slot)
+    } else {
+      newSet.add(key)
+      await supabase.from('room_blocked_slots').insert({
+        room_id: roomId, school_id: schoolId, day_of_week: day, slot,
+      })
+    }
+
+    setBlockedSlots(prev => ({ ...prev, [roomId]: newSet }))
+  }
+
+  return (
+    <div className="p-10 bg-gray-50 min-h-full">
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-[22px] font-bold">특별실 관리</h1>
+        <button
+          onClick={openAdd}
+          className="flex items-center gap-2 h-10 px-4 bg-black text-white text-[13px] font-semibold rounded-sm hover:bg-gray-800 transition-colors"
+        >
+          <Plus size={14} />특별실 추가
+        </button>
+      </div>
+
+      <div className="flex items-center gap-2 p-3 bg-gray-100 rounded-sm mb-5 text-[12px] text-gray-500">
+        💡 사용 불가 시간대를 체크하면 해당 시간에 특별실 배정이 제외됩니다. (예: 방송부 사용, 청소 시간 등)
+      </div>
+
+      {rooms.length === 0 ? (
+        <div className="text-center py-20 text-gray-300 text-[14px]">특별실을 추가하세요</div>
+      ) : (
+        <div className="flex flex-col gap-5">
+          {rooms.map(room => (
+            <div key={room.id} className="bg-white border border-gray-200 rounded-sm p-5">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <span className="h-9 px-3 bg-black text-white text-[13px] font-bold flex items-center rounded-sm">
+                    {room.name}
+                  </span>
+                  <span className="text-[12px] text-gray-400">사용 불가 시간 설정</span>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => openEdit(room)}
+                    className="h-8 px-3 border border-gray-300 rounded-sm text-[12px] hover:bg-gray-50 flex items-center gap-1"
+                  >
+                    <Edit2 size={12} />편집
+                  </button>
+                  <button
+                    onClick={() => handleDelete(room.id)}
+                    className="h-8 px-3 border border-red-200 rounded-sm text-[12px] text-red-500 hover:bg-red-50 flex items-center gap-1"
+                  >
+                    <Trash2 size={12} />삭제
+                  </button>
+                </div>
+              </div>
+
+              {/* 사용 불가 슬롯 그리드 */}
+              <div className="border border-gray-200 rounded-sm overflow-hidden">
+                <div className="flex bg-gray-50 border-b border-gray-200">
+                  <div className="w-[64px] flex-shrink-0 border-r border-gray-200 h-8 flex items-center justify-center text-[11px] font-semibold text-gray-500">교시</div>
+                  {DAY_LABELS.map(d => (
+                    <div key={d} className="flex-1 h-8 flex items-center justify-center text-[11px] font-semibold text-gray-500 border-r border-gray-200 last:border-r-0">{d}</div>
+                  ))}
+                </div>
+                {Array.from({ length: totalSlots }, (_, slot) => (
+                  <div key={slot} className="flex border-t border-gray-100">
+                    <div className="w-[64px] flex-shrink-0 border-r border-gray-200 flex items-center justify-center text-[11px] text-gray-400 bg-gray-50 h-10">
+                      {slot + 1}교시
+                    </div>
+                    {Array.from({ length: 5 }, (_, day) => {
+                      const blocked = blockedSlots[room.id]?.has(`${day}-${slot}`)
+                      return (
+                        <div
+                          key={day}
+                          onClick={() => toggleBlocked(room.id, day, slot)}
+                          className={`flex-1 border-r border-gray-100 last:border-r-0 h-10 flex items-center justify-center cursor-pointer transition-colors
+                            ${blocked ? 'bg-gray-800 hover:bg-gray-700' : 'hover:bg-gray-50'}`}
+                        >
+                          {blocked && <span className="text-[11px] text-white font-semibold">✕</span>}
+                        </div>
+                      )
+                    })}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {showModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white w-full max-w-[400px] rounded-sm border border-gray-200 p-7">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-[16px] font-bold">{editingRoom ? '특별실 편집' : '특별실 추가'}</h2>
+              <button onClick={() => setShowModal(false)}><X size={18} className="text-gray-400" /></button>
+            </div>
+            <div className="mb-5">
+              <label className="text-[12px] font-semibold text-gray-600 block mb-1.5">특별실 이름</label>
+              <input
+                placeholder="예: 음악실, 컴퓨터실"
+                value={form.name}
+                onChange={e => setForm({ name: e.target.value })}
+                className="w-full h-10 px-3 border border-gray-300 rounded-sm text-[13px] outline-none focus:border-black"
+                autoFocus
+                onKeyDown={e => e.key === 'Enter' && handleSave()}
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setShowModal(false)} className="h-10 px-4 border border-gray-300 rounded-sm text-[13px] hover:bg-gray-50">취소</button>
+              <button onClick={handleSave} className="h-10 px-5 bg-black text-white text-[13px] font-semibold rounded-sm hover:bg-gray-800">저장</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
