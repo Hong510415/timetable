@@ -77,7 +77,7 @@ export default function Timetable() {
       const result = buildSchedule(gradeConfigs, subjects, teachers, lunchConfig || { split_lunch: false, lunch_groups: [] })
       setScheduleResult(result)
 
-      const { rows, errors: flatErrors } = flattenResult(result.result, schoolId)
+      const { rows, errors: flatErrors } = flattenResult(result.result, schoolId, result.gradeLunchSlot, result.totalSlots)
       setErrors(flatErrors || [])
 
       await supabase.from('timetable_slots').delete().eq('school_id', schoolId)
