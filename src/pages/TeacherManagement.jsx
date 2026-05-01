@@ -212,23 +212,6 @@ export default function TeacherManagement() {
                 {form.assignments.map((a, i) => (
                   <div key={i} className="flex items-center gap-2 bg-gray-50 p-2 rounded-sm flex-wrap">
                     <select
-                      value={getSubjectName(a.subject_id) || a._subjectName || ''}
-                      onChange={e => {
-                        const name = e.target.value
-                        const sid = findSubjectId(name, a.grade)
-                        setForm(prev => ({
-                          ...prev,
-                          assignments: prev.assignments.map((x, j) => j === i ? { ...x, subject_id: sid, _subjectName: name } : x)
-                        }))
-                      }}
-                      className="flex-1 min-w-[120px] h-9 px-2 border border-gray-200 rounded-sm text-[12px] outline-none bg-white"
-                    >
-                      <option value="">과목 선택</option>
-                      {uniqueSubjectNames.map(name => (
-                        <option key={name} value={name}>{name}</option>
-                      ))}
-                    </select>
-                    <select
                       value={a.grade}
                       onChange={e => {
                         const grade = Number(e.target.value)
@@ -250,6 +233,23 @@ export default function TeacherManagement() {
                     >
                       {Array.from({ length: maxClasses(a.grade) }, (_, k) => k + 1).map(c => (
                         <option key={c} value={c}>{c}반</option>
+                      ))}
+                    </select>
+                    <select
+                      value={getSubjectName(a.subject_id) || a._subjectName || ''}
+                      onChange={e => {
+                        const name = e.target.value
+                        const sid = findSubjectId(name, a.grade)
+                        setForm(prev => ({
+                          ...prev,
+                          assignments: prev.assignments.map((x, j) => j === i ? { ...x, subject_id: sid, _subjectName: name } : x)
+                        }))
+                      }}
+                      className="flex-1 min-w-[100px] h-9 px-2 border border-gray-200 rounded-sm text-[12px] outline-none bg-white"
+                    >
+                      <option value="">과목 선택</option>
+                      {uniqueSubjectNames.map(name => (
+                        <option key={name} value={name}>{name}</option>
                       ))}
                     </select>
                     <div className="flex items-center gap-1">
