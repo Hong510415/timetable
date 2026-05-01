@@ -168,7 +168,9 @@ export default function Timetable() {
   }
 
   const numClasses = gradeConfigs.find(g => g.grade === selectedGrade)?.num_classes || 1
-  const { gradeLunchSlot, totalSlots } = computeSlotMeta(gradeConfigs, lunchConfig)
+  const { gradeLunchSlot } = computeSlotMeta(gradeConfigs, lunchConfig)
+  const splitLunch = lunchConfig?.split_lunch || false
+  const totalSlots = splitLunch ? 7 : 6
   const classViewSlots = totalSlots
   const teacherViewSlots = totalSlots
 
