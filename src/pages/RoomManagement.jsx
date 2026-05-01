@@ -31,12 +31,8 @@ export default function RoomManagement() {
 
     setRooms(r || [])
 
-    // compute totalSlots
-    if (gc?.length) {
-      const maxP = Math.max(...gc.map(c => Math.max(c.periods_mon, c.periods_tue, c.periods_wed, c.periods_thu, c.periods_fri)))
-      const hasSplit = lunch?.split_lunch && lunch?.lunch_groups?.length > 0
-      setTotalSlots(hasSplit ? maxP + 1 : maxP)
-    }
+    const hasSplit = lunch?.split_lunch && lunch?.lunch_groups?.length > 0
+    setTotalSlots(hasSplit ? 7 : 6)
 
     // build blockedSlots map
     const map = {}
