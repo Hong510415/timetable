@@ -194,14 +194,14 @@ export default function SchoolSetup() {
               <div>
                 <p className="text-[12px] text-gray-500 mb-4">
                   각 학년의 점심 위치를 체크하세요.<br />
-                  슬롯 3 = 3교시 후 점심 &nbsp;|&nbsp; 슬롯 4 = 4교시 후 점심 &nbsp;|&nbsp; 슬롯 5 = 5교시 후 점심
+                  3교시 후 점심 = 4교시부터 수업 &nbsp;|&nbsp; 4교시 후 점심 = 5교시부터 수업 &nbsp;|&nbsp; 5교시 후 점심 = 6교시부터 수업
                 </p>
                 <div className="border border-gray-200 rounded-sm overflow-hidden w-fit">
                   <div className="flex bg-gray-50 border-b border-gray-200">
                     <div className="w-[80px] px-3 py-2 text-[11px] font-semibold text-gray-500 border-r border-gray-200">학년</div>
                     {[3, 4, 5].map(slot => (
                       <div key={slot} className="w-[120px] text-center py-2 text-[11px] font-semibold text-gray-500 border-r border-gray-200 last:border-r-0">
-                        슬롯 {slot} 후 점심
+                        {slot}교시 후 점심
                       </div>
                     ))}
                   </div>
