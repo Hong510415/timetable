@@ -65,7 +65,8 @@ export default function SchoolSetup() {
   }
 
   function updateGrade(grade, field, value) {
-    setGradeConfigs(prev => prev.map(c => c.grade === grade ? { ...c, [field]: Number(value) } : c))
+    const num = value === '' ? '' : Number(value)
+    setGradeConfigs(prev => prev.map(c => c.grade === grade ? { ...c, [field]: num } : c))
   }
 
   function toggleLunchGrade(gradeNum, slotIdx) {
@@ -126,6 +127,7 @@ export default function SchoolSetup() {
                   <input
                     type="number" min={1} max={20} value={num_classes}
                     onChange={e => updateGrade(grade, 'num_classes', e.target.value)}
+                    onClick={e => e.target.select()}
                     onFocus={e => e.target.select()}
                     className="w-[72px] h-10 text-center border border-gray-300 rounded-sm text-[14px] font-semibold outline-none focus:border-black"
                   />
@@ -154,6 +156,7 @@ export default function SchoolSetup() {
                       <input
                         type="number" min={1} max={7} value={config[key]}
                         onChange={e => updateGrade(config.grade, key, e.target.value)}
+                        onClick={e => e.target.select()}
                         onFocus={e => e.target.select()}
                         className="w-12 h-8 text-center text-[12px] border border-gray-200 rounded-sm outline-none focus:border-black"
                       />
