@@ -160,6 +160,12 @@ export default function TeacherManagement() {
                   ))}
                 </div>
               </div>
+              <div className="flex-shrink-0 text-center">
+                <div className="text-[18px] font-bold text-gray-900">
+                  {teacher.teacher_assignments.reduce((sum, a) => sum + (a.weekly_hours || 0), 0)}
+                </div>
+                <div className="text-[10px] text-gray-400">주당시수</div>
+              </div>
               <div className="flex gap-2 flex-shrink-0">
                 <button
                   onClick={() => openEdit(teacher)}
