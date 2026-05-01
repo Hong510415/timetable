@@ -1,20 +1,16 @@
 const DAY_LABELS = ['월', '화', '수', '목', '금']
 
-export default function TimetableGrid({ slots, totalSlots, gradeLunchSlot, teachers, subjects, onCellClick }) {
-  function isLunch(slot, grade) {
-    if (!gradeLunchSlot || Object.keys(gradeLunchSlot).length === 0) return false
-    // 분리 배정: 첫 번째 grade의 점심 슬롯을 기준으로 행 레이블 표시
-    return Object.values(gradeLunchSlot).includes(slot)
-  }
+export default function TimetableGrid({ slots, totalSlots, gradeLunchSlot, teachers, subjects, onCellClick, grade }) {
+  // 해당 학년의 점심 슬롯 (없으면 -1)
+  const lunchSlot = (gradeLunchSlot && grade) ? (gradeLunchSlot[grade] ?? -1) : -1
 
   function getSlotLabel(slot) {
-    // slot 번호 그대로 1-based 교시로 표시 (점심 행 제외)
+    // 점심 슬롯 이후 교시는 번호 보정 필요 없음 (점심 행 자체가 없으므로)
     return `${slot + 1}교시`
   }
 
   return (
     <div className="border border-gray-200 rounded-sm overflow-hidden bg-white">
-      {/* 헤더 */}
       <div className="flex bg-gray-50">
         <div className="w-[72px] flex-shrink-0 border-r border-gray-200 h-9 flex items-center justify-center text-[11px] font-semibold text-gray-500">교시</div>
         {DAY_LABELS.map(d => (
@@ -23,14 +19,14 @@ export default function TimetableGrid({ slots, totalSlots, gradeLunchSlot, teach
       </div>
 
       {Array.from({ length: totalSlots }, (_, slot) => {
-        const lunch = isLunch(slot)
+        const isLunch = lunchSlot === slot
         return (
-          <div key={slot} className={`flex border-t border-gray-100 ${lunch ? 'h-8 bg-gray-50' : 'h-[62px]'}`}>
+          <div key={slot} className={`flex border-t border-gray-100 ${isLunch ? 'h-8 bg-gray-50' : 'h-[62px]'}`}>
             <div className="w-[72px] flex-shrink-0 border-r border-gray-200 flex items-center justify-center text-[11px] font-semibold text-gray-400 bg-gray-50">
-              {lunch ? '점심' : getSlotLabel(slot)}
+              {isLunch ? '점심' : getSlotLabel(slot)}
             </div>
             {Array.from({ length: 5 }, (_, day) => {
-              if (lunch) {
+              if (isLunch) {
                 return (
                   <div key={day} className="flex-1 border-r border-gray-100 last:border-r-0 flex items-center justify-center text-[11px] text-gray-300">
                     점심시간

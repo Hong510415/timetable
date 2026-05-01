@@ -1,44 +1,51 @@
 /**
  * 전담 시간표 자동 생성 알고리즘
  *
- * 슬롯 구조:
- * - 일반 학교: slot 0~5 = 1~6교시
- * - 분리 배정: slot 0~6 = 7개 절대 시간 슬롯 (학년별 점심 슬롯 포함)
- *
- * lunchConfig.lunch_groups 예시:
- * [{grades:[1,6], slot:3}, {grades:[2,5], slot:4}, {grades:[3,4], slot:5}]
+ * 슬롯 구조: slot 0~N-1 = 교시 (학년별 최대 교시 수 기준)
+ * 점심 처리:
+ * - 일반: 점심 제약 없음
+ * - 분리 배정: 학년별 점심 슬롯이 다름. 교사는 하루에 배정된 모든 점심 슬롯 중
+ *   최소 1개는 비워야 함 (점심 보장)
  */
 
 export function buildSchedule(gradeConfigs, subjects, teachers, lunchConfig) {
   const splitLunch = lunchConfig?.split_lunch || false
   const lunchGroups = lunchConfig?.lunch_groups || []
-  const totalSlots = splitLunch ? 7 : 6
 
-  // 학년별 점심 슬롯 인덱스 계산
+  // 학년별 최대 교시 수 계산
+  const maxPeriods = Math.max(...gradeConfigs.map(gc =>
+    Math.max(gc.periods_mon, gc.periods_tue, gc.periods_wed, gc.periods_thu, gc.periods_fri)
+  ))
+  const totalSlots = maxPeriods
+
+  // 학년별 점심 슬롯 (0-based: slot = 교시-1)
   const gradeLunchSlot = {}
   if (splitLunch) {
     for (const group of lunchGroups) {
       for (const grade of group.grades) {
-        gradeLunchSlot[grade] = group.slot
+        gradeLunchSlot[grade] = group.slot - 1  // DB의 slot값은 교시번호, 0-based로 변환
       }
     }
   }
 
-  // 점심 구간 슬롯 인덱스 목록 (교사 점심 제약에 사용)
-  const lunchZoneSlots = splitLunch ? [...new Set(lunchGroups.map(g => g.slot))] : []
+  // 점심 슬롯 전체 목록 (교사 점심 제약용)
+  const allLunchSlots = splitLunch
+    ? [...new Set(Object.values(gradeLunchSlot))]
+    : []
 
-  // 학년·반의 사용 가능한 슬롯 목록 생성
+  // 학년·반의 요일별 사용 가능 슬롯 생성 (점심 슬롯 제외)
   const gradeClassSlots = {}
   for (const gc of gradeConfigs) {
     const { grade, num_classes } = gc
     const dayPeriods = [gc.periods_mon, gc.periods_tue, gc.periods_wed, gc.periods_thu, gc.periods_fri]
+    const lunchSlot = gradeLunchSlot[grade]
     gradeClassSlots[grade] = {}
     for (let cls = 1; cls <= num_classes; cls++) {
-      gradeClassSlots[grade][cls] = dayPeriods.map((periods) => {
+      gradeClassSlots[grade][cls] = dayPeriods.map(periods => {
         const slots = new Set()
         let count = 0
         for (let s = 0; s < totalSlots; s++) {
-          if (splitLunch && gradeLunchSlot[grade] === s) continue
+          if (splitLunch && lunchSlot === s) continue
           if (count < periods) { slots.add(s); count++ }
         }
         return slots
@@ -83,7 +90,6 @@ export function buildSchedule(gradeConfigs, subjects, teachers, lunchConfig) {
     const { teacherId, subjectId, grade, classNum } = item
     let remaining = item.periodsLeft
 
-    // 요일 순서 무작위로 고르게 분산
     const dayOrder = [0, 1, 2, 3, 4].sort(() => Math.random() - 0.5)
 
     for (const day of dayOrder) {
@@ -96,10 +102,10 @@ export function buildSchedule(gradeConfigs, subjects, teachers, lunchConfig) {
         if (!classAvailable.has(slot)) continue
         if (teacherOccupied[teacherId]?.[day]?.has(slot)) continue
 
-        // 교사 점심 보장: 분리 배정 학교에서 점심 구간 슬롯 모두 채우지 못하게
-        if (splitLunch && lunchZoneSlots.includes(slot)) {
-          const occupiedLunchZone = lunchZoneSlots.filter(ls => teacherOccupied[teacherId][day].has(ls))
-          if (occupiedLunchZone.length >= lunchZoneSlots.length - 1) continue
+        // 교사 점심 보장: 분리 배정 시 하루에 점심 슬롯 중 최소 1개 비워야 함
+        if (splitLunch && allLunchSlots.includes(slot)) {
+          const occupiedLunch = allLunchSlots.filter(ls => teacherOccupied[teacherId][day].has(ls))
+          if (occupiedLunch.length >= allLunchSlots.length - 1) continue
         }
 
         result[grade][classNum][day][slot] = { teacherId, subjectId }
@@ -111,7 +117,7 @@ export function buildSchedule(gradeConfigs, subjects, teachers, lunchConfig) {
     }
 
     if (remaining > 0) {
-      errors.push({ grade, classNum: classNum, teacherId, subjectId, unassigned: remaining })
+      errors.push({ grade, classNum, teacherId, subjectId, unassigned: remaining })
     }
   }
 
@@ -130,11 +136,9 @@ export function flattenResult(result, schoolId, gradeLunchSlot, totalSlots) {
 
       for (let day = 0; day < 5; day++) {
         for (let slot = 0; slot < totalSlots; slot++) {
+          if (lunchSlot !== undefined && lunchSlot === slot) continue
+
           const cell = days[day][slot]
-          const isLunch = lunchSlot === slot
-
-          if (isLunch) continue // 점심 슬롯은 DB에 저장 안 함
-
           rows.push({
             school_id: schoolId,
             grade,
