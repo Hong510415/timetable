@@ -20,7 +20,7 @@ export default function TeacherManagement() {
     setSchoolId(school.id)
 
     const [{ data: t }, { data: s }, { data: g }] = await Promise.all([
-      supabase.from('teachers').select('*, teacher_assignments(*, subjects(name, grade))').eq('school_id', school.id),
+      supabase.from('teachers').select('*, teacher_assignments(*, subjects(name, grade))').eq('school_id', school.id).order('created_at'),
       supabase.from('subjects').select('*').eq('school_id', school.id).order('grade'),
       supabase.from('grade_configs').select('*').eq('school_id', school.id).order('grade'),
     ])
