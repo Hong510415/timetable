@@ -15,6 +15,8 @@ export default function RoomTimetable() {
   const [timetableSlots, setTimetableSlots] = useState([]) // dedicated teacher slots
   const [blockedSlots, setBlockedSlots] = useState([])
   const [gradeConfigs, setGradeConfigs] = useState([])
+  const [teachers, setTeachers] = useState([])
+  const [selectedTeacher, setSelectedTeacher] = useState('')
   const [lunchConfig, setLunchConfig] = useState(null)
   const [totalSlots, setTotalSlots] = useState(6)
   const [gradeLunchSlot, setGradeLunchSlot] = useState({})
@@ -30,12 +32,13 @@ export default function RoomTimetable() {
     if (!school) return
     setSchoolId(school.id)
 
-    const [{ data: r }, { data: gc }, { data: lunch }, { data: ts }, { data: blocked }] = await Promise.all([
+    const [{ data: r }, { data: gc }, { data: lunch }, { data: ts }, { data: blocked }, { data: t }] = await Promise.all([
       supabase.from('rooms').select('*').eq('school_id', school.id).order('name'),
       supabase.from('grade_configs').select('*').eq('school_id', school.id),
       supabase.from('lunch_config').select('*').eq('school_id', school.id).single(),
       supabase.from('timetable_slots').select('*').eq('school_id', school.id),
       supabase.from('room_blocked_slots').select('*').eq('school_id', school.id),
+      supabase.from('teachers').select('*').eq('school_id', school.id).order('code'),
     ])
 
     setRooms(r || [])
@@ -43,6 +46,7 @@ export default function RoomTimetable() {
     setLunchConfig(lunch)
     setTimetableSlots(ts || [])
     setBlockedSlots(blocked || [])
+    setTeachers(t || [])
 
     const hasSplit = lunch?.split_lunch && lunch?.lunch_groups?.length > 0
     setTotalSlots(hasSplit ? 7 : 6)
@@ -72,11 +76,12 @@ export default function RoomTimetable() {
 
   async function handleGenerate() {
     if (!selectedRoom) return
+    if (!selectedTeacher) return alert('시간표를 생성할 교사를 선택하세요.')
     if (!timetableSlots.length) return alert('전담 시간표를 먼저 생성하세요.')
     setGenerating(true)
 
     const roomBlocked = blockedSlots.filter(b => b.room_id === selectedRoom)
-    const rows = buildRoomSchedule([rooms.find(r => r.id === selectedRoom)], timetableSlots, roomBlocked, schoolId)
+    const rows = buildRoomSchedule(rooms.find(r => r.id === selectedRoom), timetableSlots, roomBlocked, schoolId, selectedTeacher)
 
     await supabase.from('room_timetable_slots').delete().eq('room_id', selectedRoom)
     if (rows.length > 0) {
@@ -138,6 +143,14 @@ export default function RoomTimetable() {
           >
             <Download size={14} />엑셀 다운로드
           </button>
+          <select
+            value={selectedTeacher}
+            onChange={e => setSelectedTeacher(e.target.value)}
+            className="h-10 px-3 border border-gray-300 rounded-sm text-[13px] outline-none bg-white"
+          >
+            <option value="">교사 선택</option>
+            {teachers.map(t => <option key={t.id} value={t.id}>{t.code}</option>)}
+          </select>
           <button
             onClick={handleGenerate}
             disabled={generating || !selectedRoom}
