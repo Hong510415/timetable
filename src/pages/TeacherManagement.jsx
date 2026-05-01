@@ -58,12 +58,19 @@ export default function TeacherManagement() {
   async function handleSave() {
     if (!form.code.trim()) return alert('교사 명칭을 입력하세요')
 
+    // 저장 직전 subject_id 재매칭 (과목명+학년 기준)
+    const resolvedAssignments = form.assignments.map(a => {
+      const name = getSubjectName(a.subject_id) || a._subjectName || ''
+      const sid = findSubjectId(name, a.grade) || a.subject_id
+      return { ...a, subject_id: sid }
+    })
+
     if (editingTeacher) {
       await supabase.from('teachers').update({ code: form.code }).eq('id', editingTeacher.id)
       await supabase.from('teacher_assignments').delete().eq('teacher_id', editingTeacher.id)
-      if (form.assignments.length > 0) {
+      if (resolvedAssignments.length > 0) {
         await supabase.from('teacher_assignments').insert(
-          form.assignments.map(a => ({ ...a, teacher_id: editingTeacher.id }))
+          resolvedAssignments.map(({ _subjectName, ...a }) => ({ ...a, teacher_id: editingTeacher.id }))
         )
       }
     } else {
@@ -71,9 +78,9 @@ export default function TeacherManagement() {
         .from('teachers')
         .insert({ code: form.code, school_id: schoolId })
         .select().single()
-      if (newTeacher && form.assignments.length > 0) {
+      if (newTeacher && resolvedAssignments.length > 0) {
         await supabase.from('teacher_assignments').insert(
-          form.assignments.map(a => ({ ...a, teacher_id: newTeacher.id }))
+          resolvedAssignments.map(({ _subjectName, ...a }) => ({ ...a, teacher_id: newTeacher.id }))
         )
       }
     }
@@ -205,7 +212,7 @@ export default function TeacherManagement() {
                 {form.assignments.map((a, i) => (
                   <div key={i} className="flex items-center gap-2 bg-gray-50 p-2 rounded-sm flex-wrap">
                     <select
-                      value={getSubjectName(a.subject_id)}
+                      value={getSubjectName(a.subject_id) || a._subjectName || ''}
                       onChange={e => {
                         const name = e.target.value
                         const sid = findSubjectId(name, a.grade)
