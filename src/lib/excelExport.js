@@ -71,18 +71,17 @@ export function exportTimetableByTeacher(slots, teachers, subjects, gradeConfigs
   XLSX.writeFile(wb, '교사별전담시간표.xlsx')
 }
 
-export function exportRoomTimetable(slots, rooms) {
+export function exportRoomTimetable(rooms, roomSlots, gradeConfigs, gradeLunchSlot, totalSlots) {
   const wb = XLSX.utils.book_new()
+  const slots = totalSlots || 6
+
   for (const room of rooms) {
     const rows = [['교시', ...DAYS]]
-    for (let slot = 0; slot < 6; slot++) {
+    for (let slot = 0; slot < slots; slot++) {
       const row = [`${slot + 1}교시`]
       for (let day = 0; day < 5; day++) {
-        const cell = slots.find(s => s.room_id === room.id && s.day_of_week === day && s.slot === slot)
-        if (!cell) { row.push(''); continue }
-        row.push(cell.assignment_type === 'dedicated'
-          ? `전담(${cell.grade}학년${cell.class_num}반)`
-          : `${cell.grade}학년${cell.class_num}반`)
+        const cell = roomSlots.find(s => s.room_id === room.id && s.day_of_week === day && s.slot === slot)
+        row.push(cell ? `${cell.grade}학년${cell.class_num}반` : '')
       }
       rows.push(row)
     }

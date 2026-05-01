@@ -44,18 +44,15 @@ export default function RoomTimetable() {
     setTimetableSlots(ts || [])
     setBlockedSlots(blocked || [])
 
-    if (gc?.length) {
-      const maxP = Math.max(...gc.map(c => Math.max(c.periods_mon, c.periods_tue, c.periods_wed, c.periods_thu, c.periods_fri)))
-      const hasSplit = lunch?.split_lunch && lunch?.lunch_groups?.length > 0
-      setTotalSlots(hasSplit ? maxP + 1 : maxP)
+    const hasSplit = lunch?.split_lunch && lunch?.lunch_groups?.length > 0
+    setTotalSlots(hasSplit ? 7 : 6)
 
-      if (hasSplit) {
-        const gls = {}
-        for (const g of lunch.lunch_groups) {
-          for (const grade of g.grades) gls[grade] = g.slot
-        }
-        setGradeLunchSlot(gls)
+    if (hasSplit) {
+      const gls = {}
+      for (const g of (lunch.lunch_groups || [])) {
+        for (const grade of g.grades) gls[grade] = g.slot
       }
+      setGradeLunchSlot(gls)
     }
 
     if (r?.length) {
@@ -188,51 +185,36 @@ export default function RoomTimetable() {
                   ))}
                 </div>
 
-                {Array.from({ length: totalSlots }, (_, slot) => {
-                  const isLunch = allLunchSlots.includes(slot) && allLunchSlots.length > 0
-                  const isBlocked = blockedSlots.some(b => b.room_id === selectedRoom && b.slot === slot)
-
-                  return (
-                    <div key={slot} className={`flex border-t border-gray-100 ${isLunch ? 'h-8 bg-gray-50' : 'h-[62px]'}`}>
-                      <div className="w-[72px] flex-shrink-0 border-r border-gray-200 flex items-center justify-center text-[11px] font-semibold text-gray-400 bg-gray-50">
-                        {isLunch ? '점심' : `${slot + 1}교시`}
-                      </div>
-                      {Array.from({ length: 5 }, (_, day) => {
-                        if (isLunch) {
-                          return (
-                            <div key={day} className="flex-1 border-r border-gray-100 last:border-r-0 flex items-center justify-center text-[11px] text-gray-300">
-                              점심시간
-                            </div>
-                          )
-                        }
-
-                        const dayBlockedSlots = blockedSlots.filter(b => b.room_id === selectedRoom && b.day_of_week === day && b.slot === slot)
-                        const isDayBlocked = dayBlockedSlots.length > 0
-                        const cell = grid[day]?.[slot]
-
-                        return (
-                          <div
-                            key={day}
-                            onClick={() => !isDayBlocked && setEditModal({ day, slot, current: cell })}
-                            className={`flex-1 border-r border-gray-100 last:border-r-0 flex flex-col items-center justify-center gap-0.5 transition-colors
-                              ${isDayBlocked ? 'bg-gray-100 cursor-not-allowed' : 'hover:bg-gray-50 cursor-pointer'}`}
-                          >
-                            {isDayBlocked ? (
-                              <span className="text-[11px] text-gray-300">사용불가</span>
-                            ) : cell ? (
-                              <>
-                                <span className="text-[13px] font-semibold text-gray-900">{cell.grade}학년</span>
-                                <span className="text-[11px] text-gray-400">{cell.class_num}반</span>
-                              </>
-                            ) : (
-                              <span className="text-[12px] text-gray-200">—</span>
-                            )}
-                          </div>
-                        )
-                      })}
+                {Array.from({ length: totalSlots }, (_, slot) => (
+                  <div key={slot} className="flex border-t border-gray-100 h-[62px]">
+                    <div className="w-[72px] flex-shrink-0 border-r border-gray-200 flex items-center justify-center text-[11px] font-semibold text-gray-400 bg-gray-50">
+                      {slot + 1}교시
                     </div>
-                  )
-                })}
+                    {Array.from({ length: 5 }, (_, day) => {
+                      const isDayBlocked = blockedSlots.some(b => b.room_id === selectedRoom && b.day_of_week === day && b.slot === slot)
+                      const cell = grid[day]?.[slot]
+                      return (
+                        <div
+                          key={day}
+                          onClick={() => !isDayBlocked && setEditModal({ day, slot, current: cell })}
+                          className={`flex-1 border-r border-gray-100 last:border-r-0 flex flex-col items-center justify-center gap-0.5 transition-colors
+                            ${isDayBlocked ? 'bg-gray-100 cursor-not-allowed' : 'hover:bg-gray-50 cursor-pointer'}`}
+                        >
+                          {isDayBlocked ? (
+                            <span className="text-[11px] text-gray-300">사용불가</span>
+                          ) : cell ? (
+                            <>
+                              <span className="text-[13px] font-semibold text-gray-900">{cell.grade}학년</span>
+                              <span className="text-[11px] text-gray-400">{cell.class_num}반</span>
+                            </>
+                          ) : (
+                            <span className="text-[12px] text-gray-200">—</span>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                ))}
               </div>
             </>
           )}
