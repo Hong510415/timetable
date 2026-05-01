@@ -101,6 +101,19 @@ export default function TeacherManagement() {
 
   const maxClasses = (grade) => gradeConfigs.find(g => g.grade === grade)?.num_classes || 6
 
+  // 중복 없는 과목명 목록
+  const uniqueSubjectNames = [...new Set(subjects.map(s => s.name))]
+
+  // 과목명 + 학년으로 subject_id 찾기
+  function findSubjectId(name, grade) {
+    return subjects.find(s => s.name === name && s.grade === grade)?.id || ''
+  }
+
+  // assignment에서 과목명 역추적
+  function getSubjectName(subjectId) {
+    return subjects.find(s => s.id === subjectId)?.name || ''
+  }
+
   return (
     <div className="p-10 bg-gray-50 min-h-full">
       <div className="flex items-center justify-between mb-6">
@@ -192,18 +205,33 @@ export default function TeacherManagement() {
                 {form.assignments.map((a, i) => (
                   <div key={i} className="flex items-center gap-2 bg-gray-50 p-2 rounded-sm flex-wrap">
                     <select
-                      value={a.subject_id}
-                      onChange={e => updateAssignment(i, 'subject_id', e.target.value)}
-                      className="flex-1 min-w-[140px] h-9 px-2 border border-gray-200 rounded-sm text-[12px] outline-none bg-white"
+                      value={getSubjectName(a.subject_id)}
+                      onChange={e => {
+                        const name = e.target.value
+                        const sid = findSubjectId(name, a.grade)
+                        setForm(prev => ({
+                          ...prev,
+                          assignments: prev.assignments.map((x, j) => j === i ? { ...x, subject_id: sid, _subjectName: name } : x)
+                        }))
+                      }}
+                      className="flex-1 min-w-[120px] h-9 px-2 border border-gray-200 rounded-sm text-[12px] outline-none bg-white"
                     >
                       <option value="">과목 선택</option>
-                      {subjects.map(s => (
-                        <option key={s.id} value={s.id}>{s.name}</option>
+                      {uniqueSubjectNames.map(name => (
+                        <option key={name} value={name}>{name}</option>
                       ))}
                     </select>
                     <select
                       value={a.grade}
-                      onChange={e => { updateAssignment(i, 'grade', Number(e.target.value)); updateAssignment(i, 'class_num', 1) }}
+                      onChange={e => {
+                        const grade = Number(e.target.value)
+                        const name = getSubjectName(a.subject_id) || a._subjectName || ''
+                        const sid = findSubjectId(name, grade)
+                        setForm(prev => ({
+                          ...prev,
+                          assignments: prev.assignments.map((x, j) => j === i ? { ...x, grade, class_num: 1, subject_id: sid } : x)
+                        }))
+                      }}
                       className="w-20 h-9 px-2 border border-gray-200 rounded-sm text-[12px] outline-none bg-white"
                     >
                       {[1,2,3,4,5,6].map(g => <option key={g} value={g}>{g}학년</option>)}
