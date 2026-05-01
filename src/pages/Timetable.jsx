@@ -20,7 +20,8 @@ export default function Timetable() {
   const [selectedGrade, setSelectedGrade] = useState(1)
   const [selectedClass, setSelectedClass] = useState(1)
   const [selectedTeacher, setSelectedTeacher] = useState(null)
-  const [scheduleResult, setScheduleResult] = useState(null) // { gradeLunchSlot, totalSlots }
+  const [scheduleResult, setScheduleResult] = useState(null)
+  const [roomBlockedSlots, setRoomBlockedSlots] = useState([])
   const [editModal, setEditModal] = useState(null) // { day, slot, grade, classNum, current }
   const [saving, setSaving] = useState(false)
 
@@ -32,18 +33,20 @@ export default function Timetable() {
     if (!school) return
     setSchoolId(school.id)
 
-    const [{ data: gc }, { data: subs }, { data: t }, { data: lunch }, { data: rows }] = await Promise.all([
+    const [{ data: gc }, { data: subs }, { data: t }, { data: lunch }, { data: rows }, { data: blocked }] = await Promise.all([
       supabase.from('grade_configs').select('*').eq('school_id', school.id).order('grade'),
       supabase.from('subjects').select('*').eq('school_id', school.id).order('grade'),
       supabase.from('teachers').select('*, teacher_assignments(*)').eq('school_id', school.id),
       supabase.from('lunch_config').select('*').eq('school_id', school.id).single(),
       supabase.from('timetable_slots').select('*, teachers(code), subjects(name)').eq('school_id', school.id),
+      supabase.from('room_blocked_slots').select('*').eq('school_id', school.id),
     ])
     setGradeConfigs(gc || [])
     setSubjects(subs || [])
     setTeachers(t || [])
     setLunchConfig(lunch || { split_lunch: false, lunch_groups: [] })
     setTimetableRows(rows || [])
+    setRoomBlockedSlots(blocked || [])
 
     if (gc?.length && lunch) {
       const { gradeLunchSlot, totalSlots } = computeSlotMeta(gc, lunch)
@@ -75,7 +78,7 @@ export default function Timetable() {
     setGenerating(true)
     setErrors([])
     try {
-      const result = buildSchedule(gradeConfigs, subjects, teachers, lunchConfig || { split_lunch: false, lunch_groups: [] })
+      const result = buildSchedule(gradeConfigs, subjects, teachers, lunchConfig || { split_lunch: false, lunch_groups: [] }, roomBlockedSlots)
       setScheduleResult(result)
 
       const { rows } = flattenResult(result.result, schoolId, result.gradeLunchSlot, result.totalSlots)

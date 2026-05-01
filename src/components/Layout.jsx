@@ -5,8 +5,8 @@ import { supabase } from '../lib/supabase'
 const navItems = [
   { path: '/setup', label: '학교 설정', icon: Settings },
   { path: '/teachers', label: '전담 교사 관리', icon: Users },
-  { path: '/timetable', label: '전담 시간표', icon: Calendar },
   { path: '/rooms', label: '특별실 관리', icon: DoorOpen },
+  { path: '/timetable', label: '전담 시간표', icon: Calendar },
   { path: '/room-timetable', label: '특별실 시간표', icon: CalendarCheck },
 ]
 

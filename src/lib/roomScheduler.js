@@ -1,20 +1,28 @@
 /**
  * 특별실 시간표 자동 배정
- * 선택한 교사의 전담 시간표 슬롯을 특별실 스케줄로 복사
+ * 선택한 교사(들)의 전담 시간표 슬롯을 특별실 스케줄로 복사
+ * teacherIds: string[] — 복수 교사 지원 (예: 체육관에 체육 교사 2명)
  */
-export function buildRoomSchedule(room, timetableSlots, blockedSlots, schoolId, teacherId) {
-  const roomSlots = []
+export function buildRoomSchedule(room, timetableSlots, blockedSlots, schoolId, teacherIds) {
+  const ids = Array.isArray(teacherIds) ? teacherIds : [teacherIds]
   const blocked = blockedSlots.filter(b => b.room_id === room.id)
 
   const teacherSlots = timetableSlots.filter(
-    s => s.teacher_id === teacherId && !s.is_unassigned
+    s => ids.includes(s.teacher_id) && !s.is_unassigned
   )
 
+  // 같은 (day, slot)에 여러 교사가 배정된 경우 첫 번째만 사용
+  const seen = new Set()
+  const roomSlots = []
+
   for (const ts of teacherSlots) {
+    const key = `${ts.day_of_week}-${ts.slot}`
+    if (seen.has(key)) continue
     const isBlocked = blocked.some(
       b => b.day_of_week === ts.day_of_week && b.slot === ts.slot
     )
     if (!isBlocked) {
+      seen.add(key)
       roomSlots.push({
         school_id: schoolId,
         room_id: room.id,
