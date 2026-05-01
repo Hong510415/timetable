@@ -85,34 +85,61 @@ export function buildSchedule(gradeConfigs, subjects, teachers, lunchConfig) {
     teacherOccupied[teacher.id] = Array.from({ length: 5 }, () => new Set())
   }
 
+  // 총 시수 많은 교사 먼저 배정 (제약 강한 순서)
+  const teacherTotalHours = {}
+  for (const item of assignmentList) {
+    teacherTotalHours[item.teacherId] = (teacherTotalHours[item.teacherId] || 0) + item.periodsLeft
+  }
+  assignmentList.sort((a, b) => (teacherTotalHours[b.teacherId] || 0) - (teacherTotalHours[a.teacherId] || 0))
+
   const errors = []
+
+  function tryAssignSlot(teacherId, day, classAvailable, splitLunch, allLunchSlotIndexes) {
+    for (let slot = 0; slot < totalSlots; slot++) {
+      if (!classAvailable.has(slot)) continue
+      if (teacherOccupied[teacherId]?.[day]?.has(slot)) continue
+      if (splitLunch && allLunchSlotIndexes.includes(slot)) {
+        const occupiedLunch = allLunchSlotIndexes.filter(ls => teacherOccupied[teacherId][day].has(ls))
+        if (occupiedLunch.length >= allLunchSlotIndexes.length - 1) continue
+      }
+      return slot
+    }
+    return -1
+  }
 
   for (const item of assignmentList) {
     const { teacherId, subjectId, grade, classNum } = item
     let remaining = item.periodsLeft
-    const dayOrder = [0, 1, 2, 3, 4].sort(() => Math.random() - 0.5)
 
+    // 1차: 요일별 1슬롯씩 분산 배정
+    const dayOrder = [0, 1, 2, 3, 4].sort(() => Math.random() - 0.5)
     for (const day of dayOrder) {
       if (remaining <= 0) break
       const classAvailable = gradeClassSlots[grade]?.[classNum]?.[day]
       if (!classAvailable) continue
+      const slot = tryAssignSlot(teacherId, day, classAvailable, splitLunch, allLunchSlotIndexes)
+      if (slot === -1) continue
+      result[grade][classNum][day][slot] = { teacherId, subjectId }
+      teacherOccupied[teacherId][day].add(slot)
+      classAvailable.delete(slot)
+      remaining--
+    }
 
-      for (let slot = 0; slot < totalSlots; slot++) {
+    // 2차: 미배정 남으면 같은 날 추가 배정 허용
+    if (remaining > 0) {
+      const dayOrder2 = [0, 1, 2, 3, 4].sort(() => Math.random() - 0.5)
+      for (const day of dayOrder2) {
         if (remaining <= 0) break
-        if (!classAvailable.has(slot)) continue
-        if (teacherOccupied[teacherId]?.[day]?.has(slot)) continue
-
-        // 교사 점심 보장: 점심 가능 슬롯 중 최소 1개 비워야 함
-        if (splitLunch && allLunchSlotIndexes.includes(slot)) {
-          const occupiedLunch = allLunchSlotIndexes.filter(ls => teacherOccupied[teacherId][day].has(ls))
-          if (occupiedLunch.length >= allLunchSlotIndexes.length - 1) continue
+        const classAvailable = gradeClassSlots[grade]?.[classNum]?.[day]
+        if (!classAvailable) continue
+        while (remaining > 0) {
+          const slot = tryAssignSlot(teacherId, day, classAvailable, splitLunch, allLunchSlotIndexes)
+          if (slot === -1) break
+          result[grade][classNum][day][slot] = { teacherId, subjectId }
+          teacherOccupied[teacherId][day].add(slot)
+          classAvailable.delete(slot)
+          remaining--
         }
-
-        result[grade][classNum][day][slot] = { teacherId, subjectId }
-        teacherOccupied[teacherId][day].add(slot)
-        classAvailable.delete(slot)
-        remaining--
-        break
       }
     }
 
