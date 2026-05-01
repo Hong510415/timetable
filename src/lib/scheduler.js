@@ -2,39 +2,32 @@
  * 전담 시간표 자동 생성 알고리즘
  *
  * slot은 0-based (0=1교시, 1=2교시, ...)
- * DB의 lunch_groups.slot은 교시번호(3,4,5) → 0-based 변환: slot - 1
- * gradeLunchSlot: { grade: slotIndex(0-based) }
+ * gradeLunchSlot: { grade: slotIndex } (DB값 3,4,5 그대로)
  */
 
 export function buildSchedule(gradeConfigs, subjects, teachers, lunchConfig) {
   const splitLunch = lunchConfig?.split_lunch || false
   const lunchGroups = lunchConfig?.lunch_groups || []
 
-  // 학년별 최대 교시 수
   const maxPeriods = Math.max(...gradeConfigs.map(gc =>
     Math.max(gc.periods_mon, gc.periods_tue, gc.periods_wed, gc.periods_thu, gc.periods_fri)
   ))
-  // 분리 배정 시 점심 슬롯이 절대 슬롯 인덱스를 차지하므로 +1
   const totalSlots = splitLunch ? maxPeriods + 1 : maxPeriods
 
-  // 학년별 점심 슬롯 (0-based)
-  // DB의 slot값은 교시번호(예: 3 = 3교시 후 점심 = slot index 3, 즉 4교시 자리)
-  // 3교시 후 점심 → 3교시와 4교시 사이 → slot index 3 (0-based)
   const gradeLunchSlot = {}
   if (splitLunch) {
     for (const group of lunchGroups) {
       for (const grade of group.grades) {
-        gradeLunchSlot[grade] = group.slot  // 그대로 사용 (3,4,5 = slot index)
+        gradeLunchSlot[grade] = group.slot
       }
     }
   }
 
-  // 교사 점심 제약: 하루에 모든 점심 슬롯 중 최소 1개는 비워야 함
   const allLunchSlotIndexes = splitLunch
     ? [...new Set(Object.values(gradeLunchSlot))]
     : []
 
-  // 학년·반의 요일별 사용 가능 슬롯 (점심 슬롯 제외)
+  // 학년·반의 요일별 가용 슬롯
   const gradeClassSlots = {}
   for (const gc of gradeConfigs) {
     const { grade, num_classes } = gc
@@ -46,7 +39,7 @@ export function buildSchedule(gradeConfigs, subjects, teachers, lunchConfig) {
         const slots = new Set()
         let count = 0
         for (let s = 0; s < totalSlots; s++) {
-          if (splitLunch && lunchSlot === s) continue  // 해당 학년 점심 슬롯 제외
+          if (splitLunch && lunchSlot === s) continue
           if (count < periods) { slots.add(s); count++ }
         }
         return slots
@@ -54,21 +47,43 @@ export function buildSchedule(gradeConfigs, subjects, teachers, lunchConfig) {
     }
   }
 
-  // 배정 목록
-  const assignmentList = []
+  // 1시간 단위 배정 목록 (session은 라운드로빈 순서용)
+  const units = []
   for (const teacher of teachers) {
     for (const a of (teacher.teacher_assignments || [])) {
       if (a.weekly_hours > 0) {
-        assignmentList.push({
-          teacherId: teacher.id,
-          subjectId: a.subject_id,
-          grade: a.grade,
-          classNum: a.class_num,
-          periodsLeft: a.weekly_hours,
-        })
+        for (let session = 0; session < a.weekly_hours; session++) {
+          units.push({
+            teacherId: teacher.id,
+            subjectId: a.subject_id,
+            grade: a.grade,
+            classNum: a.class_num,
+            session,
+          })
+        }
       }
     }
   }
+
+  // 교사별 총 시수
+  const teacherTotalHours = {}
+  for (const u of units) {
+    teacherTotalHours[u.teacherId] = (teacherTotalHours[u.teacherId] || 0) + 1
+  }
+
+  // 정렬 우선순위:
+  // ① session (라운드로빈: 전체 1회차 완료 후 2회차)
+  // ② 총 시수 많은 교사 (제약 강한 교사 먼저)
+  // ③ 교사ID → 학년 → 반
+  units.sort((a, b) => {
+    if (a.session !== b.session) return a.session - b.session
+    const aH = teacherTotalHours[a.teacherId] || 0
+    const bH = teacherTotalHours[b.teacherId] || 0
+    if (aH !== bH) return bH - aH
+    if (a.teacherId !== b.teacherId) return a.teacherId < b.teacherId ? -1 : 1
+    if (a.grade !== b.grade) return a.grade - b.grade
+    return a.classNum - b.classNum
+  })
 
   // 결과 구조
   const result = {}
@@ -79,75 +94,90 @@ export function buildSchedule(gradeConfigs, subjects, teachers, lunchConfig) {
     }
   }
 
-  // 교사별 점유 추적
+  // 교사별 점유 슬롯
   const teacherOccupied = {}
   for (const teacher of teachers) {
     teacherOccupied[teacher.id] = Array.from({ length: 5 }, () => new Set())
   }
 
-  // 총 시수 많은 교사 먼저 배정 (제약 강한 순서)
-  const teacherTotalHours = {}
-  for (const item of assignmentList) {
-    teacherTotalHours[item.teacherId] = (teacherTotalHours[item.teacherId] || 0) + item.periodsLeft
-  }
-  assignmentList.sort((a, b) => (teacherTotalHours[b.teacherId] || 0) - (teacherTotalHours[a.teacherId] || 0))
+  // 교사+학년+요일별 배정 수 (같은 학년 클러스터링용)
+  const teacherGradeDay = {}
+  // 학급+요일별 전담 수업 수 (담임 시각 균형용)
+  const classDayCount = {}
 
-  const errors = []
-
-  function tryAssignSlot(teacherId, day, classAvailable, splitLunch, allLunchSlotIndexes) {
+  // 교사 점심 제약 고려하여 슬롯 탐색
+  function findSlot(teacherId, day, classAvailable) {
     for (let slot = 0; slot < totalSlots; slot++) {
       if (!classAvailable.has(slot)) continue
-      if (teacherOccupied[teacherId]?.[day]?.has(slot)) continue
+      if (teacherOccupied[teacherId][day].has(slot)) continue
       if (splitLunch && allLunchSlotIndexes.includes(slot)) {
-        const occupiedLunch = allLunchSlotIndexes.filter(ls => teacherOccupied[teacherId][day].has(ls))
-        if (occupiedLunch.length >= allLunchSlotIndexes.length - 1) continue
+        const occ = allLunchSlotIndexes.filter(ls => teacherOccupied[teacherId][day].has(ls))
+        if (occ.length >= allLunchSlotIndexes.length - 1) continue
       }
       return slot
     }
     return -1
   }
 
-  for (const item of assignmentList) {
-    const { teacherId, subjectId, grade, classNum } = item
-    let remaining = item.periodsLeft
-
-    // 1차: 요일별 1슬롯씩 분산 배정
-    const dayOrder = [0, 1, 2, 3, 4].sort(() => Math.random() - 0.5)
-    for (const day of dayOrder) {
-      if (remaining <= 0) break
-      const classAvailable = gradeClassSlots[grade]?.[classNum]?.[day]
-      if (!classAvailable) continue
-      const slot = tryAssignSlot(teacherId, day, classAvailable, splitLunch, allLunchSlotIndexes)
+  // 요일 점수 계산 후 최적 배정
+  function doAssign(teacherId, subjectId, grade, classNum) {
+    const candidates = []
+    for (let day = 0; day < 5; day++) {
+      const ca = gradeClassSlots[grade]?.[classNum]?.[day]
+      if (!ca) continue
+      const slot = findSlot(teacherId, day, ca)
       if (slot === -1) continue
-      result[grade][classNum][day][slot] = { teacherId, subjectId }
-      teacherOccupied[teacherId][day].add(slot)
-      classAvailable.delete(slot)
-      remaining--
+
+      const teacherLoad = teacherOccupied[teacherId][day].size
+      const sameGradeLoad = teacherGradeDay[teacherId]?.[grade]?.[day] || 0
+      // 같은 학년이 이미 있는지 여부 (binary - 누적 보상 방지)
+      const hasSameGrade = sameGradeLoad > 0 ? 1 : 0
+      const diffGradeLoad = teacherLoad - sameGradeLoad
+      const classLoad = classDayCount[grade]?.[classNum]?.[day] || 0
+
+      // 점수:
+      // +3 같은 학년 수업이 이미 있는 날 선호 (Priority 1)
+      // -2 다른 학년 수업이 있는 날 페널티 (Priority 1)
+      // -1 교사 요일 부하 (Priority 3: 교사 요일 균형)
+      // -3 학급 요일 부하 (Priority 3: 담임 요일 균형)
+      const score = hasSameGrade * 3 - diffGradeLoad * 2 - teacherLoad - classLoad * 3
+
+      candidates.push({ day, slot, score })
     }
 
-    // 2차: 미배정 남으면 같은 날 추가 배정 허용
-    if (remaining > 0) {
-      const dayOrder2 = [0, 1, 2, 3, 4].sort(() => Math.random() - 0.5)
-      for (const day of dayOrder2) {
-        if (remaining <= 0) break
-        const classAvailable = gradeClassSlots[grade]?.[classNum]?.[day]
-        if (!classAvailable) continue
-        while (remaining > 0) {
-          const slot = tryAssignSlot(teacherId, day, classAvailable, splitLunch, allLunchSlotIndexes)
-          if (slot === -1) break
-          result[grade][classNum][day][slot] = { teacherId, subjectId }
-          teacherOccupied[teacherId][day].add(slot)
-          classAvailable.delete(slot)
-          remaining--
-        }
-      }
-    }
+    if (candidates.length === 0) return false
 
-    if (remaining > 0) {
-      errors.push({ grade, classNum, teacherId, subjectId, unassigned: remaining })
+    // 점수 높은 날 선택, 동점이면 랜덤
+    candidates.sort((a, b) => b.score - a.score || Math.random() - 0.5)
+    const { day, slot } = candidates[0]
+
+    result[grade][classNum][day][slot] = { teacherId, subjectId }
+    teacherOccupied[teacherId][day].add(slot)
+    gradeClassSlots[grade][classNum][day].delete(slot)
+
+    if (!teacherGradeDay[teacherId]) teacherGradeDay[teacherId] = {}
+    if (!teacherGradeDay[teacherId][grade]) teacherGradeDay[teacherId][grade] = [0, 0, 0, 0, 0]
+    teacherGradeDay[teacherId][grade][day]++
+
+    if (!classDayCount[grade]) classDayCount[grade] = {}
+    if (!classDayCount[grade][classNum]) classDayCount[grade][classNum] = [0, 0, 0, 0, 0]
+    classDayCount[grade][classNum][day]++
+
+    return true
+  }
+
+  const errorMap = {}
+
+  for (const unit of units) {
+    const { teacherId, subjectId, grade, classNum } = unit
+    if (!doAssign(teacherId, subjectId, grade, classNum)) {
+      const key = `${grade}|${classNum}|${teacherId}|${subjectId}`
+      if (!errorMap[key]) errorMap[key] = { grade, classNum, teacherId, subjectId, unassigned: 0 }
+      errorMap[key].unassigned++
     }
   }
 
+  const errors = Object.values(errorMap)
   return { result, errors, gradeLunchSlot, totalSlots }
 }
 
@@ -163,10 +193,10 @@ export function flattenResult(result, schoolId, gradeLunchSlot, totalSlots) {
 
       for (let day = 0; day < 5; day++) {
         for (let slot = 0; slot < totalSlots; slot++) {
-          if (lunchSlot !== undefined && lunchSlot === slot) continue  // 점심 슬롯 저장 안 함
+          if (lunchSlot !== undefined && lunchSlot === slot) continue
 
           const cell = days[day][slot]
-          if (!cell) continue  // 빈 셀은 저장 안 함 (미배정 아님, 그냥 전담 없는 시간)
+          if (!cell) continue
 
           rows.push({
             school_id: schoolId,
