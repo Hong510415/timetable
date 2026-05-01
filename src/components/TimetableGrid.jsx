@@ -5,7 +5,10 @@ export default function TimetableGrid({ slots, totalSlots, gradeLunchSlot, teach
   const lunchSlot = (gradeLunchSlot && grade) ? (gradeLunchSlot[grade] ?? -1) : -1
 
   function getSlotLabel(slot) {
-    // 점심 슬롯 이후 교시는 번호 보정 필요 없음 (점심 행 자체가 없으므로)
+    // 점심 슬롯 이후 교시는 점심이 한 자리를 차지하므로 번호 -1 보정
+    if (lunchSlot !== -1 && slot > lunchSlot) {
+      return `${slot}교시`
+    }
     return `${slot + 1}교시`
   }
 
