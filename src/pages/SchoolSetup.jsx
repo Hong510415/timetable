@@ -126,6 +126,7 @@ export default function SchoolSetup() {
                   <input
                     type="number" min={1} max={20} value={num_classes}
                     onChange={e => updateGrade(grade, 'num_classes', e.target.value)}
+                    onFocus={e => e.target.select()}
                     className="w-[72px] h-10 text-center border border-gray-300 rounded-sm text-[14px] font-semibold outline-none focus:border-black"
                   />
                 </div>
@@ -153,6 +154,7 @@ export default function SchoolSetup() {
                       <input
                         type="number" min={1} max={7} value={config[key]}
                         onChange={e => updateGrade(config.grade, key, e.target.value)}
+                        onFocus={e => e.target.select()}
                         className="w-12 h-8 text-center text-[12px] border border-gray-200 rounded-sm outline-none focus:border-black"
                       />
                     </div>
