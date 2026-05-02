@@ -44,7 +44,7 @@ export default function Layout({ children }) {
     <div className="flex h-screen bg-gray-50">
       <aside className="w-[220px] bg-white border-r border-gray-200 flex flex-col py-7 flex-shrink-0">
         <div className="flex items-center gap-2 px-6 pb-4">
-          <div className="w-4 h-4 bg-black flex-shrink-0" />
+          <span className="text-base grayscale select-none">🗓️</span>
           <span className="text-[13px] font-bold text-gray-900">시간표 자동 작성</span>
         </div>
         <div className="h-px bg-gray-200 mb-3" />
