@@ -188,12 +188,25 @@ export function runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assig
   }
 
   // ── Step E: 일반과목 배정 ──────────────────────────────────────────
+  // 우선순위: 이미 해당 학년을 담당 중인 교사에게 먼저 → 그 다음 시수 적은 교사
   const minorUnits = units.filter(u => !u.is_major).sort((a, b) => b.totalHours - a.totalHours)
 
   for (const unit of minorUnits) {
     let remaining = [...unit.classNums]
     while (remaining.length > 0) {
-      const teacher = ts.slice().sort((a, b) => a.hours - b.hours)[0]
+      // 이미 이 학년을 담당 중이고 시수 여유 있는 교사 우선
+      const sameGradeTeachers = ts
+        .filter(t => {
+          const roomLeft = targetHours - t.hours
+          if (roomLeft <= 0) return false
+          return t.assignments.some(a => a.grade === unit.grade)
+        })
+        .sort((a, b) => a.hours - b.hours)
+
+      const teacher = sameGradeTeachers.length > 0
+        ? sameGradeTeachers[0]
+        : ts.slice().sort((a, b) => a.hours - b.hours)[0]
+
       const roomLeft = targetHours - teacher.hours
       const canTake = roomLeft > 0
         ? Math.min(remaining.length, Math.max(1, Math.floor(roomLeft / unit.hoursPerClass)))
