@@ -198,9 +198,17 @@ export function runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assig
     return new Set(teacher.assignments.map(a => a.grade)).size
   }
 
+  function countMinorGrades(teacher) {
+    return new Set(teacher.assignments.filter(a => !a.is_major).map(a => a.grade)).size
+  }
+
   function pickMinorTeacher(pool) {
-    // 담당 학년 수 가장 적은 교사 (동점이면 시수 적은 교사)
+    // 1) 일반과목 학년 수 가장 적은 교사 (일반과목 없는 교사 최우선)
+    // 2) 동점이면 전체 학년 수 가장 적은 교사
+    // 3) 동점이면 시수 적은 교사
     return pool.slice().sort((a, b) => {
+      const minorGradeDiff = countMinorGrades(a) - countMinorGrades(b)
+      if (minorGradeDiff !== 0) return minorGradeDiff
       const gradeDiff = countGrades(a) - countGrades(b)
       return gradeDiff !== 0 ? gradeDiff : a.hours - b.hours
     })[0]
