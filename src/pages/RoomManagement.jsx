@@ -1,46 +1,23 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Plus, X, Trash2, Edit2 } from 'lucide-react'
-import { supabase } from '../lib/supabase'
+import { useApp } from '../context/AppContext'
 
 const DAY_LABELS = ['월', '화', '수', '목', '금']
 
 export default function RoomManagement() {
-  const [schoolId, setSchoolId] = useState(null)
-  const [rooms, setRooms] = useState([])
-  const [totalSlots, setTotalSlots] = useState(6)
+  const { state, setRooms, setRoomBlockedSlots } = useApp()
+  const { rooms, lunchConfig, roomBlockedSlots } = state
   const [showModal, setShowModal] = useState(false)
   const [editingRoom, setEditingRoom] = useState(null)
   const [form, setForm] = useState({ name: '' })
-  const [blockedSlots, setBlockedSlots] = useState({}) // roomId -> Set of "day-slot"
-  const [savingBlocked, setSavingBlocked] = useState(false)
 
-  useEffect(() => { load() }, [])
+  const hasSplit = lunchConfig?.split_lunch && lunchConfig?.lunch_groups?.length > 0
+  const totalSlots = hasSplit ? 7 : 6
 
-  async function load() {
-    const { data: { user } } = await supabase.auth.getUser()
-    const { data: school } = await supabase.from('schools').select('id').eq('user_id', user.id).single()
-    if (!school) return
-    setSchoolId(school.id)
-
-    const [{ data: r }, { data: gc }, { data: lunch }, { data: blocked }] = await Promise.all([
-      supabase.from('rooms').select('*').eq('school_id', school.id).order('name'),
-      supabase.from('grade_configs').select('*').eq('school_id', school.id),
-      supabase.from('lunch_config').select('*').eq('school_id', school.id).single(),
-      supabase.from('room_blocked_slots').select('*').eq('school_id', school.id),
-    ])
-
-    setRooms(r || [])
-
-    const hasSplit = lunch?.split_lunch && lunch?.lunch_groups?.length > 0
-    setTotalSlots(hasSplit ? 7 : 6)
-
-    // build blockedSlots map
-    const map = {}
-    for (const b of (blocked || [])) {
-      if (!map[b.room_id]) map[b.room_id] = new Set()
-      map[b.room_id].add(`${b.day_of_week}-${b.slot}`)
-    }
-    setBlockedSlots(map)
+  const blockedMap = {}
+  for (const b of roomBlockedSlots) {
+    if (!blockedMap[b.room_id]) blockedMap[b.room_id] = new Set()
+    blockedMap[b.room_id].add(`${b.day_of_week}-${b.slot}`)
   }
 
   function openAdd() {
@@ -55,40 +32,29 @@ export default function RoomManagement() {
     setShowModal(true)
   }
 
-  async function handleDelete(roomId) {
+  function handleDelete(roomId) {
     if (!confirm('이 특별실을 삭제하시겠습니까?')) return
-    await supabase.from('rooms').delete().eq('id', roomId)
-    load()
+    setRooms(rooms.filter(r => r.id !== roomId))
+    setRoomBlockedSlots(roomBlockedSlots.filter(b => b.room_id !== roomId))
   }
 
-  async function handleSave() {
+  function handleSave() {
     if (!form.name.trim()) return alert('특별실 이름을 입력하세요')
     if (editingRoom) {
-      await supabase.from('rooms').update({ name: form.name }).eq('id', editingRoom.id)
+      setRooms(rooms.map(r => r.id === editingRoom.id ? { ...r, name: form.name } : r))
     } else {
-      await supabase.from('rooms').insert({ name: form.name, school_id: schoolId })
+      setRooms([...rooms, { id: crypto.randomUUID(), name: form.name }])
     }
     setShowModal(false)
-    load()
   }
 
-  async function toggleBlocked(roomId, day, slot) {
-    const key = `${day}-${slot}`
-    const current = blockedSlots[roomId] || new Set()
-    const newSet = new Set(current)
-
-    if (newSet.has(key)) {
-      newSet.delete(key)
-      await supabase.from('room_blocked_slots').delete()
-        .eq('room_id', roomId).eq('day_of_week', day).eq('slot', slot)
+  function toggleBlocked(roomId, day, slot) {
+    const exists = roomBlockedSlots.find(b => b.room_id === roomId && b.day_of_week === day && b.slot === slot)
+    if (exists) {
+      setRoomBlockedSlots(roomBlockedSlots.filter(b => !(b.room_id === roomId && b.day_of_week === day && b.slot === slot)))
     } else {
-      newSet.add(key)
-      await supabase.from('room_blocked_slots').insert({
-        room_id: roomId, school_id: schoolId, day_of_week: day, slot,
-      })
+      setRoomBlockedSlots([...roomBlockedSlots, { id: crypto.randomUUID(), room_id: roomId, day_of_week: day, slot }])
     }
-
-    setBlockedSlots(prev => ({ ...prev, [roomId]: newSet }))
   }
 
   return (
@@ -136,7 +102,6 @@ export default function RoomManagement() {
                 </div>
               </div>
 
-              {/* 사용 불가 슬롯 그리드 */}
               <div className="border border-gray-200 rounded-sm overflow-hidden">
                 <div className="flex bg-gray-50 border-b border-gray-200">
                   <div className="w-[64px] flex-shrink-0 border-r border-gray-200 h-8 flex items-center justify-center text-[11px] font-semibold text-gray-500">교시</div>
@@ -150,7 +115,7 @@ export default function RoomManagement() {
                       {slot + 1}교시
                     </div>
                     {Array.from({ length: 5 }, (_, day) => {
-                      const blocked = blockedSlots[room.id]?.has(`${day}-${slot}`)
+                      const blocked = blockedMap[room.id]?.has(`${day}-${slot}`)
                       return (
                         <div
                           key={day}
