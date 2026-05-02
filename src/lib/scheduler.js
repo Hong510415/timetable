@@ -127,6 +127,8 @@ export function buildSchedule(gradeConfigs, subjects, teachers, lunchConfig, roo
   const classDayCount = {}
   // 교사+과목+요일별 배정 슬롯 (연속 배치 + 최대 횟수 제한용)
   const teacherSubjectDaySlots = {}
+  // 교사+요일별 슬롯의 학년 (인접 다른 학년 패널티용)
+  const teacherSlotGrade = {}
 
   function isSlotValid(teacherId, subjectId, day, slot, classAvailable) {
     const subjectBlocked = subjectBlockedMap[subjectId]
@@ -198,13 +200,22 @@ export function buildSchedule(gradeConfigs, subjects, teachers, lunchConfig, roo
         }
       }
 
+      // 인접 슬롯에 다른 학년이 있으면 패널티 (같은 학년 수업이 뭉쳐서 배치되도록)
+      let adjDiffGradePenalty = 0
+      for (const adj of [slot - 1, slot + 1]) {
+        if (adj < 0 || adj >= totalSlots) continue
+        const adjGrade = teacherSlotGrade[teacherId]?.[day]?.[adj]
+        if (adjGrade !== undefined && adjGrade !== grade) adjDiffGradePenalty++
+      }
+
       // 점수:
       // +5 연속 쌍 배치 가능한 날 (Priority 0)
       // +3 같은 학년 수업이 이미 있는 날 선호 (Priority 1)
       // -2 다른 학년 수업이 있는 날 페널티 (Priority 1)
+      // -6 인접 슬롯에 다른 학년 (끼어들기 방지)
       // -1 교사 요일 부하 (Priority 3: 교사 요일 균형)
       // -3 학급 요일 부하 (Priority 3: 담임 요일 균형)
-      const score = pairBonus + hasSameGrade * 3 - diffGradeLoad * 2 - teacherLoad - classLoad * 3
+      const score = pairBonus + hasSameGrade * 3 - diffGradeLoad * 2 - adjDiffGradePenalty * 6 - teacherLoad - classLoad * 3
 
       candidates.push({ day, slot, score })
     }
@@ -218,6 +229,8 @@ export function buildSchedule(gradeConfigs, subjects, teachers, lunchConfig, roo
     result[grade][classNum][day][slot] = { teacherId, subjectId }
     teacherOccupied[teacherId][day].add(slot)
     gradeClassSlots[grade][classNum][day].delete(slot)
+    if (!teacherSlotGrade[teacherId]) teacherSlotGrade[teacherId] = Array.from({ length: 5 }, () => ({}))
+    teacherSlotGrade[teacherId][day][slot] = grade
 
     if (!teacherGradeDay[teacherId]) teacherGradeDay[teacherId] = {}
     if (!teacherGradeDay[teacherId][grade]) teacherGradeDay[teacherId][grade] = [0, 0, 0, 0, 0]
