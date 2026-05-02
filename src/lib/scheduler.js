@@ -93,17 +93,17 @@ export function buildSchedule(gradeConfigs, subjects, teachers, lunchConfig, roo
   }
 
   // 정렬 우선순위:
-  // ① 총 시수 많은 교사 (제약 강한 교사 먼저)
-  // ② 교사ID → 학년 → 반 → session
-  // 같은 학급의 session을 연속 처리해야 2반도 1반과 같은 요일에 연속 배치됨
+  // ① session (라운드로빈: 같은 학년 전체 1회차 완료 후 2회차)
+  // ② 총 시수 많은 교사 (제약 강한 교사 먼저)
+  // ③ 교사ID → 학년 → 반
   units.sort((a, b) => {
+    if (a.session !== b.session) return a.session - b.session
     const aH = teacherTotalHours[a.teacherId] || 0
     const bH = teacherTotalHours[b.teacherId] || 0
     if (aH !== bH) return bH - aH
     if (a.teacherId !== b.teacherId) return a.teacherId < b.teacherId ? -1 : 1
     if (a.grade !== b.grade) return a.grade - b.grade
-    if (a.classNum !== b.classNum) return a.classNum - b.classNum
-    return a.session - b.session
+    return a.classNum - b.classNum
   })
 
   // 결과 구조
