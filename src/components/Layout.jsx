@@ -1,12 +1,13 @@
 import { useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { Settings, Users, Calendar, DoorOpen, CalendarCheck, Download, Upload } from 'lucide-react'
+import { Settings, Users, Calendar, DoorOpen, CalendarCheck, Download, Upload, ClipboardList } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { exportFullWorkbook, importFullWorkbook } from '../lib/excelIO'
 
 const navItems = [
   { path: '/setup', label: '학교 설정', icon: Settings },
   { path: '/teachers', label: '전담 교사 관리', icon: Users },
+  { path: '/assignment', label: '전담 배정', icon: ClipboardList },
   { path: '/rooms', label: '특별실 관리', icon: DoorOpen },
   { path: '/timetable', label: '전담 시간표', icon: Calendar },
   { path: '/room-timetable', label: '특별실 시간표', icon: CalendarCheck },

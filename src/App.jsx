@@ -5,6 +5,7 @@ import SchoolSetup from './pages/SchoolSetup'
 import TeacherManagement from './pages/TeacherManagement'
 import Timetable from './pages/Timetable'
 import RoomManagement from './pages/RoomManagement'
+import Assignment from './pages/Assignment'
 import RoomTimetable from './pages/RoomTimetable'
 
 export default function App() {
@@ -14,6 +15,7 @@ export default function App() {
         <Routes>
           <Route path="/setup" element={<Layout><SchoolSetup /></Layout>} />
           <Route path="/teachers" element={<Layout><TeacherManagement /></Layout>} />
+          <Route path="/assignment" element={<Layout><Assignment /></Layout>} />
           <Route path="/timetable" element={<Layout><Timetable /></Layout>} />
           <Route path="/rooms" element={<Layout><RoomManagement /></Layout>} />
           <Route path="/room-timetable" element={<Layout><RoomTimetable /></Layout>} />
