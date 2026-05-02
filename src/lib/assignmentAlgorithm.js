@@ -83,7 +83,19 @@ export function runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assig
     let remaining = [...unit.classNums]
 
     while (remaining.length > 0) {
-      const teacher = pickTeacher(true)
+      // 이 unit을 이미 담당 중인 교사가 있으면 그 교사에게 계속 배정 (같은 과목·학년 내 학급 추가)
+      const continuationTeacher = teacherState.find(
+        t => t.assignments.some(a => a.subjectId === unit.subjectId && a.grade === unit.grade)
+      )
+
+      let teacher
+      if (continuationTeacher) {
+        teacher = continuationTeacher
+      } else {
+        // 새로운 주요과목 — 제한 슬롯 남은 교사 중 시수 가장 적은 교사
+        teacher = pickTeacher(true)
+      }
+
       if (!teacher) {
         // 모든 교사가 주요과목 제한 초과 — 어쩔 수 없이 시수 적은 교사에게
         const fallback = teacherState.slice().sort((a, b) => a.currentHours - b.currentHours)[0]
@@ -96,16 +108,13 @@ export function runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assig
         break
       }
 
-      // 이 교사가 이 과목을 이미 담당 중이면 그냥 추가 (같은 주요과목 내 학급 추가는 허용)
-      const alreadyHasThis = teacher.assignments.some(
-        a => a.subjectId === unit.subjectId && a.grade === unit.grade
-      )
-
-      // 이 교사가 받을 수 있는 시수 여유 계산
+      // 이 교사가 받을 수 있는 반 수 계산
+      // roomLeft가 0 이하이면 최소 1반은 배정 (막히면 loop 탈출 안 되므로)
       const roomLeft = targetHours - teacher.currentHours
-      const classesCanTake = alreadyHasThis
-        ? remaining.length  // 이미 담당 중이면 전부 받을 수 있음
-        : Math.max(1, Math.min(remaining.length, Math.ceil(roomLeft / unit.hoursPerClass)))
+      const maxClasses = roomLeft > 0
+        ? Math.floor(roomLeft / unit.hoursPerClass)
+        : 1
+      const classesCanTake = Math.min(remaining.length, Math.max(1, maxClasses))
 
       const toAssign = remaining.slice(0, classesCanTake)
       remaining = remaining.slice(classesCanTake)
