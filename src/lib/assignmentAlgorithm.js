@@ -306,6 +306,32 @@ export function runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assig
     addClasses(least, unit, [classToMove])
   }
 
+  // ── Step F-3: 시수 균형 보정 ──────────────────────────────────────
+  // 일반과목 반을 1개씩 시수 많은 교사 → 적은 교사로 이동해 시수 균등화
+  for (let iter = 0; iter < 50; iter++) {
+    const sorted = ts.slice().sort((a, b) => a.hours - b.hours)
+    const least = sorted[0]
+    const most = sorted[sorted.length - 1]
+    if (most.hours - least.hours <= 1) break
+
+    const minorAssigns = most.assignments
+      .filter(a => !a.is_major)
+      .sort((a, b) => a.hoursPerClass - b.hoursPerClass) // 작은 단위부터 시도
+
+    let moved = false
+    for (const fromAssign of minorAssigns) {
+      const unit = units.find(u => u.subjectId === fromAssign.subjectId && u.grade === fromAssign.grade)
+      if (!unit) continue
+      if (unit.hoursPerClass > most.hours - least.hours) continue // 이동 시 역전
+      const classToMove = fromAssign.classNums[fromAssign.classNums.length - 1]
+      removeClasses(most, unit, [classToMove])
+      addClasses(least, unit, [classToMove])
+      moved = true
+      break
+    }
+    if (!moved) break
+  }
+
   // 결과 변환
   const assignments = []
   for (const t of ts) {

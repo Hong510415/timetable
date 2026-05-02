@@ -164,7 +164,6 @@ export default function Assignment() {
               <div className="w-[90px] flex-shrink-0 px-3 py-2.5 border-r border-gray-200">과목</div>
               <div className="w-[60px] flex-shrink-0 px-3 py-2.5 border-r border-gray-200">학년</div>
               <div className="flex-1 px-3 py-2.5 border-r border-gray-200">담당 반</div>
-              <div className="w-[50px] flex-shrink-0 px-3 py-2.5 border-r border-gray-200">시수</div>
               <div className="w-[80px] flex-shrink-0 px-3 py-2.5 border-r border-gray-200">합계</div>
               <div className="w-[60px] flex-shrink-0 px-3 py-2.5">편집</div>
             </div>
@@ -198,7 +197,6 @@ export default function Assignment() {
                           }
                         />
                       </div>
-                      <div className="w-[50px] flex-shrink-0 border-r border-gray-100" />
                       <div className="w-[80px] flex-shrink-0 px-3 text-[12px] font-bold text-gray-400 border-r border-gray-100">0h</div>
                       <div className="w-[60px]" />
                     </div>
@@ -232,11 +230,9 @@ export default function Assignment() {
                               {a.isManual && <span className="text-blue-400 text-[10px]">✎</span>}
                             </div>
                             <div className="w-[60px] flex-shrink-0 px-3 text-[12px] border-r border-gray-100">{a.grade}학년</div>
-                            <div className="flex-1 px-3 text-[12px] border-r border-gray-100">
-                              {classDisplay} ({a.classNums.length}반)
-                            </div>
-                            <div className="w-[50px] flex-shrink-0 px-3 text-[12px] text-gray-500 border-r border-gray-100">
-                              {a.weeklyHours}h
+                            <div className="flex-1 px-3 text-[12px] border-r border-gray-100 flex items-center gap-2">
+                              <span>{classDisplay} ({a.classNums.length}반)</span>
+                              <span className="text-gray-400">{a.weeklyHours}h</span>
                             </div>
                             <div className={`w-[80px] flex-shrink-0 px-3 text-[12px] font-bold border-r border-gray-100 ${localIdx === 0 && (isOver || isUnder) ? 'text-yellow-700' : 'text-gray-900'}`}>
                               {localIdx === 0 ? `${totalH}h` : ''}
