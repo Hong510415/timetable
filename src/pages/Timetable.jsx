@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
-import { Download, RefreshCw, ChevronDown } from 'lucide-react'
-import { supabase } from '../lib/supabase'
+import { useState } from 'react'
+import { Download, RefreshCw } from 'lucide-react'
+import { useApp } from '../context/AppContext'
 import { buildSchedule, flattenResult } from '../lib/scheduler'
 import { exportTimetableByClass, exportTimetableByTeacher } from '../lib/excelExport'
 import TimetableGrid from '../components/TimetableGrid'
@@ -8,53 +8,17 @@ import TimetableGrid from '../components/TimetableGrid'
 const GRADES = [1, 2, 3, 4, 5, 6]
 
 export default function Timetable() {
-  const [schoolId, setSchoolId] = useState(null)
-  const [gradeConfigs, setGradeConfigs] = useState([])
-  const [subjects, setSubjects] = useState([])
-  const [teachers, setTeachers] = useState([])
-  const [lunchConfig, setLunchConfig] = useState(null)
-  const [timetableRows, setTimetableRows] = useState([])
+  const { state, setTimetableSlots } = useApp()
+  const { gradeConfigs, subjects, teachers, lunchConfig, timetableSlots: timetableRows, roomBlockedSlots } = state
+
   const [generating, setGenerating] = useState(false)
   const [errors, setErrors] = useState([])
-  const [tab, setTab] = useState('class') // 'class' | 'teacher'
+  const [tab, setTab] = useState('class')
   const [selectedGrade, setSelectedGrade] = useState(1)
   const [selectedClass, setSelectedClass] = useState(1)
-  const [selectedTeacher, setSelectedTeacher] = useState(null)
-  const [scheduleResult, setScheduleResult] = useState(null)
-  const [roomBlockedSlots, setRoomBlockedSlots] = useState([])
-  const [editModal, setEditModal] = useState(null) // { day, slot, grade, classNum, current }
+  const [selectedTeacher, setSelectedTeacher] = useState(teachers[0]?.id || null)
+  const [editModal, setEditModal] = useState(null)
   const [saving, setSaving] = useState(false)
-
-  useEffect(() => { load() }, [])
-
-  async function load() {
-    const { data: { user } } = await supabase.auth.getUser()
-    const { data: school } = await supabase.from('schools').select('id').eq('user_id', user.id).single()
-    if (!school) return
-    setSchoolId(school.id)
-
-    const [{ data: gc }, { data: subs }, { data: t }, { data: lunch }, { data: rows }, { data: blocked }] = await Promise.all([
-      supabase.from('grade_configs').select('*').eq('school_id', school.id).order('grade'),
-      supabase.from('subjects').select('*').eq('school_id', school.id).order('grade'),
-      supabase.from('teachers').select('*, teacher_assignments(*)').eq('school_id', school.id),
-      supabase.from('lunch_config').select('*').eq('school_id', school.id).single(),
-      supabase.from('timetable_slots').select('*, teachers(code), subjects(name)').eq('school_id', school.id),
-      supabase.from('room_blocked_slots').select('*').eq('school_id', school.id),
-    ])
-    setGradeConfigs(gc || [])
-    setSubjects(subs || [])
-    setTeachers(t || [])
-    setLunchConfig(lunch || { split_lunch: false, lunch_groups: [] })
-    setTimetableRows(rows || [])
-    setRoomBlockedSlots(blocked || [])
-
-    if (gc?.length && lunch) {
-      const { gradeLunchSlot, totalSlots } = computeSlotMeta(gc, lunch)
-      setScheduleResult(prev => ({ ...prev, gradeLunchSlot, totalSlots }))
-    }
-
-    if (t?.length) setSelectedTeacher(t[0]?.id || null)
-  }
 
   function computeSlotMeta(gc, lunch) {
     if (!gc?.length) return { gradeLunchSlot: {}, totalSlots: 6 }
@@ -65,7 +29,7 @@ export default function Timetable() {
     const gradeLunchSlot = {}
     for (const g of lunch.lunch_groups) {
       for (const grade of g.grades) {
-        gradeLunchSlot[grade] = g.slot  // 교시번호 그대로 (3,4,5)
+        gradeLunchSlot[grade] = g.slot
       }
     }
     return { gradeLunchSlot, totalSlots: maxPeriods + 1 }
@@ -79,18 +43,11 @@ export default function Timetable() {
     setErrors([])
     try {
       const result = buildSchedule(gradeConfigs, subjects, teachers, lunchConfig || { split_lunch: false, lunch_groups: [] }, roomBlockedSlots)
-      setScheduleResult(result)
-
-      const { rows } = flattenResult(result.result, schoolId, result.gradeLunchSlot, result.totalSlots)
+      const { rows } = flattenResult(result.result, result.gradeLunchSlot, result.totalSlots)
       const flatErrors = (result.errors || []).map(e => `${e.grade}학년 ${e.classNum}반 ${e.unassigned}시수 미배정`)
       setErrors(flatErrors)
-
-      await supabase.from('timetable_slots').delete().eq('school_id', schoolId)
-      if (rows.length > 0) {
-        const { error } = await supabase.from('timetable_slots').insert(rows)
-        if (error) console.error(error)
-      }
-      await load()
+      const rowsWithId = rows.map(r => ({ ...r, id: crypto.randomUUID() }))
+      setTimetableSlots(rowsWithId)
     } catch (e) {
       console.error(e)
       alert('시간표 생성 중 오류가 발생했습니다.')
@@ -104,12 +61,7 @@ export default function Timetable() {
       daySlots[d] = {}
       const relevant = timetableRows.filter(r => r.grade === grade && r.class_num === classNum && r.day_of_week === d)
       for (const r of relevant) {
-        daySlots[d][r.slot] = {
-          teacher_id: r.teacher_id,
-          subject_id: r.subject_id,
-          is_unassigned: r.is_unassigned,
-          id: r.id,
-        }
+        daySlots[d][r.slot] = { teacher_id: r.teacher_id, subject_id: r.subject_id, is_unassigned: r.is_unassigned, id: r.id }
       }
     }
     return daySlots
@@ -121,14 +73,7 @@ export default function Timetable() {
       daySlots[d] = {}
       const relevant = timetableRows.filter(r => r.teacher_id === teacherId && r.day_of_week === d)
       for (const r of relevant) {
-        const key = `${r.grade}-${r.class_num}`
-        daySlots[d][r.slot] = {
-          teacher_id: r.teacher_id,
-          subject_id: r.subject_id,
-          is_unassigned: r.is_unassigned,
-          label: `${r.grade}학년 ${r.class_num}반`,
-          id: r.id,
-        }
+        daySlots[d][r.slot] = { teacher_id: r.teacher_id, subject_id: r.subject_id, is_unassigned: r.is_unassigned, label: `${r.grade}학년 ${r.class_num}반`, id: r.id }
       }
     }
     return daySlots
@@ -140,42 +85,29 @@ export default function Timetable() {
     }
   }
 
-  async function handleEditSave(teacherId, subjectId) {
+  function handleEditSave(teacherId, subjectId) {
     if (!editModal) return
     setSaving(true)
     const { day, slot, grade, classNum } = editModal
-
-    const existing = timetableRows.find(r =>
-      r.grade === grade && r.class_num === classNum && r.day_of_week === day && r.slot === slot
-    )
-
-    if (existing) {
-      await supabase.from('timetable_slots').update({
-        teacher_id: teacherId || null,
-        subject_id: subjectId || null,
-        is_unassigned: !teacherId,
-      }).eq('id', existing.id)
-    } else {
-      await supabase.from('timetable_slots').insert({
-        school_id: schoolId,
-        grade, class_num: classNum,
-        day_of_week: day, slot,
-        teacher_id: teacherId || null,
-        subject_id: subjectId || null,
-        is_unassigned: !teacherId,
-      })
+    const updated = timetableRows.map(r => {
+      if (r.grade === grade && r.class_num === classNum && r.day_of_week === day && r.slot === slot) {
+        return { ...r, teacher_id: teacherId || null, subject_id: subjectId || null, is_unassigned: !teacherId }
+      }
+      return r
+    })
+    const exists = timetableRows.find(r => r.grade === grade && r.class_num === classNum && r.day_of_week === day && r.slot === slot)
+    if (!exists && teacherId) {
+      updated.push({ id: crypto.randomUUID(), grade, class_num: classNum, day_of_week: day, slot, teacher_id: teacherId, subject_id: subjectId, is_unassigned: false })
     }
+    setTimetableSlots(updated)
     setEditModal(null)
     setSaving(false)
-    await load()
   }
 
   const numClasses = gradeConfigs.find(g => g.grade === selectedGrade)?.num_classes || 1
   const { gradeLunchSlot } = computeSlotMeta(gradeConfigs, lunchConfig)
   const splitLunch = lunchConfig?.split_lunch || false
   const totalSlots = splitLunch ? 7 : 6
-  const classViewSlots = totalSlots
-  const teacherViewSlots = totalSlots
 
   const classSlots = getSlotsForClass(selectedGrade, selectedClass)
   const teacherSlots = selectedTeacher ? getSlotsForTeacher(selectedTeacher) : {}
@@ -220,7 +152,6 @@ export default function Timetable() {
         </div>
       ) : (
         <>
-          {/* 탭 */}
           <div className="flex border border-gray-200 bg-white rounded-sm w-fit mb-5">
             {[{ key: 'class', label: '학급별 보기' }, { key: 'teacher', label: '교사별 보기' }].map(t => (
               <button
@@ -255,7 +186,7 @@ export default function Timetable() {
               </div>
               <TimetableGrid
                 slots={classSlots}
-                totalSlots={classViewSlots}
+                totalSlots={totalSlots}
                 gradeLunchSlot={gradeLunchSlot}
                 teachers={teachers}
                 subjects={subjects}
@@ -278,7 +209,7 @@ export default function Timetable() {
               </div>
               <TeacherTimetableGrid
                 slots={teacherSlots}
-                totalSlots={teacherViewSlots}
+                totalSlots={totalSlots}
                 gradeLunchSlot={gradeLunchSlot}
                 subjects={subjects}
               />
@@ -287,7 +218,6 @@ export default function Timetable() {
         </>
       )}
 
-      {/* 셀 편집 모달 */}
       {editModal && (
         <EditCellModal
           modal={editModal}
