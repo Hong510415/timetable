@@ -8,6 +8,7 @@ export default function Assignment() {
   const { gradeConfigs, subjects, teachers, assignmentSettings, assignmentResult } = state
 
   const [running, setRunning] = useState(false)
+  const [openPopupId, setOpenPopupId] = useState(null)
 
   const result = assignmentResult?.result ?? null
   const editedAssignments = assignmentResult?.edited ?? null
@@ -188,6 +189,9 @@ export default function Assignment() {
                           teacher={teacher}
                           subjects={subjects}
                           gradeConfigs={gradeConfigs}
+                          popupId={`add-${teacher.id}`}
+                          openPopupId={openPopupId}
+                          setOpenPopupId={setOpenPopupId}
                           onAdd={(subjectId, subjectName, grade, classNums, hoursPerClass, isMajor) =>
                             addAssignment(teacher.id, teacher.code, subjectId, subjectName, grade, classNums, hoursPerClass, isMajor)
                           }
@@ -232,6 +236,9 @@ export default function Assignment() {
                               <EditClassNumsButton
                                 assignment={a}
                                 gradeConfigs={gradeConfigs}
+                                popupId={`edit-${globalIdx}`}
+                                openPopupId={openPopupId}
+                                setOpenPopupId={setOpenPopupId}
                                 onUpdate={(classNums) => updateAssignment(globalIdx, 'classNums', classNums)}
                               />
                             </div>
@@ -245,6 +252,9 @@ export default function Assignment() {
                             teacher={teacher}
                             subjects={subjects}
                             gradeConfigs={gradeConfigs}
+                            popupId={`add-${teacher.id}`}
+                            openPopupId={openPopupId}
+                            setOpenPopupId={setOpenPopupId}
                             onAdd={(subjectId, subjectName, grade, classNums, hoursPerClass, isMajor) =>
                               addAssignment(teacher.id, teacher.code, subjectId, subjectName, grade, classNums, hoursPerClass, isMajor)
                             }
@@ -277,27 +287,18 @@ export default function Assignment() {
   )
 }
 
-function EditClassNumsButton({ assignment, gradeConfigs, onUpdate }) {
-  const [open, setOpen] = useState(false)
-  const [openUp, setOpenUp] = useState(false)
+function EditClassNumsButton({ assignment, gradeConfigs, popupId, openPopupId, setOpenPopupId, onUpdate }) {
   const btnRef = React.useRef(null)
   const gc = gradeConfigs.find(g => g.grade === assignment.grade)
   const allClasses = gc ? Array.from({ length: gc.num_classes }, (_, i) => i + 1) : []
   const [selected, setSelected] = useState(new Set(assignment.classNums))
+  const isOpen = openPopupId === popupId
 
-  if (!open) {
-    return (
-      <button ref={btnRef} onClick={() => {
-        setSelected(new Set(assignment.classNums))
-        const rect = btnRef.current?.getBoundingClientRect()
-        setOpenUp(rect && rect.bottom > window.innerHeight - 200)
-        setOpen(true)
-      }}
-        className="text-[11px] text-gray-400 hover:text-gray-700">
-        편집
-      </button>
-    )
-  }
+  const openUp = React.useMemo(() => {
+    if (!isOpen || !btnRef.current) return false
+    const rect = btnRef.current.getBoundingClientRect()
+    return rect.bottom > window.innerHeight - 200
+  }, [isOpen])
 
   function toggle(c) {
     setSelected(prev => {
@@ -310,13 +311,23 @@ function EditClassNumsButton({ assignment, gradeConfigs, onUpdate }) {
 
   function handleDone() {
     const sorted = allClasses.filter(c => selected.has(c))
-    onUpdate(sorted) // 0개면 해당 행 삭제 (updateAssignment에서 처리)
-    setOpen(false)
+    onUpdate(sorted)
+    setOpenPopupId(null)
+  }
+
+  if (!isOpen) {
+    return (
+      <button ref={btnRef} onClick={() => { setSelected(new Set(assignment.classNums)); setOpenPopupId(popupId) }}
+        className="text-[11px] text-gray-400 hover:text-gray-700">
+        편집
+      </button>
+    )
   }
 
   return (
     <div className="relative">
-      <div className={`absolute right-0 z-20 bg-white border border-gray-200 rounded-sm shadow-lg p-3 min-w-[160px] ${openUp ? 'bottom-6' : 'top-0'}`}>
+      <button ref={btnRef} className="text-[11px] text-gray-700">편집</button>
+      <div className={`absolute right-0 z-20 bg-white border border-gray-200 rounded-sm shadow-lg p-3 min-w-[160px] ${openUp ? 'bottom-full mb-1' : 'top-full mt-1'}`}>
         <div className="text-[11px] font-semibold text-gray-600 mb-2">{assignment.grade}학년 담당 반 선택</div>
         <div className="flex flex-wrap gap-1 mb-2">
           {allClasses.map(c => (
@@ -330,7 +341,7 @@ function EditClassNumsButton({ assignment, gradeConfigs, onUpdate }) {
           ))}
         </div>
         <div className="flex gap-1">
-          <button onClick={() => setOpen(false)} className="flex-1 h-7 border border-gray-300 rounded-sm text-[11px] hover:bg-gray-50">취소</button>
+          <button onClick={() => setOpenPopupId(null)} className="flex-1 h-7 border border-gray-300 rounded-sm text-[11px] hover:bg-gray-50">취소</button>
           <button onClick={handleDone} className="flex-1 h-7 bg-black text-white rounded-sm text-[11px] hover:bg-gray-800">확인</button>
         </div>
       </div>
@@ -338,8 +349,8 @@ function EditClassNumsButton({ assignment, gradeConfigs, onUpdate }) {
   )
 }
 
-function AddAssignmentButton({ teacher, subjects, gradeConfigs, onAdd }) {
-  const [open, setOpen] = useState(false)
+function AddAssignmentButton({ teacher, subjects, gradeConfigs, popupId, openPopupId, setOpenPopupId, onAdd }) {
+  const isOpen = openPopupId === popupId
   const [selectedSubject, setSelectedSubject] = useState(null)
   const [selectedGrade, setSelectedGrade] = useState(null)
   const [selectedClasses, setSelectedClasses] = useState(new Set())
@@ -375,7 +386,7 @@ function AddAssignmentButton({ teacher, subjects, gradeConfigs, onAdd }) {
     const subjDef = subjects.find(s => s.name === selectedSubject.name && s.grade === selectedGrade)
     if (!subjDef) return
     onAdd(subjDef.id, subjDef.name, selectedGrade, classNums, subjDef.weekly_hours, subjDef.is_major)
-    setOpen(false)
+    setOpenPopupId(null)
     setSelectedSubject(null)
     setSelectedGrade(null)
     setSelectedClasses(new Set())
@@ -389,9 +400,9 @@ function AddAssignmentButton({ teacher, subjects, gradeConfigs, onAdd }) {
     ? (() => { const gc = gradeConfigs.find(g => g.grade === selectedGrade); return gc ? Array.from({ length: gc.num_classes }, (_, i) => i + 1) : [] })()
     : []
 
-  if (!open) {
+  if (!isOpen) {
     return (
-      <button onClick={() => setOpen(true)} className="text-[11px] text-gray-400 hover:text-gray-700">
+      <button onClick={() => setOpenPopupId(popupId)} className="text-[11px] text-gray-400 hover:text-gray-700">
         + 과목 추가
       </button>
     )
@@ -399,7 +410,7 @@ function AddAssignmentButton({ teacher, subjects, gradeConfigs, onAdd }) {
 
   return (
     <div className="relative">
-      <div className="absolute left-0 top-0 z-20 bg-white border border-gray-200 rounded-sm shadow-lg p-3 min-w-[220px]">
+      <div className="absolute left-0 bottom-full mb-1 z-20 bg-white border border-gray-200 rounded-sm shadow-lg p-3 min-w-[220px]">
         <div className="text-[11px] font-semibold text-gray-600 mb-2">과목 추가 — {teacher.code}</div>
 
         <div className="text-[10px] text-gray-400 mb-1">과목 선택</div>
@@ -450,7 +461,7 @@ function AddAssignmentButton({ teacher, subjects, gradeConfigs, onAdd }) {
         )}
 
         <div className="flex gap-1">
-          <button onClick={() => setOpen(false)} className="flex-1 h-7 border border-gray-300 rounded-sm text-[11px] hover:bg-gray-50">취소</button>
+          <button onClick={() => setOpenPopupId(null)} className="flex-1 h-7 border border-gray-300 rounded-sm text-[11px] hover:bg-gray-50">취소</button>
           <button
             onClick={handleDone}
             disabled={!selectedSubject || !selectedGrade || selectedClasses.size === 0}
