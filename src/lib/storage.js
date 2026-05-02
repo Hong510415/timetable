@@ -21,6 +21,7 @@ export const initialState = {
   timetableSlots: [],
   roomTimetableSlots: [],
   assignmentSettings: { maxMajorSubjectsPerTeacher: 1 },
+  assignmentResult: null,
 }
 
 export function loadFromStorage() {

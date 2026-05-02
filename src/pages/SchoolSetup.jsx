@@ -9,7 +9,6 @@ export default function SchoolSetup() {
   const { state, setSchoolName, setGradeConfigs, setLunchConfig } = useApp()
   const { schoolName, gradeConfigs, lunchConfig } = state
   const [tab, setTab] = useState('grade')
-  const [saved, setSaved] = useState(false)
 
   function updateGrade(grade, field, value) {
     const num = value === '' ? '' : Number(value)
@@ -31,11 +30,6 @@ export default function SchoolSetup() {
 
   function isGradeInSlot(grade, slot) {
     return lunchConfig.lunch_groups.some(g => g.slot === slot && g.grades.includes(grade))
-  }
-
-  function handleSave() {
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
   }
 
   const tabs = [
@@ -184,14 +178,6 @@ export default function SchoolSetup() {
         </div>
       )}
 
-      <div className="flex justify-end mt-6">
-        <button
-          onClick={handleSave}
-          className="h-10 px-5 bg-black text-white text-[13px] font-semibold rounded-sm hover:bg-gray-800"
-        >
-          {saved ? '저장됨 ✓' : '저장'}
-        </button>
-      </div>
     </div>
   )
 }

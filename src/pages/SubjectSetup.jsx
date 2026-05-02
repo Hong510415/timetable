@@ -4,8 +4,8 @@ import { useApp } from '../context/AppContext'
 const GRADES = [1, 2, 3, 4, 5, 6]
 
 export default function SubjectSetup() {
-  const { state, setSubjects, setTeachers } = useApp()
-  const { subjects, gradeConfigs, teachers } = state
+  const { state, setSubjects, setTeachers, setAssignmentSettings } = useApp()
+  const { subjects, gradeConfigs, teachers, assignmentSettings } = state
   const [tab, setTab] = useState('subjects')
 
   const activeGrades = gradeConfigs.filter(g => g.num_classes > 0).map(g => g.grade)
@@ -46,6 +46,7 @@ export default function SubjectSetup() {
     <div className="p-10 bg-gray-50 min-h-full">
       <div className="mb-6">
         <h1 className="text-[22px] font-bold">전담 설정</h1>
+        <p className="text-[12px] text-gray-400 mt-1">변경 사항은 자동으로 저장됩니다.</p>
       </div>
 
       <div className="flex border border-gray-200 bg-white rounded-sm w-fit mb-6">
@@ -64,7 +65,38 @@ export default function SubjectSetup() {
 
       {tab === 'subjects' && (
         <div className="flex flex-col gap-4">
-          <p className="text-[12px] text-gray-400 -mt-2">학년별 전담 과목과 주당 시수를 입력하세요.</p>
+          {/* 주요/일반 안내 + 배정 설정 */}
+          <div className="bg-white border border-gray-200 rounded-sm p-5 flex flex-col gap-3">
+            <div>
+              <p className="text-[13px] font-semibold text-gray-700 mb-1">주요 과목 vs 일반 과목</p>
+              <p className="text-[12px] text-gray-500 leading-5">
+                <span className="font-semibold text-gray-700">주요 과목</span>은 영어·과학·체육처럼 전담 부담이 큰 과목입니다.
+                한 교사가 주요 과목을 여러 개 맡으면 수업 준비 부담이 집중됩니다.<br />
+                <span className="font-semibold text-gray-700">일반 과목</span>은 안전처럼 부담이 적은 과목입니다.
+              </p>
+            </div>
+            <div className="h-px bg-gray-100" />
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={assignmentSettings.maxMajorSubjectsPerTeacher === 1}
+                  onChange={e => setAssignmentSettings({
+                    ...assignmentSettings,
+                    maxMajorSubjectsPerTeacher: e.target.checked ? 1 : 99,
+                  })}
+                  className="w-4 h-4"
+                />
+                <span className="text-[13px] text-gray-700">교사 1명당 주요 과목 1개만 배정</span>
+              </label>
+              <span className="text-[11px] text-gray-400">
+                {assignmentSettings.maxMajorSubjectsPerTeacher === 1
+                  ? '✓ 한 교사가 영어+과학처럼 주요 과목 2개를 동시에 맡지 않습니다.'
+                  : '제한 없음 — 주요 과목 여러 개를 한 교사가 맡을 수 있습니다.'}
+              </span>
+            </div>
+          </div>
+
           {gradesToShow.map(grade => (
             <div key={grade} className="bg-white border border-gray-200 rounded-sm p-5">
               <div className="flex items-center justify-between mb-3">

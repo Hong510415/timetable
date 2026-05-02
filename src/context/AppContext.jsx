@@ -15,6 +15,7 @@ function reducer(state, action) {
     case 'SET_TIMETABLE_SLOTS': return { ...state, timetableSlots: action.payload }
     case 'SET_ROOM_TIMETABLE_SLOTS': return { ...state, roomTimetableSlots: action.payload }
     case 'SET_ASSIGNMENT_SETTINGS': return { ...state, assignmentSettings: action.payload }
+    case 'SET_ASSIGNMENT_RESULT': return { ...state, assignmentResult: action.payload }
     case 'IMPORT': return { ...initialState, ...action.payload }
     default: return state
   }
@@ -39,6 +40,7 @@ export function AppProvider({ children }) {
     setTimetableSlots: (v) => dispatch({ type: 'SET_TIMETABLE_SLOTS', payload: v }),
     setRoomTimetableSlots: (v) => dispatch({ type: 'SET_ROOM_TIMETABLE_SLOTS', payload: v }),
     setAssignmentSettings: (v) => dispatch({ type: 'SET_ASSIGNMENT_SETTINGS', payload: v }),
+    setAssignmentResult: (v) => dispatch({ type: 'SET_ASSIGNMENT_RESULT', payload: v }),
     importData: (data) => dispatch({ type: 'IMPORT', payload: data }),
   }
 
