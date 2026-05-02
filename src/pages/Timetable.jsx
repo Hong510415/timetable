@@ -86,24 +86,26 @@ export default function Timetable() {
   function openEditModal(day, slot, cell) {
     if (tab === 'class') {
       setEditModal({ day, slot, grade: selectedGrade, classNum: selectedClass, current: cell })
-    } else if (tab === 'teacher' && cell) {
-      setEditModal({ day, slot, grade: cell.grade, classNum: cell.class_num, current: cell, classLabel: cell.label })
+    } else if (tab === 'teacher') {
+      setEditModal({ day, slot, grade: cell?.grade || null, classNum: cell?.class_num || null, current: cell, classLabel: cell?.label || null, teacherView: true, defaultTeacherId: selectedTeacher })
     }
   }
 
-  function handleEditSave(teacherId, subjectId) {
+  function handleEditSave(teacherId, subjectId, grade, classNum) {
     if (!editModal) return
     setSaving(true)
-    const { day, slot, grade, classNum } = editModal
+    const g = grade ?? editModal.grade
+    const cn = classNum ?? editModal.classNum
+    if (!g || !cn) { setSaving(false); return }
     const updated = timetableRows.map(r => {
-      if (r.grade === grade && r.class_num === classNum && r.day_of_week === day && r.slot === slot) {
+      if (r.grade === g && r.class_num === cn && r.day_of_week === editModal.day && r.slot === editModal.slot) {
         return { ...r, teacher_id: teacherId || null, subject_id: subjectId || null, is_unassigned: !teacherId }
       }
       return r
     })
-    const exists = timetableRows.find(r => r.grade === grade && r.class_num === classNum && r.day_of_week === day && r.slot === slot)
+    const exists = timetableRows.find(r => r.grade === g && r.class_num === cn && r.day_of_week === editModal.day && r.slot === editModal.slot)
     if (!exists && teacherId) {
-      updated.push({ id: crypto.randomUUID(), grade, class_num: classNum, day_of_week: day, slot, teacher_id: teacherId, subject_id: subjectId, is_unassigned: false })
+      updated.push({ id: crypto.randomUUID(), grade: g, class_num: cn, day_of_week: editModal.day, slot: editModal.slot, teacher_id: teacherId, subject_id: subjectId, is_unassigned: false })
     }
     setTimetableSlots(updated)
     setEditModal(null)
@@ -230,6 +232,7 @@ export default function Timetable() {
           modal={editModal}
           teachers={teachers}
           subjects={subjects}
+          gradeConfigs={gradeConfigs}
           grade={editModal.grade}
           onSave={handleEditSave}
           onClose={() => setEditModal(null)}
@@ -262,8 +265,8 @@ function TeacherTimetableGrid({ slots, totalSlots, gradeLunchSlot, subjects, onC
             return (
               <div
                 key={day}
-                onClick={() => cell && onCellClick?.(day, slot, cell)}
-                className={`flex-1 border-r border-gray-100 last:border-r-0 flex flex-col items-center justify-center gap-0.5 ${cell ? 'cursor-pointer hover:bg-blue-50 transition-colors' : ''}`}
+                onClick={() => onCellClick?.(day, slot, cell)}
+                className="flex-1 border-r border-gray-100 last:border-r-0 flex flex-col items-center justify-center gap-0.5 cursor-pointer hover:bg-blue-50 transition-colors"
               >
                 {cell ? (
                   <>
@@ -282,13 +285,25 @@ function TeacherTimetableGrid({ slots, totalSlots, gradeLunchSlot, subjects, onC
   )
 }
 
-function EditCellModal({ modal, teachers, subjects, grade, onSave, onClose, saving }) {
-  const { day, slot, classLabel } = modal
+function EditCellModal({ modal, teachers, subjects, gradeConfigs, grade, onSave, onClose, saving }) {
+  const { day, slot, classLabel, teacherView, defaultTeacherId } = modal
   const DAY_LABELS = ['월', '화', '수', '목', '금']
-  const [teacherId, setTeacherId] = useState(modal.current?.teacher_id || '')
-  const [subjectId, setSubjectId] = useState(modal.current?.subject_id || '')
+  const needsGradeClass = teacherView && !modal.grade
 
-  const gradeSubjects = subjects.filter(s => s.grade === grade)
+  const [teacherId, setTeacherId] = useState(modal.current?.teacher_id || defaultTeacherId || '')
+  const [subjectId, setSubjectId] = useState(modal.current?.subject_id || '')
+  const [formGrade, setFormGrade] = useState(grade || 1)
+  const [formClass, setFormClass] = useState(1)
+
+  const numClasses = gradeConfigs?.find(g => g.grade === formGrade)?.num_classes || 1
+  const effectiveGrade = needsGradeClass ? formGrade : grade
+  const gradeSubjects = subjects.filter(s => s.grade === effectiveGrade)
+
+  function handleGradeChange(g) {
+    setFormGrade(g)
+    setFormClass(1)
+    setSubjectId('')
+  }
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
@@ -296,6 +311,30 @@ function EditCellModal({ modal, teachers, subjects, grade, onSave, onClose, savi
         <h2 className="text-[16px] font-bold mb-1">{DAY_LABELS[day]}요일 {slot + 1}교시 편집</h2>
         {classLabel && <p className="text-[12px] text-gray-400 mb-4">{classLabel}</p>}
         <div className="flex flex-col gap-3 mb-5">
+          {needsGradeClass && (
+            <>
+              <div>
+                <label className="text-[12px] font-semibold text-gray-600 block mb-1">학년</label>
+                <select
+                  value={formGrade}
+                  onChange={e => handleGradeChange(Number(e.target.value))}
+                  className="w-full h-9 px-2 border border-gray-300 rounded-sm text-[13px] outline-none bg-white"
+                >
+                  {[1,2,3,4,5,6].map(g => <option key={g} value={g}>{g}학년</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-[12px] font-semibold text-gray-600 block mb-1">반</label>
+                <select
+                  value={formClass}
+                  onChange={e => setFormClass(Number(e.target.value))}
+                  className="w-full h-9 px-2 border border-gray-300 rounded-sm text-[13px] outline-none bg-white"
+                >
+                  {Array.from({ length: numClasses }, (_, i) => i + 1).map(c => <option key={c} value={c}>{c}반</option>)}
+                </select>
+              </div>
+            </>
+          )}
           <div>
             <label className="text-[12px] font-semibold text-gray-600 block mb-1">교사</label>
             <select
@@ -322,7 +361,7 @@ function EditCellModal({ modal, teachers, subjects, grade, onSave, onClose, savi
         <div className="flex justify-end gap-2">
           <button onClick={onClose} className="h-9 px-4 border border-gray-300 rounded-sm text-[13px] hover:bg-gray-50">취소</button>
           <button
-            onClick={() => onSave(teacherId, subjectId)}
+            onClick={() => onSave(teacherId, subjectId, needsGradeClass ? formGrade : null, needsGradeClass ? formClass : null)}
             disabled={saving}
             className="h-9 px-4 bg-black text-white text-[13px] font-semibold rounded-sm hover:bg-gray-800 disabled:opacity-50"
           >
