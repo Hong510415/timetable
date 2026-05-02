@@ -1,5 +1,10 @@
 /**
  * 전담 배정 알고리즘
+ *
+ * 원칙:
+ * 1. 같은 과목·같은 학년은 한 교사에게 몰아줌 (학년 수 최소화)
+ * 2. 주요과목 1인 제한은 절대 준수 (넘치면 학급 분리)
+ * 3. 일반과목은 자투리 시수 채우는 용도로 학급 쪼개서 배정
  */
 export function runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assignmentSettings }) {
   const maxMajor = assignmentSettings?.maxMajorSubjectsPerTeacher ?? 1
@@ -7,21 +12,20 @@ export function runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assig
   if (!teachers.length) return { assignments: [], warnings: [{ type: 'error', message: '교사가 없습니다.' }], gradeSummary: [], teacherSummary: [] }
   if (!subjects.length) return { assignments: [], warnings: [{ type: 'error', message: '과목이 없습니다.' }], gradeSummary: [], teacherSummary: [] }
 
-  // Step A: 배정 단위 생성
+  // Step A: 배정 단위 생성 (과목×학년 조합)
   const units = []
   for (const subj of subjects) {
     const gc = gradeConfigs.find(g => g.grade === subj.grade)
     if (!gc) continue
-    const numClasses = gc.num_classes
     units.push({
       subjectId: subj.id,
       subjectName: subj.name,
       grade: subj.grade,
       is_major: subj.is_major,
       hoursPerClass: subj.weekly_hours,
-      numClasses,
-      totalHours: subj.weekly_hours * numClasses,
-      classNums: Array.from({ length: numClasses }, (_, i) => i + 1),
+      numClasses: gc.num_classes,
+      totalHours: subj.weekly_hours * gc.num_classes,
+      classNums: Array.from({ length: gc.num_classes }, (_, i) => i + 1),
     })
   }
 
@@ -31,83 +35,103 @@ export function runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assig
   const totalDedicated = units.reduce((s, u) => s + u.totalHours, 0)
   const targetHours = Math.round(totalDedicated / teachers.length)
 
-  // 교사 상태 (mutable)
+  // 교사 상태
   const teacherState = teachers.map(t => ({
     id: t.id,
     code: t.code,
     currentHours: 0,
-    majorCount: 0,
-    assignments: [],
+    majorCount: 0,   // 담당 중인 주요과목 종류 수
+    assignments: [], // { subjectId, subjectName, grade, classNums, hoursPerClass }
   }))
 
-  function assignUnit(unit, teacherSt, classNums) {
-    const hours = unit.hoursPerClass * classNums.length
-    teacherSt.assignments.push({
-      subjectId: unit.subjectId,
-      grade: unit.grade,
-      classNums: [...classNums],
-      hoursPerClass: unit.hoursPerClass,
-    })
-    teacherSt.currentHours += hours
-    if (unit.is_major) teacherSt.majorCount++
+  // 시수 가장 적고 주요과목 제한 미달인 교사 반환
+  function pickTeacher(requireMajorSlot) {
+    const pool = requireMajorSlot
+      ? teacherState.filter(t => t.majorCount < maxMajor)
+      : teacherState
+    if (!pool.length) return null
+    return pool.slice().sort((a, b) => a.currentHours - b.currentHours)[0]
   }
 
-  // Step C: 주요 과목 배정
-  const majorUnits = units.filter(u => u.is_major).sort((a, b) => b.totalHours - a.totalHours)
-  const majorOverflowWarnings = []
-  for (const unit of majorUnits) {
-    const eligible = teacherState.filter(t => t.majorCount < maxMajor)
-    if (eligible.length === 0 && maxMajor < 99) {
-      majorOverflowWarnings.push(unit.subjectName + `(${unit.grade}학년)`)
-    }
-    const target = eligible.length > 0
-      ? eligible.sort((a, b) => a.currentHours - b.currentHours)[0]
-      : teacherState.sort((a, b) => a.currentHours - b.currentHours)[0]
-    assignUnit(unit, target, unit.classNums)
-  }
-
-  // Step D: 일반 과목 배정
-  const minorUnits = units.filter(u => !u.is_major).sort((a, b) => b.totalHours - a.totalHours)
-  for (const unit of minorUnits) {
-    const target = teacherState.sort((a, b) => a.currentHours - b.currentHours)[0]
-    assignUnit(unit, target, unit.classNums)
-  }
-
-  // Step E: 시수 편차 줄이기 (학급 분리)
-  for (let iter = 0; iter < 20; iter++) {
-    const sorted = [...teacherState].sort((a, b) => a.currentHours - b.currentHours)
-    const least = sorted[0]
-    const most = sorted[sorted.length - 1]
-    if (most.currentHours - least.currentHours <= Math.max(3, targetHours * 0.15)) break
-
-    // 주요 과목은 받는 교사의 majorCount 제한을 확인
-    const splitableAssign = most.assignments
-      .filter(a => {
-        if (a.classNums.length < 2) return false
-        const unit = units.find(u => u.subjectId === a.subjectId)
-        if (!unit?.is_major) return true
-        // 주요 과목이면 least가 아직 이 과목을 담당하지 않고 제한 미달인지 확인
-        const alreadyHasSubject = least.assignments.some(la => la.subjectId === a.subjectId && la.grade === a.grade)
-        return !alreadyHasSubject && least.majorCount < maxMajor
+  // 교사에게 classNums 배정
+  function assign(teacher, unit, classNums) {
+    const existing = teacher.assignments.find(
+      a => a.subjectId === unit.subjectId && a.grade === unit.grade
+    )
+    if (existing) {
+      existing.classNums = [...existing.classNums, ...classNums]
+    } else {
+      teacher.assignments.push({
+        subjectId: unit.subjectId,
+        subjectName: unit.subjectName,
+        grade: unit.grade,
+        classNums: [...classNums],
+        hoursPerClass: unit.hoursPerClass,
       })
-      .sort((a, b) => (b.hoursPerClass * b.classNums.length) - (a.hoursPerClass * a.classNums.length))[0]
-    if (!splitableAssign) break
+      if (unit.is_major) teacher.majorCount++
+    }
+    teacher.currentHours += unit.hoursPerClass * classNums.length
+  }
 
-    const unit = units.find(u => u.subjectId === splitableAssign.subjectId)
-    const half = Math.floor(splitableAssign.classNums.length / 2)
-    const movedClasses = splitableAssign.classNums.slice(0, half)
-    splitableAssign.classNums = splitableAssign.classNums.slice(half)
-    const movedHours = splitableAssign.hoursPerClass * movedClasses.length
-    most.currentHours -= movedHours
+  // Step C: 주요과목 배정
+  // 총시수 큰 순서대로, 한 과목·학년 단위를 통째로 한 교사에게
+  // 목표시수 초과 시 학급 분리 → 나머지는 다른 교사에게
+  const majorUnits = units.filter(u => u.is_major).sort((a, b) => b.totalHours - a.totalHours)
+  const warnings = []
 
-    least.assignments.push({
-      subjectId: splitableAssign.subjectId,
-      grade: splitableAssign.grade,
-      classNums: movedClasses,
-      hoursPerClass: splitableAssign.hoursPerClass,
-    })
-    least.currentHours += movedHours
-    if (unit?.is_major) least.majorCount++
+  for (const unit of majorUnits) {
+    let remaining = [...unit.classNums]
+
+    while (remaining.length > 0) {
+      const teacher = pickTeacher(true)
+      if (!teacher) {
+        // 모든 교사가 주요과목 제한 초과 — 어쩔 수 없이 시수 적은 교사에게
+        const fallback = teacherState.slice().sort((a, b) => a.currentHours - b.currentHours)[0]
+        assign(fallback, unit, remaining)
+        warnings.push({
+          type: 'warning',
+          message: `교사 수 부족으로 ${unit.subjectName}(${unit.grade}학년)이 주요과목 제한을 초과해 배정되었습니다. 전담 교사 수를 늘리거나 제한을 해제하세요.`,
+        })
+        remaining = []
+        break
+      }
+
+      // 이 교사가 이 과목을 이미 담당 중이면 그냥 추가 (같은 주요과목 내 학급 추가는 허용)
+      const alreadyHasThis = teacher.assignments.some(
+        a => a.subjectId === unit.subjectId && a.grade === unit.grade
+      )
+
+      // 이 교사가 받을 수 있는 시수 여유 계산
+      const roomLeft = targetHours - teacher.currentHours
+      const classesCanTake = alreadyHasThis
+        ? remaining.length  // 이미 담당 중이면 전부 받을 수 있음
+        : Math.max(1, Math.min(remaining.length, Math.ceil(roomLeft / unit.hoursPerClass)))
+
+      const toAssign = remaining.slice(0, classesCanTake)
+      remaining = remaining.slice(classesCanTake)
+
+      assign(teacher, unit, toAssign)
+    }
+  }
+
+  // Step D: 일반과목 배정 — 학급을 쪼개서 자투리 시수 채우기
+  const minorUnits = units.filter(u => !u.is_major).sort((a, b) => b.totalHours - a.totalHours)
+
+  for (const unit of minorUnits) {
+    let remaining = [...unit.classNums]
+
+    while (remaining.length > 0) {
+      // 시수 가장 적은 교사에게 배정
+      const teacher = teacherState.slice().sort((a, b) => a.currentHours - b.currentHours)[0]
+
+      const roomLeft = targetHours - teacher.currentHours
+      const classesCanTake = Math.max(1, Math.min(remaining.length, Math.ceil(roomLeft / unit.hoursPerClass)))
+
+      const toAssign = remaining.slice(0, classesCanTake)
+      remaining = remaining.slice(classesCanTake)
+
+      assign(teacher, unit, toAssign)
+    }
   }
 
   // 결과 변환
@@ -118,9 +142,9 @@ export function runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assig
         teacherId: ts.id,
         teacherCode: ts.code,
         subjectId: a.subjectId,
-        subjectName: subjects.find(s => s.id === a.subjectId)?.name || '',
+        subjectName: a.subjectName,
         grade: a.grade,
-        classNums: a.classNums,
+        classNums: [...a.classNums],
         weeklyHours: a.hoursPerClass * a.classNums.length,
         hoursPerClass: a.hoursPerClass,
         isManual: false,
@@ -128,20 +152,10 @@ export function runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assig
     }
   }
 
-  // Step F: 경고 계산
-  const warnings = []
-  if (majorOverflowWarnings.length > 0) {
-    warnings.push({
-      type: 'warning',
-      message: `교사 수가 부족해 일부 주요 과목이 한 교사에게 중복 배정되었습니다: ${majorOverflowWarnings.join(', ')}. 전담 설정에서 교사 수를 늘리거나 제한을 해제하세요.`,
-    })
-  }
-
+  // Step E: 경고 계산
   const gradeSummary = gradeConfigs.map(gc => {
     const weeklyTotal = gc.periods_mon + gc.periods_tue + gc.periods_wed + gc.periods_thu + gc.periods_fri
-    const dedicatedHours = subjects
-      .filter(s => s.grade === gc.grade)
-      .reduce((sum, s) => sum + s.weekly_hours, 0)
+    const dedicatedHours = subjects.filter(s => s.grade === gc.grade).reduce((sum, s) => sum + s.weekly_hours, 0)
     return { grade: gc.grade, dedicatedHours, homeRoomHours: weeklyTotal - dedicatedHours }
   })
 
