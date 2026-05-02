@@ -344,16 +344,20 @@ function TeacherTimetableGrid({ slots, totalSlots, gradeLunchSlot, subjects, tim
                   </>
                 ) : (
                   <>
-                    <span className="text-[12px] text-gray-200">—</span>
-                    {classesAtSlot.length > 0 && (
-                      <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1 z-30 hidden group-hover:flex flex-col bg-gray-800 text-white text-[11px] rounded px-2 py-1.5 gap-0.5 whitespace-nowrap">
+                    <span className="text-[12px] text-gray-200 group-hover:hidden">—</span>
+                    {classesAtSlot.length > 0 ? (
+                      <div className="hidden group-hover:flex flex-col items-center gap-0.5 w-full px-1">
                         {classesAtSlot.map(r => {
                           const subj = subjects?.find(s => s.id === r.subject_id)
                           return (
-                            <span key={r.id}>{r.grade}학년 {r.class_num}반 {subj?.name ?? '?'}</span>
+                            <span key={r.id} className="text-[10px] text-gray-500 leading-tight text-center">
+                              {r.grade}학년 {r.class_num}반 {subj?.name ?? '?'}
+                            </span>
                           )
                         })}
                       </div>
+                    ) : (
+                      <span className="hidden group-hover:block text-[12px] text-gray-300">—</span>
                     )}
                   </>
                 )}
