@@ -85,9 +85,9 @@ export default function Timetable() {
 
   function openEditModal(day, slot, cell) {
     if (tab === 'class') {
-      setEditModal({ day, slot, grade: selectedGrade, classNum: selectedClass, current: cell })
+      setEditModal({ day, slot, grade: selectedGrade, classNum: selectedClass, current: cell, rowId: cell?.id || null })
     } else if (tab === 'teacher') {
-      setEditModal({ day, slot, grade: cell?.grade || null, classNum: cell?.class_num || null, current: cell, classLabel: cell?.label || null, teacherView: true, defaultTeacherId: selectedTeacher })
+      setEditModal({ day, slot, grade: cell?.grade || null, classNum: cell?.class_num || null, current: cell, classLabel: cell?.label || null, teacherView: true, defaultTeacherId: selectedTeacher, rowId: cell?.id || null })
     }
   }
 
@@ -97,16 +97,23 @@ export default function Timetable() {
     const g = grade ?? editModal.grade
     const cn = classNum ?? editModal.classNum
     if (!g || !cn) { setSaving(false); return }
-    const updated = timetableRows.map(r => {
-      if (r.grade === g && r.class_num === cn && r.day_of_week === editModal.day && r.slot === editModal.slot) {
-        return { ...r, teacher_id: teacherId || null, subject_id: subjectId || null, is_unassigned: !teacherId }
+
+    let updated
+    if (editModal.rowId) {
+      // 기존 행을 id로 특정해서 수정 — 같은 슬롯의 다른 수업은 건드리지 않음
+      updated = timetableRows.map(r =>
+        r.id === editModal.rowId
+          ? { ...r, teacher_id: teacherId || null, subject_id: subjectId || null, is_unassigned: !teacherId }
+          : r
+      )
+    } else {
+      // 빈 칸에 새로 추가 — 기존 행 덮어쓰기 없이 INSERT
+      updated = [...timetableRows]
+      if (teacherId) {
+        updated.push({ id: crypto.randomUUID(), grade: g, class_num: cn, day_of_week: editModal.day, slot: editModal.slot, teacher_id: teacherId, subject_id: subjectId, is_unassigned: false })
       }
-      return r
-    })
-    const exists = timetableRows.find(r => r.grade === g && r.class_num === cn && r.day_of_week === editModal.day && r.slot === editModal.slot)
-    if (!exists && teacherId) {
-      updated.push({ id: crypto.randomUUID(), grade: g, class_num: cn, day_of_week: editModal.day, slot: editModal.slot, teacher_id: teacherId, subject_id: subjectId, is_unassigned: false })
     }
+
     setTimetableSlots(updated)
     setEditModal(null)
     setSaving(false)
