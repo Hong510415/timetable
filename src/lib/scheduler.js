@@ -181,12 +181,30 @@ export function buildSchedule(gradeConfigs, subjects, teachers, lunchConfig, roo
       const diffGradeLoad = teacherLoad - sameGradeLoad
       const classLoad = classDayCount[grade]?.[classNum]?.[day] || 0
 
+      // 연속 쌍 보너스: 첫 배정(existingCount===0)이고 같은 날 2회 허용일 때,
+      // 인접 슬롯도 교사+학급+특별실 제약을 통과하면 +5 부여
+      // → session 0이 session 1을 연속 배치할 수 있는 날을 선호하게 해서
+      //   같은 학년 전체가 연속/분리 패턴을 통일
+      let pairBonus = 0
+      if (getSubjectMaxSameDay(subjectId) >= 2 && existingCount === 0) {
+        for (const adj of [slot - 1, slot + 1]) {
+          if (adj < 0 || adj >= totalSlots) continue
+          if (!ca.has(adj)) continue
+          if (teacherOccupied[teacherId][day].has(adj)) continue
+          if (subjectBlockedMap[subjectId]?.has(`${day}-${adj}`)) continue
+          if (splitLunch && allLunchSlotIndexes.includes(adj)) continue
+          pairBonus = 5
+          break
+        }
+      }
+
       // 점수:
+      // +5 연속 쌍 배치 가능한 날 (Priority 0)
       // +3 같은 학년 수업이 이미 있는 날 선호 (Priority 1)
       // -2 다른 학년 수업이 있는 날 페널티 (Priority 1)
       // -1 교사 요일 부하 (Priority 3: 교사 요일 균형)
       // -3 학급 요일 부하 (Priority 3: 담임 요일 균형)
-      const score = hasSameGrade * 3 - diffGradeLoad * 2 - teacherLoad - classLoad * 3
+      const score = pairBonus + hasSameGrade * 3 - diffGradeLoad * 2 - teacherLoad - classLoad * 3
 
       candidates.push({ day, slot, score })
     }
