@@ -16,6 +16,8 @@ export default function RoomTimetable() {
   const [gradeConfigs, setGradeConfigs] = useState([])
   const [teachers, setTeachers] = useState([])
   const [selectedTeachers, setSelectedTeachers] = useState([])
+  const [subjects, setSubjects] = useState([])
+  const [selectedSubjects, setSelectedSubjects] = useState([])
   const [lunchConfig, setLunchConfig] = useState(null)
   const [totalSlots, setTotalSlots] = useState(6)
   const [gradeLunchSlot, setGradeLunchSlot] = useState({})
@@ -31,13 +33,14 @@ export default function RoomTimetable() {
     if (!school) return
     setSchoolId(school.id)
 
-    const [{ data: r }, { data: gc }, { data: lunch }, { data: ts }, { data: blocked }, { data: t }] = await Promise.all([
+    const [{ data: r }, { data: gc }, { data: lunch }, { data: ts }, { data: blocked }, { data: t }, { data: subs }] = await Promise.all([
       supabase.from('rooms').select('*').eq('school_id', school.id).order('name'),
       supabase.from('grade_configs').select('*').eq('school_id', school.id),
       supabase.from('lunch_config').select('*').eq('school_id', school.id).single(),
       supabase.from('timetable_slots').select('*').eq('school_id', school.id),
       supabase.from('room_blocked_slots').select('*').eq('school_id', school.id),
       supabase.from('teachers').select('*').eq('school_id', school.id).order('code'),
+      supabase.from('subjects').select('*').eq('school_id', school.id),
     ])
 
     setRooms(r || [])
@@ -46,6 +49,7 @@ export default function RoomTimetable() {
     setTimetableSlots(ts || [])
     setBlockedSlots(blocked || [])
     setTeachers(t || [])
+    setSubjects(subs || [])
 
     const hasSplit = lunch?.split_lunch && lunch?.lunch_groups?.length > 0
     setTotalSlots(hasSplit ? 7 : 6)
@@ -79,6 +83,24 @@ export default function RoomTimetable() {
     )
   }
 
+  function toggleSubject(id) {
+    setSelectedSubjects(prev =>
+      prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]
+    )
+  }
+
+  // 선택된 교사들이 담당하는 과목 목록 (중복 제거)
+  function getTeacherSubjects() {
+    if (selectedTeachers.length === 0) return []
+    const subjectIds = new Set(
+      timetableSlots
+        .filter(s => selectedTeachers.includes(s.teacher_id) && !s.is_unassigned)
+        .map(s => s.subject_id)
+    )
+    return subjects.filter(s => subjectIds.has(s.id))
+      .filter((s, i, arr) => arr.findIndex(x => x.name === s.name) === i) // 같은 이름 중복 제거
+  }
+
   async function handleGenerate() {
     if (!selectedRoom) return
     if (selectedTeachers.length === 0) return alert('시간표를 생성할 교사를 선택하세요.')
@@ -86,7 +108,10 @@ export default function RoomTimetable() {
     setGenerating(true)
 
     const roomBlocked = blockedSlots.filter(b => b.room_id === selectedRoom)
-    const rows = buildRoomSchedule(rooms.find(r => r.id === selectedRoom), timetableSlots, roomBlocked, schoolId, selectedTeachers)
+    const rows = buildRoomSchedule(
+      rooms.find(r => r.id === selectedRoom), timetableSlots, roomBlocked, schoolId,
+      selectedTeachers, selectedSubjects.length > 0 ? selectedSubjects : null
+    )
 
     await supabase.from('room_timetable_slots').delete().eq('room_id', selectedRoom)
     if (rows.length > 0) {
@@ -180,25 +205,42 @@ export default function RoomTimetable() {
 
           {selectedRoom && (
             <>
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
+              <div className="mb-4">
+                <div className="flex items-center gap-2 mb-1">
                   <span className="text-[14px] font-semibold">{selectedRoomObj?.name}</span>
                   <span className="text-[12px] text-gray-400">시간표 — 셀을 클릭하면 수정할 수 있습니다</span>
                 </div>
                 {/* 교사 선택 (복수) */}
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-[12px] text-gray-500 font-semibold">담당 교사:</span>
+                <div className="flex items-center gap-2 flex-wrap mb-2">
+                  <span className="text-[12px] text-gray-500 font-semibold w-[56px]">담당 교사</span>
                   {teachers.map(t => (
                     <button
                       key={t.id}
                       onClick={() => toggleTeacher(t.id)}
-                      className={`h-8 px-3 rounded-sm text-[12px] font-semibold border transition-colors
+                      className={`h-7 px-3 rounded-sm text-[12px] font-semibold border transition-colors
                         ${selectedTeachers.includes(t.id) ? 'bg-black text-white border-black' : 'bg-white text-gray-500 border-gray-300 hover:bg-gray-50'}`}
                     >
                       {t.code}
                     </button>
                   ))}
                 </div>
+                {/* 과목 필터 (선택된 교사들이 담당하는 과목만 표시) */}
+                {getTeacherSubjects().length > 0 && (
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[12px] text-gray-500 font-semibold w-[56px]">과목 필터</span>
+                    {getTeacherSubjects().map(s => (
+                      <button
+                        key={s.id}
+                        onClick={() => toggleSubject(s.id)}
+                        className={`h-7 px-3 rounded-sm text-[12px] font-semibold border transition-colors
+                          ${selectedSubjects.includes(s.id) ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-500 border-gray-300 hover:bg-gray-50'}`}
+                      >
+                        {s.name}
+                      </button>
+                    ))}
+                    <span className="text-[11px] text-gray-400">선택 안 하면 전체 포함</span>
+                  </div>
+                )}
               </div>
 
               <div className="border border-gray-200 rounded-sm overflow-hidden bg-white">

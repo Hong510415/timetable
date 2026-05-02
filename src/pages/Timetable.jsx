@@ -280,6 +280,7 @@ export default function Timetable() {
                 slots={teacherSlots}
                 totalSlots={teacherViewSlots}
                 gradeLunchSlot={gradeLunchSlot}
+                subjects={subjects}
               />
             </>
           )}
@@ -302,7 +303,7 @@ export default function Timetable() {
   )
 }
 
-function TeacherTimetableGrid({ slots, totalSlots }) {
+function TeacherTimetableGrid({ slots, totalSlots, gradeLunchSlot, subjects }) {
   const DAY_LABELS = ['월', '화', '수', '목', '금']
 
   return (
@@ -320,10 +321,14 @@ function TeacherTimetableGrid({ slots, totalSlots }) {
           </div>
           {Array.from({ length: 5 }, (_, day) => {
             const cell = slots?.[day]?.[slot]
+            const subject = cell?.subject_id ? subjects?.find(s => s.id === cell.subject_id) : null
             return (
               <div key={day} className="flex-1 border-r border-gray-100 last:border-r-0 flex flex-col items-center justify-center gap-0.5">
                 {cell ? (
-                  <span className="text-[12px] font-semibold text-gray-900">{cell.label}</span>
+                  <>
+                    <span className="text-[13px] font-semibold text-gray-900">{subject?.name ?? '—'}</span>
+                    <span className="text-[11px] text-gray-400">{cell.label}</span>
+                  </>
                 ) : (
                   <span className="text-[12px] text-gray-200">—</span>
                 )}
