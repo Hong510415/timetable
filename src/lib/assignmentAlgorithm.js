@@ -54,8 +54,12 @@ export function runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assig
 
   // Step C: 주요 과목 배정
   const majorUnits = units.filter(u => u.is_major).sort((a, b) => b.totalHours - a.totalHours)
+  const majorOverflowWarnings = []
   for (const unit of majorUnits) {
     const eligible = teacherState.filter(t => t.majorCount < maxMajor)
+    if (eligible.length === 0 && maxMajor < 99) {
+      majorOverflowWarnings.push(unit.subjectName + `(${unit.grade}학년)`)
+    }
     const target = eligible.length > 0
       ? eligible.sort((a, b) => a.currentHours - b.currentHours)[0]
       : teacherState.sort((a, b) => a.currentHours - b.currentHours)[0]
@@ -76,11 +80,20 @@ export function runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assig
     const most = sorted[sorted.length - 1]
     if (most.currentHours - least.currentHours <= Math.max(3, targetHours * 0.15)) break
 
+    // 주요 과목은 받는 교사의 majorCount 제한을 확인
     const splitableAssign = most.assignments
-      .filter(a => a.classNums.length >= 2)
+      .filter(a => {
+        if (a.classNums.length < 2) return false
+        const unit = units.find(u => u.subjectId === a.subjectId)
+        if (!unit?.is_major) return true
+        // 주요 과목이면 least가 아직 이 과목을 담당하지 않고 제한 미달인지 확인
+        const alreadyHasSubject = least.assignments.some(la => la.subjectId === a.subjectId && la.grade === a.grade)
+        return !alreadyHasSubject && least.majorCount < maxMajor
+      })
       .sort((a, b) => (b.hoursPerClass * b.classNums.length) - (a.hoursPerClass * a.classNums.length))[0]
     if (!splitableAssign) break
 
+    const unit = units.find(u => u.subjectId === splitableAssign.subjectId)
     const half = Math.floor(splitableAssign.classNums.length / 2)
     const movedClasses = splitableAssign.classNums.slice(0, half)
     splitableAssign.classNums = splitableAssign.classNums.slice(half)
@@ -94,6 +107,7 @@ export function runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assig
       hoursPerClass: splitableAssign.hoursPerClass,
     })
     least.currentHours += movedHours
+    if (unit?.is_major) least.majorCount++
   }
 
   // 결과 변환
@@ -116,6 +130,12 @@ export function runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assig
 
   // Step F: 경고 계산
   const warnings = []
+  if (majorOverflowWarnings.length > 0) {
+    warnings.push({
+      type: 'warning',
+      message: `교사 수가 부족해 일부 주요 과목이 한 교사에게 중복 배정되었습니다: ${majorOverflowWarnings.join(', ')}. 전담 설정에서 교사 수를 늘리거나 제한을 해제하세요.`,
+    })
+  }
 
   const gradeSummary = gradeConfigs.map(gc => {
     const weeklyTotal = gc.periods_mon + gc.periods_tue + gc.periods_wed + gc.periods_thu + gc.periods_fri

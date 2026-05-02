@@ -70,9 +70,8 @@ export default function SubjectSetup() {
             <div>
               <p className="text-[13px] font-semibold text-gray-700 mb-1">주요 과목 vs 일반 과목</p>
               <p className="text-[12px] text-gray-500 leading-5">
-                <span className="font-semibold text-gray-700">주요 과목</span>은 영어·과학·체육처럼 전담 부담이 큰 과목입니다.
-                한 교사가 주요 과목을 여러 개 맡으면 수업 준비 부담이 집중됩니다.<br />
-                <span className="font-semibold text-gray-700">일반 과목</span>은 안전처럼 부담이 적은 과목입니다.
+                <span className="font-semibold text-gray-700">주요 과목</span>은 전담 부담이 큰 과목입니다. 한 교사가 주요 과목을 여러 개 맡으면 수업 준비 부담이 집중됩니다.<br />
+                <span className="font-semibold text-gray-700">일반 과목</span>은 주요 과목에 추가해 맡을 수 있는 과목입니다.
               </p>
             </div>
             <div className="h-px bg-gray-100" />
