@@ -77,7 +77,7 @@ export default function Timetable() {
       daySlots[d] = {}
       const relevant = timetableRows.filter(r => r.teacher_id === teacherId && r.day_of_week === d)
       for (const r of relevant) {
-        daySlots[d][r.slot] = { teacher_id: r.teacher_id, subject_id: r.subject_id, is_unassigned: r.is_unassigned, label: `${r.grade}학년 ${r.class_num}반`, id: r.id }
+        daySlots[d][r.slot] = { teacher_id: r.teacher_id, subject_id: r.subject_id, is_unassigned: r.is_unassigned, label: `${r.grade}학년 ${r.class_num}반`, grade: r.grade, class_num: r.class_num, id: r.id }
       }
     }
     return daySlots
@@ -86,6 +86,8 @@ export default function Timetable() {
   function openEditModal(day, slot, cell) {
     if (tab === 'class') {
       setEditModal({ day, slot, grade: selectedGrade, classNum: selectedClass, current: cell })
+    } else if (tab === 'teacher' && cell) {
+      setEditModal({ day, slot, grade: cell.grade, classNum: cell.class_num, current: cell, classLabel: cell.label })
     }
   }
 
@@ -216,6 +218,7 @@ export default function Timetable() {
                 totalSlots={totalSlots}
                 gradeLunchSlot={gradeLunchSlot}
                 subjects={subjects}
+                onCellClick={(day, slot, cell) => openEditModal(day, slot, cell)}
               />
             </>
           )}
@@ -237,7 +240,7 @@ export default function Timetable() {
   )
 }
 
-function TeacherTimetableGrid({ slots, totalSlots, gradeLunchSlot, subjects }) {
+function TeacherTimetableGrid({ slots, totalSlots, gradeLunchSlot, subjects, onCellClick }) {
   const DAY_LABELS = ['월', '화', '수', '목', '금']
 
   return (
@@ -257,7 +260,11 @@ function TeacherTimetableGrid({ slots, totalSlots, gradeLunchSlot, subjects }) {
             const cell = slots?.[day]?.[slot]
             const subject = cell?.subject_id ? subjects?.find(s => s.id === cell.subject_id) : null
             return (
-              <div key={day} className="flex-1 border-r border-gray-100 last:border-r-0 flex flex-col items-center justify-center gap-0.5">
+              <div
+                key={day}
+                onClick={() => cell && onCellClick?.(day, slot, cell)}
+                className={`flex-1 border-r border-gray-100 last:border-r-0 flex flex-col items-center justify-center gap-0.5 ${cell ? 'cursor-pointer hover:bg-blue-50 transition-colors' : ''}`}
+              >
                 {cell ? (
                   <>
                     <span className="text-[13px] font-semibold text-gray-900">{subject?.name ?? '—'}</span>
@@ -276,7 +283,7 @@ function TeacherTimetableGrid({ slots, totalSlots, gradeLunchSlot, subjects }) {
 }
 
 function EditCellModal({ modal, teachers, subjects, grade, onSave, onClose, saving }) {
-  const { day, slot } = modal
+  const { day, slot, classLabel } = modal
   const DAY_LABELS = ['월', '화', '수', '목', '금']
   const [teacherId, setTeacherId] = useState(modal.current?.teacher_id || '')
   const [subjectId, setSubjectId] = useState(modal.current?.subject_id || '')
@@ -286,7 +293,8 @@ function EditCellModal({ modal, teachers, subjects, grade, onSave, onClose, savi
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
       <div className="bg-white w-full max-w-[400px] rounded-sm border border-gray-200 p-6">
-        <h2 className="text-[16px] font-bold mb-4">{DAY_LABELS[day]}요일 {slot + 1}교시 편집</h2>
+        <h2 className="text-[16px] font-bold mb-1">{DAY_LABELS[day]}요일 {slot + 1}교시 편집</h2>
+        {classLabel && <p className="text-[12px] text-gray-400 mb-4">{classLabel}</p>}
         <div className="flex flex-col gap-3 mb-5">
           <div>
             <label className="text-[12px] font-semibold text-gray-600 block mb-1">교사</label>
