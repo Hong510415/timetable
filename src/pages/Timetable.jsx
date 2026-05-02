@@ -39,10 +39,14 @@ export default function Timetable() {
     if (!gradeConfigs.length || !subjects.length || !teachers.length) {
       return alert('학급 정보, 전담 과목, 교사 정보를 먼저 설정하세요.')
     }
+    const hasAssignments = teachers.some(t => t.teacher_assignments?.length > 0)
+    if (!hasAssignments) {
+      return alert('전담 배정 탭에서 배정을 실행하고 "시간표에 적용"을 먼저 해주세요.')
+    }
     setGenerating(true)
     setErrors([])
     try {
-      const result = buildSchedule(gradeConfigs, subjects, teachers, lunchConfig || { split_lunch: false, lunch_groups: [] }, roomBlockedSlots)
+      const result = buildSchedule(gradeConfigs, subjects, teachers, lunchConfig || { split_lunch: false, lunch_groups: [] })
       const { rows } = flattenResult(result.result, result.gradeLunchSlot, result.totalSlots)
       const flatErrors = (result.errors || []).map(e => `${e.grade}학년 ${e.classNum}반 ${e.unassigned}시수 미배정`)
       setErrors(flatErrors)
