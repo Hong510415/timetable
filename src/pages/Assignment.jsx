@@ -492,6 +492,24 @@ function computeWarnings(assignments, gradeConfigs, subjects, teacherCount) {
   }, 0)
   const targetHours = teacherCount ? Math.round(totalDedicated / teacherCount) : 0
 
+  // 중복 배정 체크: 같은 과목+학년+반이 여러 교사에게 배정됐는지 확인
+  const classOwners = {} // key: subjectId_grade_classNum → [teacherCode, ...]
+  for (const a of assignments) {
+    for (const c of a.classNums) {
+      const key = `${a.subjectId}_${a.grade}_${c}`
+      if (!classOwners[key]) classOwners[key] = { subjectName: a.subjectName, grade: a.grade, classNum: c, teachers: [] }
+      classOwners[key].teachers.push(a.teacherCode)
+    }
+  }
+  for (const { subjectName, grade, classNum, teachers } of Object.values(classOwners)) {
+    if (teachers.length > 1) {
+      warnings.push({
+        type: 'error',
+        message: `중복: ${subjectName} ${grade}학년 ${classNum}반이 ${teachers.join(', ')}에게 중복 배정되었습니다.`,
+      })
+    }
+  }
+
   // 누락 수업 체크: 모든 과목×반이 배정됐는지 확인
   for (const subj of subjects) {
     const gc = gradeConfigs.find(g => g.grade === subj.grade)
