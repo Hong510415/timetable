@@ -36,7 +36,7 @@ export default function Assignment() {
   }
 
   function updateAssignment(idx, field, value) {
-    const next = activeAssignments.map((a, i) => {
+    let next = activeAssignments.map((a, i) => {
       if (i !== idx) return a
       const updated = { ...a, [field]: value, isManual: true }
       if (field === 'classNums') {
@@ -44,6 +44,10 @@ export default function Assignment() {
       }
       return updated
     })
+    // 반이 0개가 된 행은 삭제
+    if (field === 'classNums' && value.length === 0) {
+      next = next.filter((_, i) => i !== idx)
+    }
     setAssignmentResult({ result, edited: next })
   }
 
@@ -250,8 +254,7 @@ function EditClassNumsButton({ assignment, gradeConfigs, onUpdate }) {
 
   function handleDone() {
     const sorted = allClasses.filter(c => selected.has(c))
-    if (sorted.length === 0) return alert('최소 1개 반을 선택하세요.')
-    onUpdate(sorted)
+    onUpdate(sorted) // 0개면 해당 행 삭제 (updateAssignment에서 처리)
     setOpen(false)
   }
 

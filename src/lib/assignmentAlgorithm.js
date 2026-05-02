@@ -270,8 +270,8 @@ export function runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assig
 
   // ── Step F-2: 일반과목 학년 수 불균형 swap ───────────────────────
   // 일반과목 학년이 많은 교사 → 적은 교사로 반 이동
-  // 시수는 targetHours 이내로 유지
-  for (let iter = 0; iter < 30; iter++) {
+  // 이동 후 least 시수가 most 시수보다 많아지는 역전만 방지
+  for (let iter = 0; iter < 50; iter++) {
     const sorted = ts.slice().sort((a, b) => countMinorGrades(b) - countMinorGrades(a))
     const most = sorted[0]
     const least = sorted[sorted.length - 1]
@@ -293,8 +293,8 @@ export function runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assig
     const classToMove = fromAssign.classNums[fromAssign.classNums.length - 1]
     const newMostHours = most.hours - unit.hoursPerClass
     const newLeastHours = least.hours + unit.hoursPerClass
-    // 시수가 targetHours 초과하지 않도록
-    if (newLeastHours > targetHours) break
+    // 이동 후 역전(least > most)되면 중단
+    if (newLeastHours > newMostHours + unit.hoursPerClass) break
 
     removeClasses(most, unit, [classToMove])
     addClasses(least, unit, [classToMove])
