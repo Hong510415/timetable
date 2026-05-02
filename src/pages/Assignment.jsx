@@ -35,6 +35,25 @@ export default function Assignment() {
     alert('적용되었습니다.')
   }
 
+  function addAssignment(teacherId, teacherCode, subjectId, subjectName, grade, classNums, hoursPerClass, isMajor) {
+    const existing = activeAssignments.find(a => a.teacherId === teacherId && a.subjectId === subjectId && a.grade === grade)
+    let next
+    if (existing) {
+      const merged = [...new Set([...existing.classNums, ...classNums])].sort((a, b) => a - b)
+      next = activeAssignments.map(a =>
+        a === existing ? { ...a, classNums: merged, weeklyHours: a.hoursPerClass * merged.length, isManual: true } : a
+      )
+    } else {
+      const newEntry = {
+        teacherId, teacherCode, subjectId, subjectName, grade, classNums,
+        weeklyHours: hoursPerClass * classNums.length, hoursPerClass,
+        isManual: true, isMajor,
+      }
+      next = [...activeAssignments, newEntry]
+    }
+    setAssignmentResult({ result, edited: next })
+  }
+
   function updateAssignment(idx, field, value) {
     let next = activeAssignments.map((a, i) => {
       if (i !== idx) return a
@@ -160,50 +179,76 @@ export default function Assignment() {
                           className="w-full h-7 px-2 text-[12px] font-semibold border border-transparent rounded-sm hover:border-gray-200 focus:border-black outline-none"
                         />
                       </div>
-                      <div className="flex-1 px-3 text-[12px] text-gray-300">배정 없음</div>
+                      <div className="flex-1 px-3">
+                        <AddAssignmentButton
+                          teacher={teacher}
+                          subjects={subjects}
+                          gradeConfigs={gradeConfigs}
+                          onAdd={(subjectId, subjectName, grade, classNums, hoursPerClass, isMajor) =>
+                            addAssignment(teacher.id, teacher.code, subjectId, subjectName, grade, classNums, hoursPerClass, isMajor)
+                          }
+                        />
+                      </div>
                       <div className="w-[80px] flex-shrink-0 px-3 text-[12px] font-bold text-gray-400 border-r border-gray-100">0h</div>
                       <div className="w-[60px]" />
                     </div>
-                  ) : teacherAssigns.map((a, localIdx) => {
-                    const globalIdx = activeAssignments.indexOf(a)
-                    const numClassesForGrade = gradeConfigs.find(g => g.grade === a.grade)?.num_classes ?? 0
-                    const classDisplay = a.classNums.length === numClassesForGrade
-                      ? '전체'
-                      : a.classNums.length === 1
-                        ? `${a.classNums[0]}반`
-                        : `${a.classNums[0]}~${a.classNums[a.classNums.length - 1]}반`
-                    return (
-                      <div key={localIdx} className="flex items-center h-10 border-b border-gray-50 last:border-b-0">
-                        <div className="w-[110px] flex-shrink-0 px-2 border-r border-gray-100">
-                          {localIdx === 0 ? (
-                            <input
-                              value={teacher.code}
-                              onChange={e => setTeachers(teachers.map(t => t.id === teacher.id ? { ...t, code: e.target.value } : t))}
-                              className="w-full h-7 px-2 text-[12px] font-semibold border border-transparent rounded-sm hover:border-gray-200 focus:border-black outline-none"
-                            />
-                          ) : ''}
-                        </div>
-                        <div className="w-[90px] flex-shrink-0 px-3 text-[12px] border-r border-gray-100 flex items-center gap-1">
-                          {a.subjectName}
-                          {a.isManual && <span className="text-blue-400 text-[10px]">✎</span>}
-                        </div>
-                        <div className="w-[60px] flex-shrink-0 px-3 text-[12px] border-r border-gray-100">{a.grade}학년</div>
-                        <div className="flex-1 px-3 text-[12px] border-r border-gray-100">
-                          {classDisplay} ({a.classNums.length}반)
-                        </div>
-                        <div className={`w-[80px] flex-shrink-0 px-3 text-[12px] font-bold border-r border-gray-100 ${localIdx === 0 && (isOver || isUnder) ? 'text-yellow-700' : 'text-gray-900'}`}>
-                          {localIdx === 0 ? `${totalH}h` : ''}
-                        </div>
-                        <div className="w-[60px] flex-shrink-0 px-3">
-                          <EditClassNumsButton
-                            assignment={a}
+                  ) : (
+                    <>
+                      {teacherAssigns.map((a, localIdx) => {
+                        const globalIdx = activeAssignments.indexOf(a)
+                        const numClassesForGrade = gradeConfigs.find(g => g.grade === a.grade)?.num_classes ?? 0
+                        const classDisplay = a.classNums.length === numClassesForGrade
+                          ? '전체'
+                          : a.classNums.length === 1
+                            ? `${a.classNums[0]}반`
+                            : `${a.classNums[0]}~${a.classNums[a.classNums.length - 1]}반`
+                        return (
+                          <div key={localIdx} className="flex items-center h-10 border-b border-gray-50 last:border-b-0">
+                            <div className="w-[110px] flex-shrink-0 px-2 border-r border-gray-100">
+                              {localIdx === 0 ? (
+                                <input
+                                  value={teacher.code}
+                                  onChange={e => setTeachers(teachers.map(t => t.id === teacher.id ? { ...t, code: e.target.value } : t))}
+                                  className="w-full h-7 px-2 text-[12px] font-semibold border border-transparent rounded-sm hover:border-gray-200 focus:border-black outline-none"
+                                />
+                              ) : ''}
+                            </div>
+                            <div className="w-[90px] flex-shrink-0 px-3 text-[12px] border-r border-gray-100 flex items-center gap-1">
+                              {a.subjectName}
+                              {a.isManual && <span className="text-blue-400 text-[10px]">✎</span>}
+                            </div>
+                            <div className="w-[60px] flex-shrink-0 px-3 text-[12px] border-r border-gray-100">{a.grade}학년</div>
+                            <div className="flex-1 px-3 text-[12px] border-r border-gray-100">
+                              {classDisplay} ({a.classNums.length}반)
+                            </div>
+                            <div className={`w-[80px] flex-shrink-0 px-3 text-[12px] font-bold border-r border-gray-100 ${localIdx === 0 && (isOver || isUnder) ? 'text-yellow-700' : 'text-gray-900'}`}>
+                              {localIdx === 0 ? `${totalH}h` : ''}
+                            </div>
+                            <div className="w-[60px] flex-shrink-0 px-3">
+                              <EditClassNumsButton
+                                assignment={a}
+                                gradeConfigs={gradeConfigs}
+                                onUpdate={(classNums) => updateAssignment(globalIdx, 'classNums', classNums)}
+                              />
+                            </div>
+                          </div>
+                        )
+                      })}
+                      <div className="flex items-center h-9 border-b border-gray-50">
+                        <div className="w-[110px] flex-shrink-0 border-r border-gray-100" />
+                        <div className="flex-1 px-3">
+                          <AddAssignmentButton
+                            teacher={teacher}
+                            subjects={subjects}
                             gradeConfigs={gradeConfigs}
-                            onUpdate={(classNums) => updateAssignment(globalIdx, 'classNums', classNums)}
+                            onAdd={(subjectId, subjectName, grade, classNums, hoursPerClass, isMajor) =>
+                              addAssignment(teacher.id, teacher.code, subjectId, subjectName, grade, classNums, hoursPerClass, isMajor)
+                            }
                           />
                         </div>
                       </div>
-                    )
-                  })}
+                    </>
+                  )}
                 </div>
               )
             })}
@@ -276,6 +321,132 @@ function EditClassNumsButton({ assignment, gradeConfigs, onUpdate }) {
         <div className="flex gap-1">
           <button onClick={() => setOpen(false)} className="flex-1 h-7 border border-gray-300 rounded-sm text-[11px] hover:bg-gray-50">취소</button>
           <button onClick={handleDone} className="flex-1 h-7 bg-black text-white rounded-sm text-[11px] hover:bg-gray-800">확인</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function AddAssignmentButton({ teacher, subjects, gradeConfigs, onAdd }) {
+  const [open, setOpen] = useState(false)
+  const [selectedSubject, setSelectedSubject] = useState(null)
+  const [selectedGrade, setSelectedGrade] = useState(null)
+  const [selectedClasses, setSelectedClasses] = useState(new Set())
+
+  const uniqueSubjects = [...new Map(subjects.map(s => [s.name, s])).values()]
+
+  function handleSubjectSelect(subj) {
+    setSelectedSubject(subj)
+    setSelectedGrade(null)
+    setSelectedClasses(new Set())
+  }
+
+  function handleGradeSelect(subj, grade) {
+    setSelectedGrade(grade)
+    setSelectedClasses(new Set())
+  }
+
+  function toggleClass(c) {
+    setSelectedClasses(prev => {
+      const next = new Set(prev)
+      if (next.has(c)) next.delete(c)
+      else next.add(c)
+      return next
+    })
+  }
+
+  function handleDone() {
+    if (!selectedSubject || !selectedGrade || selectedClasses.size === 0) return
+    const gc = gradeConfigs.find(g => g.grade === selectedGrade)
+    const allClasses = gc ? Array.from({ length: gc.num_classes }, (_, i) => i + 1) : []
+    const classNums = allClasses.filter(c => selectedClasses.has(c))
+    // subjects에서 해당 학년+과목명 찾아서 hoursPerClass 가져오기
+    const subjDef = subjects.find(s => s.name === selectedSubject.name && s.grade === selectedGrade)
+    if (!subjDef) return
+    onAdd(subjDef.id, subjDef.name, selectedGrade, classNums, subjDef.weekly_hours, subjDef.is_major)
+    setOpen(false)
+    setSelectedSubject(null)
+    setSelectedGrade(null)
+    setSelectedClasses(new Set())
+  }
+
+  const gradesForSubject = selectedSubject
+    ? subjects.filter(s => s.name === selectedSubject.name).map(s => s.grade).sort()
+    : []
+
+  const classesForGrade = selectedGrade
+    ? (() => { const gc = gradeConfigs.find(g => g.grade === selectedGrade); return gc ? Array.from({ length: gc.num_classes }, (_, i) => i + 1) : [] })()
+    : []
+
+  if (!open) {
+    return (
+      <button onClick={() => setOpen(true)} className="text-[11px] text-gray-400 hover:text-gray-700">
+        + 과목 추가
+      </button>
+    )
+  }
+
+  return (
+    <div className="relative">
+      <div className="absolute left-0 top-0 z-20 bg-white border border-gray-200 rounded-sm shadow-lg p-3 min-w-[220px]">
+        <div className="text-[11px] font-semibold text-gray-600 mb-2">과목 추가 — {teacher.code}</div>
+
+        <div className="text-[10px] text-gray-400 mb-1">과목 선택</div>
+        <div className="flex flex-wrap gap-1 mb-3">
+          {uniqueSubjects.map(s => (
+            <button
+              key={s.name}
+              onClick={() => handleSubjectSelect(s)}
+              className={`px-2 h-6 text-[11px] rounded-sm border transition-colors ${selectedSubject?.name === s.name ? 'bg-black text-white border-black' : 'border-gray-300 hover:bg-gray-50'}`}
+            >
+              {s.name}
+            </button>
+          ))}
+        </div>
+
+        {selectedSubject && (
+          <>
+            <div className="text-[10px] text-gray-400 mb-1">학년 선택</div>
+            <div className="flex flex-wrap gap-1 mb-3">
+              {gradesForSubject.map(g => (
+                <button
+                  key={g}
+                  onClick={() => handleGradeSelect(selectedSubject, g)}
+                  className={`w-8 h-6 text-[11px] rounded-sm border transition-colors ${selectedGrade === g ? 'bg-black text-white border-black' : 'border-gray-300 hover:bg-gray-50'}`}
+                >
+                  {g}학년
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+
+        {selectedGrade && (
+          <>
+            <div className="text-[10px] text-gray-400 mb-1">반 선택</div>
+            <div className="flex flex-wrap gap-1 mb-3">
+              {classesForGrade.map(c => (
+                <button
+                  key={c}
+                  onClick={() => toggleClass(c)}
+                  className={`w-7 h-7 text-[11px] rounded-sm border transition-colors ${selectedClasses.has(c) ? 'bg-black text-white border-black' : 'border-gray-300 hover:bg-gray-50'}`}
+                >
+                  {c}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+
+        <div className="flex gap-1">
+          <button onClick={() => setOpen(false)} className="flex-1 h-7 border border-gray-300 rounded-sm text-[11px] hover:bg-gray-50">취소</button>
+          <button
+            onClick={handleDone}
+            disabled={!selectedSubject || !selectedGrade || selectedClasses.size === 0}
+            className="flex-1 h-7 bg-black text-white rounded-sm text-[11px] hover:bg-gray-800 disabled:opacity-40"
+          >
+            추가
+          </button>
         </div>
       </div>
     </div>
