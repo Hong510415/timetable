@@ -202,11 +202,15 @@ export function runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assig
     return new Set(teacher.assignments.filter(a => !a.is_major).map(a => a.grade)).size
   }
 
-  function pickMinorTeacher(pool) {
-    // 1) 일반과목 학년 수 가장 적은 교사 (일반과목 없는 교사 최우선)
-    // 2) 동점이면 전체 학년 수 가장 적은 교사
-    // 3) 동점이면 시수 적은 교사
+  function pickMinorTeacher(pool, unit) {
+    // 1) 이미 같은 과목+학년 담당 중인 교사 우선 (같은 학년 통합)
+    // 2) 일반과목 학년 수 가장 적은 교사
+    // 3) 전체 학년 수 가장 적은 교사
+    // 4) 시수 적은 교사
     return pool.slice().sort((a, b) => {
+      const aHasUnit = a.assignments.some(x => x.subjectId === unit.subjectId && x.grade === unit.grade) ? 0 : 1
+      const bHasUnit = b.assignments.some(x => x.subjectId === unit.subjectId && x.grade === unit.grade) ? 0 : 1
+      if (aHasUnit !== bHasUnit) return aHasUnit - bHasUnit
       const minorGradeDiff = countMinorGrades(a) - countMinorGrades(b)
       if (minorGradeDiff !== 0) return minorGradeDiff
       const gradeDiff = countGrades(a) - countGrades(b)
@@ -220,13 +224,8 @@ export function runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assig
       // 일반과목은 targetHours + hoursPerClass 이내까지 허용 (minor 분산 우선)
       const available = ts.filter(t => t.hours < targetHours + unit.hoursPerClass)
       const pool = available.length > 0 ? available : ts.slice()
-
-      // 교사 선택 우선순위:
-      // 1) 일반과목 학년 수 가장 적은 교사 (일반과목 없는 교사 최우선)
-      // 2) 동점이면 전체 학년 수 가장 적은 교사
-      // 3) 동점이면 시수 적은 교사
-      const teacher = pickMinorTeacher(pool)
-      // 1반씩만 배정해서 매 루프마다 재선택 → 골고루 분산
+      // 1반씩 배정해서 매 루프마다 재선택 → 골고루 분산
+      const teacher = pickMinorTeacher(pool, unit)
       addClasses(teacher, unit, remaining.splice(0, 1))
     }
   }

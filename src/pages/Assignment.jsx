@@ -205,11 +205,15 @@ export default function Assignment() {
                       {teacherAssigns.map((a, localIdx) => {
                         const globalIdx = activeAssignments.indexOf(a)
                         const numClassesForGrade = gradeConfigs.find(g => g.grade === a.grade)?.num_classes ?? 0
+                        const isContiguous = a.classNums.length > 1 &&
+                          a.classNums.every((c, i) => i === 0 || c === a.classNums[i - 1] + 1)
                         const classDisplay = a.classNums.length === numClassesForGrade
                           ? '전체'
                           : a.classNums.length === 1
                             ? `${a.classNums[0]}반`
-                            : `${a.classNums[0]}~${a.classNums[a.classNums.length - 1]}반`
+                            : isContiguous
+                              ? `${a.classNums[0]}~${a.classNums[a.classNums.length - 1]}반`
+                              : a.classNums.map(c => `${c}반`).join(', ')
                         return (
                           <div key={localIdx} className="flex items-center h-10 border-b border-gray-50 last:border-b-0">
                             <div className="w-[110px] flex-shrink-0 px-2 border-r border-gray-100">
@@ -289,16 +293,11 @@ export default function Assignment() {
 
 function EditClassNumsButton({ assignment, gradeConfigs, popupId, openPopupId, setOpenPopupId, onUpdate }) {
   const btnRef = React.useRef(null)
+  const [openUp, setOpenUp] = useState(false)
   const gc = gradeConfigs.find(g => g.grade === assignment.grade)
   const allClasses = gc ? Array.from({ length: gc.num_classes }, (_, i) => i + 1) : []
   const [selected, setSelected] = useState(new Set(assignment.classNums))
   const isOpen = openPopupId === popupId
-
-  const openUp = React.useMemo(() => {
-    if (!isOpen || !btnRef.current) return false
-    const rect = btnRef.current.getBoundingClientRect()
-    return rect.bottom > window.innerHeight - 200
-  }, [isOpen])
 
   function toggle(c) {
     setSelected(prev => {
@@ -315,18 +314,20 @@ function EditClassNumsButton({ assignment, gradeConfigs, popupId, openPopupId, s
     setOpenPopupId(null)
   }
 
-  if (!isOpen) {
-    return (
-      <button ref={btnRef} onClick={() => { setSelected(new Set(assignment.classNums)); setOpenPopupId(popupId) }}
-        className="text-[11px] text-gray-400 hover:text-gray-700">
-        편집
-      </button>
-    )
+  function handleOpen() {
+    const rect = btnRef.current?.getBoundingClientRect()
+    setOpenUp(!!rect && rect.bottom > window.innerHeight - 220)
+    setSelected(new Set(assignment.classNums))
+    setOpenPopupId(popupId)
   }
 
   return (
     <div className="relative">
-      <button ref={btnRef} className="text-[11px] text-gray-700">편집</button>
+      <button ref={btnRef} onClick={isOpen ? () => setOpenPopupId(null) : handleOpen}
+        className={`text-[11px] ${isOpen ? 'text-gray-700' : 'text-gray-400 hover:text-gray-700'}`}>
+        편집
+      </button>
+      {isOpen && (
       <div className={`absolute right-0 z-20 bg-white border border-gray-200 rounded-sm shadow-lg p-3 min-w-[160px] ${openUp ? 'bottom-full mb-1' : 'top-full mt-1'}`}>
         <div className="text-[11px] font-semibold text-gray-600 mb-2">{assignment.grade}학년 담당 반 선택</div>
         <div className="flex flex-wrap gap-1 mb-2">
@@ -345,6 +346,7 @@ function EditClassNumsButton({ assignment, gradeConfigs, popupId, openPopupId, s
           <button onClick={handleDone} className="flex-1 h-7 bg-black text-white rounded-sm text-[11px] hover:bg-gray-800">확인</button>
         </div>
       </div>
+      )}
     </div>
   )
 }
