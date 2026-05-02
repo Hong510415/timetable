@@ -4,7 +4,7 @@
  * teacherIds: string[] — 복수 교사 지원 (예: 체육관에 체육 교사 2명)
  * subjectIds: string[] | null — null이면 전 과목, 배열이면 해당 과목만
  */
-export function buildRoomSchedule(room, timetableSlots, blockedSlots, schoolId, teacherIds, subjectIds = null) {
+export function buildRoomSchedule(room, timetableSlots, blockedSlots, teacherIds, subjectIds = null) {
   const ids = Array.isArray(teacherIds) ? teacherIds : [teacherIds]
   const sids = subjectIds && subjectIds.length > 0 ? new Set(subjectIds) : null
   const blocked = blockedSlots.filter(b => b.room_id === room.id)
@@ -27,7 +27,6 @@ export function buildRoomSchedule(room, timetableSlots, blockedSlots, schoolId, 
     if (!isBlocked) {
       seen.add(key)
       roomSlots.push({
-        school_id: schoolId,
         room_id: room.id,
         day_of_week: ts.day_of_week,
         slot: ts.slot,

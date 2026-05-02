@@ -187,7 +187,7 @@ export function buildSchedule(gradeConfigs, subjects, teachers, lunchConfig, roo
   return { result, errors, gradeLunchSlot, totalSlots }
 }
 
-export function flattenResult(result, schoolId, gradeLunchSlot, totalSlots) {
+export function flattenResult(result, gradeLunchSlot, totalSlots) {
   const rows = []
 
   for (const [gradeStr, classes] of Object.entries(result)) {
@@ -205,7 +205,6 @@ export function flattenResult(result, schoolId, gradeLunchSlot, totalSlots) {
           if (!cell) continue
 
           rows.push({
-            school_id: schoolId,
             grade,
             class_num: classNum,
             day_of_week: day,
