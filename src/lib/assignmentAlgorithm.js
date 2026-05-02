@@ -218,32 +218,18 @@ export function runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assig
     let remaining = [...unit.classNums]
     while (remaining.length > 0) {
       const available = ts.filter(t => targetHours - t.hours > 0)
+      const pool = available.length > 0 ? available : ts.slice()
 
-      // 1순위: 이미 이 학년 담당 중 + 시수 여유 있는 교사
-      const sameGradeAvail = available.filter(t => t.assignments.some(a => a.grade === unit.grade))
-      if (sameGradeAvail.length > 0) {
-        const teacher = sameGradeAvail.sort((a, b) => a.hours - b.hours)[0]
-        const roomLeft = targetHours - teacher.hours
-        const canTake = Math.min(remaining.length, Math.max(1, Math.floor(roomLeft / unit.hoursPerClass)))
-        addClasses(teacher, unit, remaining.splice(0, canTake))
-        continue
-      }
-
-      // 2순위: 시수 여유 있고 학년 수 가장 적은 교사
-      if (available.length > 0) {
-        const teacher = pickMinorTeacher(available)
-        const roomLeft = targetHours - teacher.hours
-        const canTake = Math.min(remaining.length, Math.max(1, Math.floor(roomLeft / unit.hoursPerClass)))
-        addClasses(teacher, unit, remaining.splice(0, canTake))
-        continue
-      }
-
-      // 3순위 (시수 초과 불가피): 이미 이 학년 담당 중인 교사 우선, 없으면 학년 수 가장 적은 교사
-      const sameGradeAll = ts.filter(t => t.assignments.some(a => a.grade === unit.grade))
-      const teacher = sameGradeAll.length > 0
-        ? sameGradeAll.sort((a, b) => a.hours - b.hours)[0]
-        : pickMinorTeacher(ts.slice())
-      addClasses(teacher, unit, remaining.splice(0, 1))
+      // 교사 선택 우선순위:
+      // 1) 일반과목 학년 수 가장 적은 교사 (일반과목 없는 교사 최우선)
+      // 2) 동점이면 전체 학년 수 가장 적은 교사
+      // 3) 동점이면 시수 적은 교사
+      const teacher = pickMinorTeacher(pool)
+      const roomLeft = targetHours - teacher.hours
+      const canTake = roomLeft > 0
+        ? Math.min(remaining.length, Math.max(1, Math.floor(roomLeft / unit.hoursPerClass)))
+        : 1
+      addClasses(teacher, unit, remaining.splice(0, canTake))
     }
   }
 
