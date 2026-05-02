@@ -1,81 +1,32 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Download, RefreshCw } from 'lucide-react'
-import { supabase } from '../lib/supabase'
+import { useApp } from '../context/AppContext'
 import { buildRoomSchedule } from '../lib/roomScheduler'
 import { exportRoomTimetable } from '../lib/excelExport'
 
 const DAY_LABELS = ['월', '화', '수', '목', '금']
 
 export default function RoomTimetable() {
-  const [schoolId, setSchoolId] = useState(null)
-  const [rooms, setRooms] = useState([])
-  const [selectedRoom, setSelectedRoom] = useState(null)
-  const [roomSlots, setRoomSlots] = useState([])
-  const [timetableSlots, setTimetableSlots] = useState([])
-  const [blockedSlots, setBlockedSlots] = useState([])
-  const [gradeConfigs, setGradeConfigs] = useState([])
-  const [teachers, setTeachers] = useState([])
+  const { state, setRoomTimetableSlots } = useApp()
+  const { rooms, gradeConfigs, lunchConfig, timetableSlots, roomBlockedSlots, teachers, subjects } = state
+
+  const [selectedRoom, setSelectedRoom] = useState(rooms[0]?.id || null)
   const [selectedTeachers, setSelectedTeachers] = useState([])
-  const [subjects, setSubjects] = useState([])
   const [selectedSubjects, setSelectedSubjects] = useState([])
-  const [lunchConfig, setLunchConfig] = useState(null)
-  const [totalSlots, setTotalSlots] = useState(6)
-  const [gradeLunchSlot, setGradeLunchSlot] = useState({})
   const [generating, setGenerating] = useState(false)
   const [editModal, setEditModal] = useState(null)
   const [saving, setSaving] = useState(false)
 
-  useEffect(() => { load() }, [])
-
-  async function load() {
-    const { data: { user } } = await supabase.auth.getUser()
-    const { data: school } = await supabase.from('schools').select('id').eq('user_id', user.id).single()
-    if (!school) return
-    setSchoolId(school.id)
-
-    const [{ data: r }, { data: gc }, { data: lunch }, { data: ts }, { data: blocked }, { data: t }, { data: subs }] = await Promise.all([
-      supabase.from('rooms').select('*').eq('school_id', school.id).order('name'),
-      supabase.from('grade_configs').select('*').eq('school_id', school.id),
-      supabase.from('lunch_config').select('*').eq('school_id', school.id).single(),
-      supabase.from('timetable_slots').select('*').eq('school_id', school.id),
-      supabase.from('room_blocked_slots').select('*').eq('school_id', school.id),
-      supabase.from('teachers').select('*').eq('school_id', school.id).order('code'),
-      supabase.from('subjects').select('*').eq('school_id', school.id),
-    ])
-
-    setRooms(r || [])
-    setGradeConfigs(gc || [])
-    setLunchConfig(lunch)
-    setTimetableSlots(ts || [])
-    setBlockedSlots(blocked || [])
-    setTeachers(t || [])
-    setSubjects(subs || [])
-
-    const hasSplit = lunch?.split_lunch && lunch?.lunch_groups?.length > 0
-    setTotalSlots(hasSplit ? 7 : 6)
-
-    if (hasSplit) {
-      const gls = {}
-      for (const g of (lunch.lunch_groups || [])) {
-        for (const grade of g.grades) gls[grade] = g.slot
-      }
-      setGradeLunchSlot(gls)
-    }
-
-    if (r?.length) {
-      setSelectedRoom(prev => prev || r[0]?.id)
+  const hasSplit = lunchConfig?.split_lunch && lunchConfig?.lunch_groups?.length > 0
+  const totalSlots = hasSplit ? 7 : 6
+  const gradeLunchSlot = {}
+  if (hasSplit) {
+    for (const g of (lunchConfig.lunch_groups || [])) {
+      for (const grade of g.grades) gradeLunchSlot[grade] = g.slot
     }
   }
 
-  async function loadRoomSlots(roomId) {
-    if (!roomId) return
-    const { data } = await supabase.from('room_timetable_slots').select('*').eq('room_id', roomId)
-    setRoomSlots(data || [])
-  }
-
-  useEffect(() => {
-    if (selectedRoom) loadRoomSlots(selectedRoom)
-  }, [selectedRoom])
+  const roomSlots = state.roomTimetableSlots.filter(s => s.room_id === selectedRoom)
 
   function toggleTeacher(id) {
     setSelectedTeachers(prev =>
@@ -83,14 +34,12 @@ export default function RoomTimetable() {
     )
   }
 
-  // selectedSubjects는 과목 이름(name) 배열 — 학년별로 ID가 달라도 이름으로 묶어 처리
   function toggleSubject(name) {
     setSelectedSubjects(prev =>
       prev.includes(name) ? prev.filter(s => s !== name) : [...prev, name]
     )
   }
 
-  // 선택된 교사들이 담당하는 과목 이름 목록 (중복 제거, 이름 기준)
   function getTeacherSubjectNames() {
     if (selectedTeachers.length === 0) return []
     const subjectIds = new Set(
@@ -110,23 +59,19 @@ export default function RoomTimetable() {
     if (!timetableSlots.length) return alert('전담 시간표를 먼저 생성하세요.')
     setGenerating(true)
 
-    // 선택된 과목 이름과 일치하는 모든 학년의 subject_id를 확장
     const subjectIdFilter = selectedSubjects.length > 0
       ? subjects.filter(s => selectedSubjects.includes(s.name)).map(s => s.id)
       : null
 
-    const roomBlocked = blockedSlots.filter(b => b.room_id === selectedRoom)
+    const roomBlocked = roomBlockedSlots.filter(b => b.room_id === selectedRoom)
     const rows = buildRoomSchedule(
-      rooms.find(r => r.id === selectedRoom), timetableSlots, roomBlocked, schoolId,
+      rooms.find(r => r.id === selectedRoom), timetableSlots, roomBlocked,
       selectedTeachers, subjectIdFilter
     )
 
-    await supabase.from('room_timetable_slots').delete().eq('room_id', selectedRoom)
-    if (rows.length > 0) {
-      await supabase.from('room_timetable_slots').insert(rows)
-    }
-
-    await loadRoomSlots(selectedRoom)
+    const otherRoomSlots = state.roomTimetableSlots.filter(s => s.room_id !== selectedRoom)
+    const newSlots = rows.map(r => ({ ...r, id: crypto.randomUUID() }))
+    setRoomTimetableSlots([...otherRoomSlots, ...newSlots])
     setGenerating(false)
   }
 
@@ -142,28 +87,24 @@ export default function RoomTimetable() {
     return grid
   }
 
-  async function handleEditSave(grade, classNum) {
+  function handleEditSave(grade, classNum) {
     if (!editModal) return
     setSaving(true)
     const { day, slot } = editModal
-
-    const existing = roomSlots.find(r => r.day_of_week === day && r.slot === slot)
+    const existing = state.roomTimetableSlots.find(r => r.room_id === selectedRoom && r.day_of_week === day && r.slot === slot)
+    let updated = [...state.roomTimetableSlots]
     if (existing) {
       if (grade && classNum) {
-        await supabase.from('room_timetable_slots').update({ grade, class_num: classNum }).eq('id', existing.id)
+        updated = updated.map(r => r.id === existing.id ? { ...r, grade, class_num: classNum } : r)
       } else {
-        await supabase.from('room_timetable_slots').delete().eq('id', existing.id)
+        updated = updated.filter(r => r.id !== existing.id)
       }
     } else if (grade && classNum) {
-      await supabase.from('room_timetable_slots').insert({
-        room_id: selectedRoom, school_id: schoolId,
-        day_of_week: day, slot, grade, class_num: classNum,
-      })
+      updated.push({ id: crypto.randomUUID(), room_id: selectedRoom, day_of_week: day, slot, grade, class_num: classNum })
     }
-
+    setRoomTimetableSlots(updated)
     setEditModal(null)
     setSaving(false)
-    await loadRoomSlots(selectedRoom)
   }
 
   const grid = getSlotsGrid()
@@ -175,7 +116,7 @@ export default function RoomTimetable() {
         <h1 className="text-[22px] font-bold">특별실 시간표</h1>
         <div className="flex gap-2">
           <button
-            onClick={() => exportRoomTimetable(rooms, roomSlots, gradeConfigs, gradeLunchSlot, totalSlots)}
+            onClick={() => exportRoomTimetable(rooms, state.roomTimetableSlots, gradeConfigs, gradeLunchSlot, totalSlots)}
             className="flex items-center gap-2 h-10 px-4 border border-gray-300 text-[13px] rounded-sm hover:bg-gray-50"
           >
             <Download size={14} />엑셀 다운로드
@@ -197,7 +138,6 @@ export default function RoomTimetable() {
         </div>
       ) : (
         <>
-          {/* 특별실 선택 */}
           <div className="flex gap-2 mb-5 flex-wrap">
             {rooms.map(room => (
               <button
@@ -218,7 +158,6 @@ export default function RoomTimetable() {
                   <span className="text-[14px] font-semibold">{selectedRoomObj?.name}</span>
                   <span className="text-[12px] text-gray-400">시간표 — 셀을 클릭하면 수정할 수 있습니다</span>
                 </div>
-                {/* 교사 선택 (복수) */}
                 <div className="flex items-center gap-2 flex-wrap mb-2">
                   <span className="text-[12px] text-gray-500 font-semibold w-[56px]">담당 교사</span>
                   {teachers.map(t => (
@@ -232,7 +171,6 @@ export default function RoomTimetable() {
                     </button>
                   ))}
                 </div>
-                {/* 과목 필터 (선택된 교사들이 담당하는 과목명 기준, 전학년 포함) */}
                 {getTeacherSubjectNames().length > 0 && (
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-[12px] text-gray-500 font-semibold w-[56px]">과목 필터</span>
@@ -252,7 +190,6 @@ export default function RoomTimetable() {
               </div>
 
               <div className="border border-gray-200 rounded-sm overflow-hidden bg-white">
-                {/* 헤더 */}
                 <div className="flex bg-gray-50">
                   <div className="w-[72px] flex-shrink-0 border-r border-gray-200 h-9 flex items-center justify-center text-[11px] font-semibold text-gray-500">교시</div>
                   {DAY_LABELS.map(d => (
@@ -266,7 +203,7 @@ export default function RoomTimetable() {
                       {slot + 1}교시
                     </div>
                     {Array.from({ length: 5 }, (_, day) => {
-                      const isDayBlocked = blockedSlots.some(b => b.room_id === selectedRoom && b.day_of_week === day && b.slot === slot)
+                      const isDayBlocked = roomBlockedSlots.some(b => b.room_id === selectedRoom && b.day_of_week === day && b.slot === slot)
                       const cell = grid[day]?.[slot]
                       return (
                         <div
@@ -313,14 +250,12 @@ export default function RoomTimetable() {
 function EditRoomCellModal({ modal, gradeConfigs, timetableSlots, onSave, onClose, saving }) {
   const { day, slot, current } = modal
 
-  // Classes that have a dedicated subject at this (day, slot)
   const busySet = new Set(
     timetableSlots
       .filter(s => s.day_of_week === day && s.slot === slot && !s.is_unassigned)
       .map(s => `${s.grade}-${s.class_num}`)
   )
 
-  // All classes sorted by grade/class
   const allClasses = gradeConfigs
     .slice()
     .sort((a, b) => a.grade - b.grade)
