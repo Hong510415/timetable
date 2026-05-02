@@ -187,6 +187,47 @@ export function runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assig
     }
   }
 
+  // ── Step C-post: 주요과목 그룹 내 균등화 → 일반과목 여유 확보 ─────
+  // 같은 주요과목 그룹에서 targetHours에 도달한 교사 → 여유 있는 교사로 반 1개씩 이동
+  // 목적: 영어 교사 등이 주요과목만으로 가득 차지 않고 일반과목도 받을 수 있게
+  const minMinorHPC = units.filter(u => !u.is_major)
+    .reduce((m, u) => Math.min(m, u.hoursPerClass), Infinity)
+
+  if (isFinite(minMinorHPC)) {
+    for (const { name, group } of majorGroups) {
+      const grp = ts.filter(t => t.majorSubjectNames.has(name))
+      if (grp.length < 2) continue
+
+      for (let iter = 0; iter < 30; iter++) {
+        grp.sort((a, b) => b.hours - a.hours)
+        const from = grp[0]
+        const to = grp[grp.length - 1]
+
+        // from이 targetHours 미만 → 더 이상 이동 불필요
+        if (from.hours < targetHours) break
+        // to가 (targetHours - minMinorHPC)를 초과 → 받을 자리 없음
+        if (to.hours + minMinorHPC > targetHours) break
+
+        let moved = false
+        const candidates = from.assignments
+          .filter(a => a.is_major && a.subjectName === name)
+          .sort((a, b) => a.hoursPerClass - b.hoursPerClass)
+
+        for (const assign of candidates) {
+          const unit = group.find(u => u.subjectId === assign.subjectId && u.grade === assign.grade)
+          if (!unit) continue
+          if (to.hours + unit.hoursPerClass > targetHours) continue
+          const classToMove = assign.classNums[assign.classNums.length - 1]
+          removeClasses(from, unit, [classToMove])
+          addClasses(to, unit, [classToMove])
+          moved = true
+          break
+        }
+        if (!moved) break
+      }
+    }
+  }
+
   // ── Step E: 일반과목 배정 ──────────────────────────────────────────
   // 우선순위:
   // 1) 이미 이 학년을 담당 중 + 시수 여유 있음
