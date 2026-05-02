@@ -1,90 +1,41 @@
-import { useEffect, useState } from 'react'
-import { supabase } from '../lib/supabase'
+import { useState } from 'react'
+import { useApp } from '../context/AppContext'
 
 const DAYS = ['월', '화', '수', '목', '금']
 const GRADES = [1, 2, 3, 4, 5, 6]
 const DAY_KEYS = ['periods_mon', 'periods_tue', 'periods_wed', 'periods_thu', 'periods_fri']
 
-const defaultGrade = (grade) => ({
-  grade, num_classes: 4,
-  periods_mon: 5, periods_tue: 5, periods_wed: 5, periods_thu: 5, periods_fri: 4,
-})
-
 export default function SchoolSetup() {
+  const { state, setSchoolName, setGradeConfigs, setLunchConfig, setSubjects } = useApp()
+  const { schoolName, gradeConfigs, lunchConfig, subjects } = state
   const [tab, setTab] = useState('grade')
-  const [gradeConfigs, setGradeConfigs] = useState(GRADES.map(defaultGrade))
-  const [lunchConfig, setLunchConfig] = useState({ split_lunch: false, lunch_groups: [] })
-  const [subjects, setSubjects] = useState([])
-  const [schoolId, setSchoolId] = useState(null)
-  const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
-
-  useEffect(() => { load() }, [])
-
-  async function load() {
-    const { data: { user } } = await supabase.auth.getUser()
-    const { data: school } = await supabase.from('schools').select('id').eq('user_id', user.id).single()
-    if (!school) return
-    setSchoolId(school.id)
-
-    const [{ data: configs }, { data: lunch }, { data: subs }] = await Promise.all([
-      supabase.from('grade_configs').select('*').eq('school_id', school.id).order('grade'),
-      supabase.from('lunch_config').select('*').eq('school_id', school.id).single(),
-      supabase.from('subjects').select('*').eq('school_id', school.id).order('grade'),
-    ])
-
-    if (configs?.length) setGradeConfigs(GRADES.map(g => configs.find(c => c.grade === g) || defaultGrade(g)))
-    if (lunch) setLunchConfig({ split_lunch: lunch.split_lunch, lunch_groups: lunch.lunch_groups || [] })
-    if (subs) setSubjects(subs)
-  }
-
-  async function handleSave() {
-    if (!schoolId) return
-    setSaving(true)
-
-    await Promise.all(gradeConfigs.map(config =>
-      supabase.from('grade_configs').upsert({ ...config, school_id: schoolId }, { onConflict: 'school_id,grade' })
-    ))
-
-    await supabase.from('lunch_config').upsert(
-      { split_lunch: lunchConfig.split_lunch, lunch_groups: lunchConfig.lunch_groups, school_id: schoolId },
-      { onConflict: 'school_id' }
-    )
-
-    await supabase.from('subjects').delete().eq('school_id', schoolId)
-    if (subjects.length > 0) {
-      await supabase.from('subjects').insert(subjects.map(s => {
-        const { id, ...rest } = s
-        return { ...rest, school_id: schoolId }
-      }))
-    }
-
-    setSaving(false)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
-  }
 
   function updateGrade(grade, field, value) {
     const num = value === '' ? '' : Number(value)
-    setGradeConfigs(prev => prev.map(c => c.grade === grade ? { ...c, [field]: num } : c))
+    setGradeConfigs(gradeConfigs.map(c => c.grade === grade ? { ...c, [field]: num } : c))
   }
 
   function toggleLunchGrade(gradeNum, slotIdx) {
-    setLunchConfig(prev => {
-      const groups = JSON.parse(JSON.stringify(prev.lunch_groups))
-      const existing = groups.find(g => g.slot === slotIdx)
-      if (existing) {
-        existing.grades = existing.grades.includes(gradeNum)
-          ? existing.grades.filter(g => g !== gradeNum)
-          : [...existing.grades, gradeNum]
-        return { ...prev, lunch_groups: groups }
-      }
-      return { ...prev, lunch_groups: [...groups, { slot: slotIdx, grades: [gradeNum] }] }
-    })
+    const groups = JSON.parse(JSON.stringify(lunchConfig.lunch_groups))
+    const existing = groups.find(g => g.slot === slotIdx)
+    if (existing) {
+      existing.grades = existing.grades.includes(gradeNum)
+        ? existing.grades.filter(g => g !== gradeNum)
+        : [...existing.grades, gradeNum]
+      setLunchConfig({ ...lunchConfig, lunch_groups: groups })
+    } else {
+      setLunchConfig({ ...lunchConfig, lunch_groups: [...groups, { slot: slotIdx, grades: [gradeNum] }] })
+    }
   }
 
   function isGradeInSlot(grade, slot) {
     return lunchConfig.lunch_groups.some(g => g.slot === slot && g.grades.includes(grade))
+  }
+
+  function handleSave() {
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2000)
   }
 
   const tabs = [
@@ -99,7 +50,16 @@ export default function SchoolSetup() {
         <h1 className="text-[22px] font-bold">학교 설정</h1>
       </div>
 
-      {/* 탭 */}
+      <div className="mb-5">
+        <label className="text-[12px] font-semibold text-gray-600 block mb-1">학교명</label>
+        <input
+          value={schoolName}
+          onChange={e => setSchoolName(e.target.value)}
+          placeholder="예: OO초등학교"
+          className="h-10 px-3 border border-gray-300 rounded-sm text-[13px] outline-none focus:border-black w-64"
+        />
+      </div>
+
       <div className="flex border border-gray-200 bg-white rounded-sm w-fit mb-6">
         {tabs.map(t => (
           <button
@@ -114,12 +74,11 @@ export default function SchoolSetup() {
         ))}
       </div>
 
-      {/* 탭 1: 학급 정보 */}
       {tab === 'grade' && (
         <div className="bg-white border border-gray-200 rounded-sm p-7 flex flex-col gap-6">
           <div>
             <h2 className="text-[14px] font-semibold mb-1">학년별 학급 수</h2>
-            <p className="text-[12px] text-gray-400 mb-4">각 학년의 학급 수를 입력하세요. 시간표 작성의 기준이 됩니다.</p>
+            <p className="text-[12px] text-gray-400 mb-4">각 학년의 학급 수를 입력하세요.</p>
             <div className="flex gap-3 flex-wrap">
               {gradeConfigs.map(({ grade, num_classes }) => (
                 <div key={grade} className="flex flex-col items-center gap-2">
@@ -169,7 +128,6 @@ export default function SchoolSetup() {
         </div>
       )}
 
-      {/* 탭 2: 점심시간 설정 */}
       {tab === 'lunch' && (
         <div className="bg-white border border-gray-200 rounded-sm p-7 flex flex-col gap-6">
           <div>
@@ -183,7 +141,7 @@ export default function SchoolSetup() {
                   <input
                     type="radio"
                     checked={lunchConfig.split_lunch === opt.value}
-                    onChange={() => setLunchConfig(prev => ({ ...prev, split_lunch: opt.value }))}
+                    onChange={() => setLunchConfig({ ...lunchConfig, split_lunch: opt.value })}
                   />
                   {opt.label}
                 </label>
@@ -227,7 +185,6 @@ export default function SchoolSetup() {
         </div>
       )}
 
-      {/* 탭 3: 전담 과목 설정 */}
       {tab === 'subjects' && (
         <div className="bg-white border border-gray-200 rounded-sm p-7 flex flex-col gap-4">
           <div>
@@ -239,33 +196,39 @@ export default function SchoolSetup() {
               <div className="flex items-center justify-between mb-3">
                 <span className="text-[13px] font-semibold">{grade}학년</span>
                 <button
-                  onClick={() => setSubjects(prev => [...prev, { grade, name: '', weekly_hours: 2 }])}
+                  onClick={() => setSubjects([...subjects, { id: crypto.randomUUID(), grade, name: '', weekly_hours: 2, is_major: false }])}
                   className="text-[12px] px-3 h-7 border border-gray-300 rounded-sm hover:bg-gray-50"
-                >
-                  + 과목 추가
-                </button>
+                >+ 과목 추가</button>
               </div>
               {subjects.filter(s => s.grade === grade).length === 0 && (
                 <p className="text-[12px] text-gray-300">과목을 추가하세요</p>
               )}
               <div className="flex flex-col gap-2">
                 {subjects.map((s, i) => s.grade !== grade ? null : (
-                  <div key={i} className="flex items-center gap-2">
+                  <div key={s.id} className="flex items-center gap-2">
                     <input
                       placeholder="과목명 (예: 영어)"
                       value={s.name}
-                      onChange={e => setSubjects(prev => prev.map((x, j) => j === i ? { ...x, name: e.target.value } : x))}
+                      onChange={e => setSubjects(subjects.map((x, j) => j === i ? { ...x, name: e.target.value } : x))}
                       className="flex-1 h-9 px-3 border border-gray-200 rounded-sm text-[13px] outline-none focus:border-black"
                     />
                     <span className="text-[12px] text-gray-400">주당</span>
                     <input
                       type="number" min={1} max={10} value={s.weekly_hours}
-                      onChange={e => setSubjects(prev => prev.map((x, j) => j === i ? { ...x, weekly_hours: Number(e.target.value) } : x))}
+                      onChange={e => setSubjects(subjects.map((x, j) => j === i ? { ...x, weekly_hours: Number(e.target.value) } : x))}
                       className="w-14 h-9 text-center border border-gray-200 rounded-sm text-[13px] outline-none focus:border-black"
                     />
                     <span className="text-[12px] text-gray-400">시수</span>
+                    <select
+                      value={s.is_major ? '주요' : '일반'}
+                      onChange={e => setSubjects(subjects.map((x, j) => j === i ? { ...x, is_major: e.target.value === '주요' } : x))}
+                      className="h-9 px-2 border border-gray-200 rounded-sm text-[13px] outline-none focus:border-black"
+                    >
+                      <option>일반</option>
+                      <option>주요</option>
+                    </select>
                     <button
-                      onClick={() => setSubjects(prev => prev.filter((_, j) => j !== i))}
+                      onClick={() => setSubjects(subjects.filter((_, j) => j !== i))}
                       className="text-[12px] text-red-400 hover:text-red-600 px-2"
                     >삭제</button>
                   </div>
@@ -276,14 +239,12 @@ export default function SchoolSetup() {
         </div>
       )}
 
-      {/* 저장 버튼 */}
       <div className="flex justify-end mt-6">
         <button
           onClick={handleSave}
-          disabled={saving}
-          className="h-10 px-5 bg-black text-white text-[13px] font-semibold rounded-sm disabled:opacity-50 hover:bg-gray-800 transition-colors"
+          className="h-10 px-5 bg-black text-white text-[13px] font-semibold rounded-sm hover:bg-gray-800"
         >
-          {saved ? '저장됨 ✓' : saving ? '저장 중...' : '저장'}
+          {saved ? '저장됨 ✓' : '저장'}
         </button>
       </div>
     </div>
