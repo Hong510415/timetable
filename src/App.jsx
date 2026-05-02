@@ -3,7 +3,6 @@ import { AppProvider } from './context/AppContext'
 import Layout from './components/Layout'
 import SchoolSetup from './pages/SchoolSetup'
 import SubjectSetup from './pages/SubjectSetup'
-import TeacherManagement from './pages/TeacherManagement'
 import Timetable from './pages/Timetable'
 import RoomManagement from './pages/RoomManagement'
 import Assignment from './pages/Assignment'
@@ -16,7 +15,6 @@ export default function App() {
         <Routes>
           <Route path="/setup" element={<Layout><SchoolSetup /></Layout>} />
           <Route path="/subjects" element={<Layout><SubjectSetup /></Layout>} />
-          <Route path="/teachers" element={<Layout><TeacherManagement /></Layout>} />
           <Route path="/assignment" element={<Layout><Assignment /></Layout>} />
           <Route path="/timetable" element={<Layout><Timetable /></Layout>} />
           <Route path="/rooms" element={<Layout><RoomManagement /></Layout>} />
