@@ -164,11 +164,11 @@ export function buildSchedule(gradeConfigs, subjects, teachers, lunchConfig, roo
       const ca = gradeClassSlots[grade]?.[classNum]?.[day]
       if (!ca) continue
 
-      const subjectDayKey = `${teacherId}_${subjectId}_${day}`
-      const existingSlotsOnDay = teacherSubjectDaySlots[subjectDayKey]
+      // 같은 학급+과목이 하루에 N회 이상이면 스킵 (교사 전체 기준이 아닌 학급 기준)
+      const classSubjectDayKey = `${grade}_${classNum}_${subjectId}_${day}`
+      const existingSlotsOnDay = teacherSubjectDaySlots[classSubjectDayKey]
       const existingCount = existingSlotsOnDay?.size || 0
 
-      // 같은 요일 같은 과목 최대 횟수 초과 시 스킵
       if (existingCount >= getSubjectMaxSameDay(subjectId)) continue
 
       const slot = findSlot(teacherId, subjectId, day, ca, existingSlotsOnDay)
@@ -209,9 +209,9 @@ export function buildSchedule(gradeConfigs, subjects, teachers, lunchConfig, roo
     if (!classDayCount[grade][classNum]) classDayCount[grade][classNum] = [0, 0, 0, 0, 0]
     classDayCount[grade][classNum][day]++
 
-    const subjectDayKey = `${teacherId}_${subjectId}_${day}`
-    if (!teacherSubjectDaySlots[subjectDayKey]) teacherSubjectDaySlots[subjectDayKey] = new Set()
-    teacherSubjectDaySlots[subjectDayKey].add(slot)
+    const classSubjectDayKey = `${grade}_${classNum}_${subjectId}_${day}`
+    if (!teacherSubjectDaySlots[classSubjectDayKey]) teacherSubjectDaySlots[classSubjectDayKey] = new Set()
+    teacherSubjectDaySlots[classSubjectDayKey].add(slot)
 
     return true
   }
