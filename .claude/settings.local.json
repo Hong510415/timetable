@@ -10,7 +10,12 @@
       "Bash(git branch *)",
       "Bash(git remote *)",
       "Bash(git push *)",
-      "Bash(Get-Content \"C:\\\\Users\\\\a\\\\Desktop\\\\timetable\\\\.env.local\")"
+      "Bash(Get-Content \"C:\\\\Users\\\\a\\\\Desktop\\\\timetable\\\\.env.local\")",
+      "Bash(git config *)",
+      "Bash(npx vercel *)",
+      "PowerShell(Get-ChildItem -Recurse -Path \"c:\\\\Users\\\\a\\\\Desktop\\\\timetable\\\\src\" -File | ForEach-Object { $lines = @\\(Get-Content $_.FullName | Measure-Object -Line\\).Count; \"$\\($_.Name\\): $lines lines\" } | Sort-Object)",
+      "Bash(git checkout *)",
+      "Bash(npm uninstall *)"
     ]
   }
 }
