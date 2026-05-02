@@ -14,6 +14,8 @@ export default function Timetable() {
   const [generating, setGenerating] = useState(false)
   const [errors, setErrors] = useState([])
   const [tab, setTab] = useState('class')
+  const [showGenerateModal, setShowGenerateModal] = useState(false)
+  const [generateOptions, setGenerateOptions] = useState({ allowSameDaySameSubject: false, maxSameDayCount: 2 })
   const [selectedGrade, setSelectedGrade] = useState(1)
   const [selectedClass, setSelectedClass] = useState(1)
   const [selectedTeacher, setSelectedTeacher] = useState(teachers[0]?.id || null)
@@ -35,7 +37,7 @@ export default function Timetable() {
     return { gradeLunchSlot, totalSlots: maxPeriods + 1 }
   }
 
-  async function handleGenerate() {
+  function handleGenerate() {
     if (!gradeConfigs.length || !subjects.length || !teachers.length) {
       return alert('학급 정보, 전담 과목, 교사 정보를 먼저 설정하세요.')
     }
@@ -43,10 +45,15 @@ export default function Timetable() {
     if (!hasAssignments) {
       return alert('전담 배정 탭에서 배정을 실행하고 "시간표에 적용"을 먼저 해주세요.')
     }
+    setShowGenerateModal(true)
+  }
+
+  async function executeGenerate() {
+    setShowGenerateModal(false)
     setGenerating(true)
     setErrors([])
     try {
-      const result = buildSchedule(gradeConfigs, subjects, teachers, lunchConfig || { split_lunch: false, lunch_groups: [] }, rooms, roomBlockedSlots)
+      const result = buildSchedule(gradeConfigs, subjects, teachers, lunchConfig || { split_lunch: false, lunch_groups: [] }, rooms, roomBlockedSlots, generateOptions)
       const { rows } = flattenResult(result.result, result.gradeLunchSlot, result.totalSlots)
       const flatErrors = (result.errors || []).map(e => `${e.grade}학년 ${e.classNum}반 ${e.unassigned}시수 미배정`)
       setErrors(flatErrors)
@@ -248,6 +255,15 @@ export default function Timetable() {
           saving={saving}
         />
       )}
+
+      {showGenerateModal && (
+        <GenerateOptionsModal
+          options={generateOptions}
+          onChange={setGenerateOptions}
+          onConfirm={executeGenerate}
+          onClose={() => setShowGenerateModal(false)}
+        />
+      )}
     </div>
   )
 }
@@ -318,6 +334,71 @@ function TeacherTimetableGrid({ slots, totalSlots, gradeLunchSlot, subjects, tim
           })}
         </div>
       ))}
+    </div>
+  )
+}
+
+function GenerateOptionsModal({ options, onChange, onConfirm, onClose }) {
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white w-full max-w-[420px] rounded-sm border border-gray-200 p-6">
+        <h2 className="text-[16px] font-bold mb-4">시간표 자동 생성 설정</h2>
+
+        <div className="flex flex-col gap-4 mb-6">
+          <div className="flex items-center justify-between">
+            <span className="text-[13px] font-semibold text-gray-700">같은 요일에 같은 전담과목 허용</span>
+            <div className="flex gap-2">
+              {[
+                { value: false, label: '불허용' },
+                { value: true, label: '허용' },
+              ].map(opt => (
+                <button
+                  key={String(opt.value)}
+                  onClick={() => onChange({ ...options, allowSameDaySameSubject: opt.value })}
+                  className={`h-8 px-3 rounded-sm text-[12px] font-semibold border transition-colors
+                    ${options.allowSameDaySameSubject === opt.value ? 'bg-black text-white border-black' : 'bg-white text-gray-500 border-gray-300 hover:bg-gray-50'}`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {options.allowSameDaySameSubject && (
+            <div className="flex items-center justify-between pl-4 border-l-2 border-gray-200">
+              <span className="text-[13px] text-gray-600">하루 최대 배정 수 <span className="text-[11px] text-gray-400">(연속으로 배치됨)</span></span>
+              <div className="flex gap-2">
+                {[2, 3, 4, 5].map(n => (
+                  <button
+                    key={n}
+                    onClick={() => onChange({ ...options, maxSameDayCount: n })}
+                    className={`w-9 h-8 rounded-sm text-[12px] font-semibold border transition-colors
+                      ${options.maxSameDayCount === n ? 'bg-black text-white border-black' : 'bg-white text-gray-500 border-gray-300 hover:bg-gray-50'}`}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <p className="text-[11px] text-gray-400 bg-gray-50 rounded-sm p-3">
+            {options.allowSameDaySameSubject
+              ? `같은 요일에 같은 과목을 최대 ${options.maxSameDayCount}회까지 연속으로 배치합니다.`
+              : '같은 요일에 같은 과목을 한 번만 배치합니다. 요일 분산이 극대화됩니다.'}
+          </p>
+        </div>
+
+        <div className="flex justify-end gap-2">
+          <button onClick={onClose} className="h-9 px-4 border border-gray-300 rounded-sm text-[13px] hover:bg-gray-50">취소</button>
+          <button
+            onClick={onConfirm}
+            className="h-9 px-5 bg-black text-white text-[13px] font-semibold rounded-sm hover:bg-gray-800"
+          >
+            생성
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

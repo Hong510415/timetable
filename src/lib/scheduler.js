@@ -5,7 +5,9 @@
  * gradeLunchSlot: { grade: slotIndex } (DB값 3,4,5 그대로)
  */
 
-export function buildSchedule(gradeConfigs, subjects, teachers, lunchConfig, rooms = [], roomBlockedSlots = []) {
+export function buildSchedule(gradeConfigs, subjects, teachers, lunchConfig, rooms = [], roomBlockedSlots = [], options = {}) {
+  const allowSameDaySameSubject = options.allowSameDaySameSubject !== false
+  const maxSameDayCount = (allowSameDaySameSubject && options.maxSameDayCount) ? options.maxSameDayCount : (allowSameDaySameSubject ? 99 : 0)
   const splitLunch = lunchConfig?.split_lunch || false
   const lunchGroups = lunchConfig?.lunch_groups || []
 
@@ -117,19 +119,34 @@ export function buildSchedule(gradeConfigs, subjects, teachers, lunchConfig, roo
   const teacherGradeDay = {}
   // 학급+요일별 전담 수업 수 (담임 시각 균형용)
   const classDayCount = {}
+  // 교사+과목+요일별 배정 슬롯 (연속 배치 + 최대 횟수 제한용)
+  const teacherSubjectDaySlots = {}
+
+  function isSlotValid(teacherId, subjectId, day, slot, classAvailable) {
+    const subjectBlocked = subjectBlockedMap[subjectId]
+    if (!classAvailable.has(slot)) return false
+    if (teacherOccupied[teacherId][day].has(slot)) return false
+    if (subjectBlocked?.has(`${day}-${slot}`)) return false
+    if (splitLunch && allLunchSlotIndexes.includes(slot)) {
+      const occ = allLunchSlotIndexes.filter(ls => teacherOccupied[teacherId][day].has(ls))
+      if (occ.length >= allLunchSlotIndexes.length - 1) return false
+    }
+    return true
+  }
 
   // 교사 점심 제약 + 특별실 사용 불가 시간 고려하여 슬롯 탐색
-  function findSlot(teacherId, subjectId, day, classAvailable) {
-    const subjectBlocked = subjectBlockedMap[subjectId]
-    for (let slot = 0; slot < totalSlots; slot++) {
-      if (!classAvailable.has(slot)) continue
-      if (teacherOccupied[teacherId][day].has(slot)) continue
-      if (subjectBlocked?.has(`${day}-${slot}`)) continue
-      if (splitLunch && allLunchSlotIndexes.includes(slot)) {
-        const occ = allLunchSlotIndexes.filter(ls => teacherOccupied[teacherId][day].has(ls))
-        if (occ.length >= allLunchSlotIndexes.length - 1) continue
+  function findSlot(teacherId, subjectId, day, classAvailable, existingSlotsOnDay) {
+    // 같은 과목이 이미 배정된 경우: 연속된 슬롯만 허용
+    if (existingSlotsOnDay && existingSlotsOnDay.size > 0) {
+      for (let slot = 0; slot < totalSlots; slot++) {
+        const isAdjacent = existingSlotsOnDay.has(slot - 1) || existingSlotsOnDay.has(slot + 1)
+        if (!isAdjacent) continue
+        if (isSlotValid(teacherId, subjectId, day, slot, classAvailable)) return slot
       }
-      return slot
+      return -1
+    }
+    for (let slot = 0; slot < totalSlots; slot++) {
+      if (isSlotValid(teacherId, subjectId, day, slot, classAvailable)) return slot
     }
     return -1
   }
@@ -140,7 +157,15 @@ export function buildSchedule(gradeConfigs, subjects, teachers, lunchConfig, roo
     for (let day = 0; day < 5; day++) {
       const ca = gradeClassSlots[grade]?.[classNum]?.[day]
       if (!ca) continue
-      const slot = findSlot(teacherId, subjectId, day, ca)
+
+      const subjectDayKey = `${teacherId}_${subjectId}_${day}`
+      const existingSlotsOnDay = teacherSubjectDaySlots[subjectDayKey]
+      const existingCount = existingSlotsOnDay?.size || 0
+
+      // 같은 요일 같은 과목 최대 횟수 초과 시 스킵
+      if (existingCount >= maxSameDayCount) continue
+
+      const slot = findSlot(teacherId, subjectId, day, ca, existingSlotsOnDay)
       if (slot === -1) continue
 
       const teacherLoad = teacherOccupied[teacherId][day].size
@@ -177,6 +202,10 @@ export function buildSchedule(gradeConfigs, subjects, teachers, lunchConfig, roo
     if (!classDayCount[grade]) classDayCount[grade] = {}
     if (!classDayCount[grade][classNum]) classDayCount[grade][classNum] = [0, 0, 0, 0, 0]
     classDayCount[grade][classNum][day]++
+
+    const subjectDayKey = `${teacherId}_${subjectId}_${day}`
+    if (!teacherSubjectDaySlots[subjectDayKey]) teacherSubjectDaySlots[subjectDayKey] = new Set()
+    teacherSubjectDaySlots[subjectDayKey].add(slot)
 
     return true
   }
