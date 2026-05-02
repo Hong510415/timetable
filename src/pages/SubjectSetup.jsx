@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { Plus, Trash2 } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 
 const GRADES = [1, 2, 3, 4, 5, 6]
@@ -8,7 +7,6 @@ export default function SubjectSetup() {
   const { state, setSubjects, setTeachers } = useApp()
   const { subjects, gradeConfigs, teachers } = state
   const [tab, setTab] = useState('subjects')
-  const [newCode, setNewCode] = useState('')
 
   const activeGrades = gradeConfigs.filter(g => g.num_classes > 0).map(g => g.grade)
   const gradesToShow = activeGrades.length > 0 ? activeGrades : GRADES
@@ -25,17 +23,18 @@ export default function SubjectSetup() {
     setSubjects(subjects.filter(s => s.id !== id))
   }
 
-  function handleAddTeacher() {
-    const code = newCode.trim()
-    if (!code) return alert('교사 명칭을 입력하세요')
-    if (teachers.some(t => t.code === code)) return alert('이미 존재하는 명칭입니다')
-    setTeachers([...teachers, { id: crypto.randomUUID(), code, teacher_assignments: [] }])
-    setNewCode('')
-  }
-
-  function handleDeleteTeacher(id) {
-    if (!confirm('이 교사를 삭제하시겠습니까?')) return
-    setTeachers(teachers.filter(t => t.id !== id))
+  function handleTeacherCountChange(count) {
+    const n = Math.max(0, Number(count))
+    if (n > teachers.length) {
+      const added = Array.from({ length: n - teachers.length }, (_, i) => ({
+        id: crypto.randomUUID(),
+        code: `교사${teachers.length + i + 1}`,
+        teacher_assignments: [],
+      }))
+      setTeachers([...teachers, ...added])
+    } else {
+      setTeachers(teachers.slice(0, n))
+    }
   }
 
   const tabs = [
@@ -121,45 +120,19 @@ export default function SubjectSetup() {
       )}
 
       {tab === 'teachers' && (
-        <div>
-          <p className="text-[12px] text-gray-400 -mt-2 mb-5">전담 교사 명칭을 입력하세요. 학급·과목 배정은 전담 배정 탭에서 자동으로 처리됩니다.</p>
-          <div className="flex items-center gap-2 p-3 bg-gray-100 rounded-sm mb-5 text-[12px] text-gray-500">
-            💡 권장 명칭 형식: [주담당학년][과목] &nbsp; 예) 34영어, 56체육, 전체음악
-          </div>
-          <div className="flex gap-2 mb-5">
+        <div className="bg-white border border-gray-200 rounded-sm p-7">
+          <h2 className="text-[14px] font-semibold mb-1">전담 교사 인원</h2>
+          <p className="text-[12px] text-gray-400 mb-5">전담 교사 총 인원을 입력하세요. 명칭은 전담 배정 후 지정할 수 있습니다.</p>
+          <div className="flex items-center gap-3">
             <input
-              placeholder="교사 명칭 (예: 34영어)"
-              value={newCode}
-              onChange={e => setNewCode(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleAddTeacher()}
-              className="h-10 px-3 border border-gray-300 rounded-sm text-[13px] outline-none focus:border-black w-64"
+              type="number" min={0} max={50}
+              value={teachers.length}
+              onChange={e => handleTeacherCountChange(e.target.value)}
+              onClick={e => e.target.select()}
+              className="w-24 h-10 text-center border border-gray-300 rounded-sm text-[18px] font-bold outline-none focus:border-black"
             />
-            <button
-              onClick={handleAddTeacher}
-              className="flex items-center gap-2 h-10 px-4 bg-black text-white text-[13px] font-semibold rounded-sm hover:bg-gray-800"
-            >
-              <Plus size={14} />추가
-            </button>
+            <span className="text-[14px] text-gray-500">명</span>
           </div>
-
-          {teachers.length === 0 ? (
-            <div className="text-center py-16 text-gray-300 text-[14px]">교사를 추가하세요</div>
-          ) : (
-            <div className="bg-white border border-gray-200 rounded-sm overflow-hidden">
-              {teachers.map((teacher, i) => (
-                <div key={teacher.id} className="flex items-center h-12 border-b border-gray-100 last:border-b-0 px-5">
-                  <span className="text-[12px] text-gray-400 w-8">{i + 1}</span>
-                  <span className="flex-1 text-[13px] font-semibold">{teacher.code}</span>
-                  <button
-                    onClick={() => handleDeleteTeacher(teacher.id)}
-                    className="text-gray-300 hover:text-red-500 transition-colors"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
       )}
     </div>

@@ -193,7 +193,13 @@ export default function Assignment() {
                 <div key={teacher.id} className={`border-b border-gray-100 last:border-b-0 ${isOver || isUnder ? 'bg-yellow-50' : ''}`}>
                   {teacherAssigns.length === 0 ? (
                     <div className="flex items-center h-10">
-                      <div className="w-[110px] flex-shrink-0 px-4 text-[12px] font-semibold border-r border-gray-100">{teacher.code}</div>
+                      <div className="w-[110px] flex-shrink-0 px-2 border-r border-gray-100">
+                        <input
+                          value={teacher.code}
+                          onChange={e => setTeachers(teachers.map(t => t.id === teacher.id ? { ...t, code: e.target.value } : t))}
+                          className="w-full h-7 px-2 text-[12px] font-semibold border border-transparent rounded-sm hover:border-gray-200 focus:border-black outline-none"
+                        />
+                      </div>
                       <div className="flex-1 px-3 text-[12px] text-gray-300">배정 없음</div>
                       <div className="w-[80px] flex-shrink-0 px-3 text-[12px] font-bold text-gray-400 border-r border-gray-100">0h</div>
                       <div className="w-[60px]" />
@@ -206,8 +212,14 @@ export default function Assignment() {
                       : `${a.classNums[0]}~${a.classNums[a.classNums.length - 1]}반`
                     return (
                       <div key={localIdx} className="flex items-center h-10 border-b border-gray-50 last:border-b-0">
-                        <div className="w-[110px] flex-shrink-0 px-4 text-[12px] font-semibold border-r border-gray-100">
-                          {localIdx === 0 ? teacher.code : ''}
+                        <div className="w-[110px] flex-shrink-0 px-2 border-r border-gray-100">
+                          {localIdx === 0 ? (
+                            <input
+                              value={teacher.code}
+                              onChange={e => setTeachers(teachers.map(t => t.id === teacher.id ? { ...t, code: e.target.value } : t))}
+                              className="w-full h-7 px-2 text-[12px] font-semibold border border-transparent rounded-sm hover:border-gray-200 focus:border-black outline-none"
+                            />
+                          ) : ''}
                         </div>
                         <div className="w-[90px] flex-shrink-0 px-3 text-[12px] border-r border-gray-100 flex items-center gap-1">
                           {a.subjectName}
