@@ -233,37 +233,68 @@ export function runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assig
     }
   }
 
-  // ── Step F: 일반과목 swap 후처리 ─────────────────────────────────
-  // 일반과목 학년 수가 많은 교사 → 적은 교사로 반 이동
-  // 조건: 이동 후 양쪽 시수가 targetHours+hoursPerClass 이내
+  // ── Step F-1: 같은 과목+학년 담당 교사 간 반 균등 재배분 ────────
+  // 영어6학년을 교사1(1반)과 교사2(6반)이 나눠 담당할 때,
+  // 교사1의 총시수가 더 적으면 교사2의 반을 교사1에게 이동
+  const allSubjectGrades = [...new Set(units.map(u => `${u.subjectId}_${u.grade}`))]
+  for (const key of allSubjectGrades) {
+    const [subjectId, gradeStr] = key.split('_')
+    const grade = Number(gradeStr)
+    const unit = units.find(u => u.subjectId === subjectId && u.grade === grade)
+    if (!unit) continue
 
+    const holders = ts
+      .map(t => ({ t, a: t.assignments.find(a => a.subjectId === subjectId && a.grade === grade) }))
+      .filter(x => x.a)
+    if (holders.length < 2) continue
+
+    // 시수 균형 맞을 때까지 반복
+    for (let iter = 0; iter < 20; iter++) {
+      holders.sort((a, b) => a.t.hours - b.t.hours)
+      const low = holders[0]
+      const high = holders[holders.length - 1]
+      if (high.t.hours - low.t.hours < unit.hoursPerClass * 2) break
+      if (high.a.classNums.length === 0) break
+
+      const classToMove = high.a.classNums[high.a.classNums.length - 1]
+      const newHighHours = high.t.hours - unit.hoursPerClass
+      const newLowHours = low.t.hours + unit.hoursPerClass
+      // 이동 후 역전되거나 범위 초과하면 중단
+      if (newHighHours < newLowHours - unit.hoursPerClass) break
+      if (newLowHours > targetHours + unit.hoursPerClass) break
+
+      removeClasses(high.t, unit, [classToMove])
+      addClasses(low.t, unit, [classToMove])
+    }
+  }
+
+  // ── Step F-2: 일반과목 학년 수 불균형 swap ───────────────────────
+  // 일반과목 학년이 많은 교사 → 적은 교사로 반 이동
+  // 시수는 targetHours 이내로 유지
   for (let iter = 0; iter < 30; iter++) {
-    // 일반과목 학년 수 기준 정렬
     const sorted = ts.slice().sort((a, b) => countMinorGrades(b) - countMinorGrades(a))
     const most = sorted[0]
     const least = sorted[sorted.length - 1]
     if (countMinorGrades(most) - countMinorGrades(least) <= 1) break
 
-    // most에서 옮길 수 있는 일반과목 반 찾기 (학년 단위로 통째로 이동 우선)
     const minorAssigns = most.assignments.filter(a => !a.is_major)
     if (!minorAssigns.length) break
 
-    // least가 아직 담당하지 않는 학년의 일반과목 반 중 가장 작은 단위
+    // least가 아직 담당하지 않는 학년의 일반과목 반
     const movable = minorAssigns
       .filter(a => !least.assignments.some(la => la.grade === a.grade && la.subjectId === a.subjectId))
       .sort((a, b) => a.classNums.length - b.classNums.length)
-
     if (!movable.length) break
 
     const fromAssign = movable[0]
     const unit = units.find(u => u.subjectId === fromAssign.subjectId && u.grade === fromAssign.grade)
     if (!unit) break
 
-    // 1반씩 이동, 시수 제한 확인
     const classToMove = fromAssign.classNums[fromAssign.classNums.length - 1]
     const newMostHours = most.hours - unit.hoursPerClass
     const newLeastHours = least.hours + unit.hoursPerClass
-    if (newMostHours < 0 || newLeastHours > targetHours + unit.hoursPerClass) break
+    // 시수가 targetHours 초과하지 않도록
+    if (newLeastHours > targetHours) break
 
     removeClasses(most, unit, [classToMove])
     addClasses(least, unit, [classToMove])
