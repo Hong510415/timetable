@@ -409,7 +409,7 @@ function AddAssignmentButton({ teacher, subjects, gradeConfigs, popupId, openPop
     return (
       <button ref={btnRef} onClick={() => {
         const rect = btnRef.current?.getBoundingClientRect()
-        setOpenUp(!!rect && rect.top < 300)
+        setOpenUp(!!rect && rect.bottom > window.innerHeight - 280)
         setOpenPopupId(popupId)
       }} className="text-[11px] text-gray-400 hover:text-gray-700">
         + 과목 추가
@@ -419,7 +419,7 @@ function AddAssignmentButton({ teacher, subjects, gradeConfigs, popupId, openPop
 
   return (
     <div className="relative">
-      <div className={`absolute left-0 z-20 bg-white border border-gray-200 rounded-sm shadow-lg p-3 min-w-[220px] ${openUp ? 'top-full mt-1' : 'bottom-full mb-1'}`}>
+      <div className={`absolute left-0 z-20 bg-white border border-gray-200 rounded-sm shadow-lg p-3 min-w-[220px] ${openUp ? 'bottom-full mb-1' : 'top-full mt-1'}`}>
         <div className="text-[11px] font-semibold text-gray-600 mb-2">과목 추가 — {teacher.code}</div>
 
         <div className="text-[10px] text-gray-400 mb-1">과목 선택</div>
