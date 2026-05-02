@@ -165,7 +165,9 @@ export default function Assignment() {
                     const numClassesForGrade = gradeConfigs.find(g => g.grade === a.grade)?.num_classes ?? 0
                     const classDisplay = a.classNums.length === numClassesForGrade
                       ? '전체'
-                      : `${a.classNums[0]}~${a.classNums[a.classNums.length - 1]}반`
+                      : a.classNums.length === 1
+                        ? `${a.classNums[0]}반`
+                        : `${a.classNums[0]}~${a.classNums[a.classNums.length - 1]}반`
                     return (
                       <div key={localIdx} className="flex items-center h-10 border-b border-gray-50 last:border-b-0">
                         <div className="w-[110px] flex-shrink-0 px-2 border-r border-gray-100">
