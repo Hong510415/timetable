@@ -6,8 +6,14 @@
  */
 
 export function buildSchedule(gradeConfigs, subjects, teachers, lunchConfig, rooms = [], roomBlockedSlots = [], options = {}) {
-  const allowSameDaySameSubject = options.allowSameDaySameSubject !== false
-  const maxSameDayCount = (allowSameDaySameSubject && options.maxSameDayCount) ? options.maxSameDayCount : (allowSameDaySameSubject ? 99 : 0)
+  const subjectSettings = options.subjectSettings || {}
+
+  function getSubjectMaxSameDay(subjectId) {
+    const subj = subjects.find(s => s.id === subjectId)
+    const settings = subjectSettings[subj?.name]
+    if (!settings || !settings.allow) return 1
+    return settings.maxCount || 2
+  }
   const splitLunch = lunchConfig?.split_lunch || false
   const lunchGroups = lunchConfig?.lunch_groups || []
 
@@ -163,7 +169,7 @@ export function buildSchedule(gradeConfigs, subjects, teachers, lunchConfig, roo
       const existingCount = existingSlotsOnDay?.size || 0
 
       // 같은 요일 같은 과목 최대 횟수 초과 시 스킵
-      if (existingCount >= maxSameDayCount) continue
+      if (existingCount >= getSubjectMaxSameDay(subjectId)) continue
 
       const slot = findSlot(teacherId, subjectId, day, ca, existingSlotsOnDay)
       if (slot === -1) continue

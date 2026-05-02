@@ -15,7 +15,7 @@ export default function Timetable() {
   const [errors, setErrors] = useState([])
   const [tab, setTab] = useState('class')
   const [showGenerateModal, setShowGenerateModal] = useState(false)
-  const [generateOptions, setGenerateOptions] = useState({ allowSameDaySameSubject: false, maxSameDayCount: 2 })
+  const [generateOptions, setGenerateOptions] = useState({ subjectSettings: {} })
   const [selectedGrade, setSelectedGrade] = useState(1)
   const [selectedClass, setSelectedClass] = useState(1)
   const [selectedTeacher, setSelectedTeacher] = useState(teachers[0]?.id || null)
@@ -45,6 +45,13 @@ export default function Timetable() {
     if (!hasAssignments) {
       return alert('전담 배정 탭에서 배정을 실행하고 "시간표에 적용"을 먼저 해주세요.')
     }
+    const uniqueNames = [...new Set(subjects.map(s => s.name))]
+    const current = generateOptions.subjectSettings || {}
+    const updated = {}
+    for (const name of uniqueNames) {
+      updated[name] = current[name] || { allow: false, maxCount: 2 }
+    }
+    setGenerateOptions({ subjectSettings: updated })
     setShowGenerateModal(true)
   }
 
@@ -260,6 +267,7 @@ export default function Timetable() {
         <GenerateOptionsModal
           options={generateOptions}
           onChange={setGenerateOptions}
+          subjects={subjects}
           onConfirm={executeGenerate}
           onClose={() => setShowGenerateModal(false)}
         />
@@ -338,65 +346,81 @@ function TeacherTimetableGrid({ slots, totalSlots, gradeLunchSlot, subjects, tim
   )
 }
 
-function GenerateOptionsModal({ options, onChange, onConfirm, onClose }) {
+function GenerateOptionsModal({ options, onChange, subjects, onConfirm, onClose }) {
+  const subjectInfo = {}
+  for (const s of subjects) {
+    if (!subjectInfo[s.name]) subjectInfo[s.name] = { name: s.name, maxWeeklyHours: 0 }
+    if (s.weekly_hours > subjectInfo[s.name].maxWeeklyHours) {
+      subjectInfo[s.name].maxWeeklyHours = s.weekly_hours
+    }
+  }
+  const uniqueSubjects = Object.values(subjectInfo)
+
+  function updateSubject(name, field, value) {
+    onChange({
+      ...options,
+      subjectSettings: {
+        ...options.subjectSettings,
+        [name]: { ...(options.subjectSettings[name] || { allow: false, maxCount: 2 }), [field]: value },
+      },
+    })
+  }
+
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white w-full max-w-[420px] rounded-sm border border-gray-200 p-6">
+      <div className="bg-white w-full max-w-[520px] rounded-sm border border-gray-200 p-6">
         <h2 className="text-[16px] font-bold mb-4">시간표 자동 생성 설정</h2>
 
-        <div className="flex flex-col gap-4 mb-6">
-          <div className="flex items-center justify-between">
-            <span className="text-[13px] font-semibold text-gray-700">같은 요일에 같은 전담과목 허용</span>
-            <div className="flex gap-2">
-              {[
-                { value: false, label: '불허용' },
-                { value: true, label: '허용' },
-              ].map(opt => (
-                <button
-                  key={String(opt.value)}
-                  onClick={() => onChange({ ...options, allowSameDaySameSubject: opt.value })}
-                  className={`h-8 px-3 rounded-sm text-[12px] font-semibold border transition-colors
-                    ${options.allowSameDaySameSubject === opt.value ? 'bg-black text-white border-black' : 'bg-white text-gray-500 border-gray-300 hover:bg-gray-50'}`}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
+        <div className="mb-1 flex text-[11px] font-semibold text-gray-400">
+          <div className="w-[100px]">과목</div>
+          <div className="w-[110px] text-center">같은 요일 배정</div>
+          <div className="flex-1 pl-4">
+            하루 최대 수
+            <span className="ml-1 text-gray-300 font-normal">(가능 시 연속 배치)</span>
           </div>
+        </div>
 
-          {options.allowSameDaySameSubject && (
-            <div className="flex items-center justify-between pl-4 border-l-2 border-gray-200">
-              <span className="text-[13px] text-gray-600">하루 최대 배정 수 <span className="text-[11px] text-gray-400">(연속으로 배치됨)</span></span>
-              <div className="flex gap-2">
-                {[2, 3, 4, 5].map(n => (
-                  <button
-                    key={n}
-                    onClick={() => onChange({ ...options, maxSameDayCount: n })}
-                    className={`w-9 h-8 rounded-sm text-[12px] font-semibold border transition-colors
-                      ${options.maxSameDayCount === n ? 'bg-black text-white border-black' : 'bg-white text-gray-500 border-gray-300 hover:bg-gray-50'}`}
-                  >
-                    {n}
-                  </button>
-                ))}
+        <div className="flex flex-col divide-y divide-gray-100 mb-4">
+          {uniqueSubjects.map(subj => {
+            const settings = options.subjectSettings[subj.name] || { allow: false, maxCount: 2 }
+            const maxButtons = Math.min(subj.maxWeeklyHours, 5)
+            const buttons = []
+            for (let i = 2; i <= maxButtons; i++) buttons.push(i)
+
+            return (
+              <div key={subj.name} className="flex items-center py-2.5 gap-3">
+                <div className="w-[100px] text-[13px] font-semibold text-gray-800 truncate">{subj.name}</div>
+                <div className="w-[110px] flex gap-1">
+                  {[{ val: false, label: '불가' }, { val: true, label: '가능' }].map(opt => (
+                    <button
+                      key={String(opt.val)}
+                      onClick={() => updateSubject(subj.name, 'allow', opt.val)}
+                      className={`flex-1 h-7 rounded-sm text-[12px] font-semibold border transition-colors
+                        ${settings.allow === opt.val ? 'bg-black text-white border-black' : 'bg-white text-gray-500 border-gray-300 hover:bg-gray-50'}`}
+                    >{opt.label}</button>
+                  ))}
+                </div>
+                <div className="flex-1 pl-4 flex gap-1">
+                  {buttons.map(n => (
+                    <button
+                      key={n}
+                      onClick={() => settings.allow && updateSubject(subj.name, 'maxCount', n)}
+                      disabled={!settings.allow}
+                      className={`w-8 h-7 rounded-sm text-[12px] font-semibold border transition-colors
+                        ${settings.allow && settings.maxCount === n ? 'bg-black text-white border-black' : 'border-gray-200 text-gray-400 bg-white'}
+                        ${!settings.allow ? 'opacity-30 cursor-not-allowed' : 'hover:bg-gray-50'}`}
+                    >{n}</button>
+                  ))}
+                  {buttons.length === 0 && <span className="text-[12px] text-gray-300 leading-7">—</span>}
+                </div>
               </div>
-            </div>
-          )}
-
-          <p className="text-[11px] text-gray-400 bg-gray-50 rounded-sm p-3">
-            {options.allowSameDaySameSubject
-              ? `같은 요일에 같은 과목을 최대 ${options.maxSameDayCount}회까지 연속으로 배치합니다.`
-              : '같은 요일에 같은 과목을 한 번만 배치합니다. 요일 분산이 극대화됩니다.'}
-          </p>
+            )
+          })}
         </div>
 
         <div className="flex justify-end gap-2">
           <button onClick={onClose} className="h-9 px-4 border border-gray-300 rounded-sm text-[13px] hover:bg-gray-50">취소</button>
-          <button
-            onClick={onConfirm}
-            className="h-9 px-5 bg-black text-white text-[13px] font-semibold rounded-sm hover:bg-gray-800"
-          >
-            생성
-          </button>
+          <button onClick={onConfirm} className="h-9 px-5 bg-black text-white text-[13px] font-semibold rounded-sm hover:bg-gray-800">생성</button>
         </div>
       </div>
     </div>
