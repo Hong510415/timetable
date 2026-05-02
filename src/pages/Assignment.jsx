@@ -1,4 +1,4 @@
-import { useState } from 'react' // running state only
+import React, { useState } from 'react'
 import { RefreshCw, AlertTriangle, CheckCircle } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { runAssignmentAlgorithm, assignmentsToTeacherAssignments } from '../lib/assignmentAlgorithm'
@@ -279,13 +279,20 @@ export default function Assignment() {
 
 function EditClassNumsButton({ assignment, gradeConfigs, onUpdate }) {
   const [open, setOpen] = useState(false)
+  const [openUp, setOpenUp] = useState(false)
+  const btnRef = React.useRef(null)
   const gc = gradeConfigs.find(g => g.grade === assignment.grade)
   const allClasses = gc ? Array.from({ length: gc.num_classes }, (_, i) => i + 1) : []
   const [selected, setSelected] = useState(new Set(assignment.classNums))
 
   if (!open) {
     return (
-      <button onClick={() => { setSelected(new Set(assignment.classNums)); setOpen(true) }}
+      <button ref={btnRef} onClick={() => {
+        setSelected(new Set(assignment.classNums))
+        const rect = btnRef.current?.getBoundingClientRect()
+        setOpenUp(rect && rect.bottom > window.innerHeight - 200)
+        setOpen(true)
+      }}
         className="text-[11px] text-gray-400 hover:text-gray-700">
         편집
       </button>
@@ -309,7 +316,7 @@ function EditClassNumsButton({ assignment, gradeConfigs, onUpdate }) {
 
   return (
     <div className="relative">
-      <div className="absolute right-0 top-0 z-20 bg-white border border-gray-200 rounded-sm shadow-lg p-3 min-w-[160px]">
+      <div className={`absolute right-0 z-20 bg-white border border-gray-200 rounded-sm shadow-lg p-3 min-w-[160px] ${openUp ? 'bottom-6' : 'top-0'}`}>
         <div className="text-[11px] font-semibold text-gray-600 mb-2">{assignment.grade}학년 담당 반 선택</div>
         <div className="flex flex-wrap gap-1 mb-2">
           {allClasses.map(c => (
