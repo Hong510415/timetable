@@ -188,5 +188,57 @@ export async function importFullWorkbook(file) {
     slot: Number(r[5]),
   }))
 
+  // 전담배정 결과 복원: teacher_assignments → assignmentResult
+  // 불러오기 후 전담배정 탭에서 배정 결과가 표시되도록 재구성
+  const reconstructedAssignments = []
+  for (const teacher of state.teachers) {
+    const grouped = {}
+    for (const a of (teacher.teacher_assignments || [])) {
+      const key = `${a.subject_id}_${a.grade}`
+      if (!grouped[key]) grouped[key] = { subjectId: a.subject_id, grade: a.grade, classNums: [], hoursPerClass: a.weekly_hours }
+      grouped[key].classNums.push(a.class_num)
+    }
+    for (const g of Object.values(grouped)) {
+      const subj = state.subjects.find(s => s.id === g.subjectId)
+      reconstructedAssignments.push({
+        teacherId: teacher.id,
+        teacherCode: teacher.code,
+        subjectId: g.subjectId,
+        subjectName: subj?.name || '',
+        grade: g.grade,
+        classNums: g.classNums.sort((a, b) => a - b),
+        weeklyHours: g.hoursPerClass * g.classNums.length,
+        hoursPerClass: g.hoursPerClass,
+        isManual: true,
+      })
+    }
+  }
+
+  if (reconstructedAssignments.length > 0) {
+    const totalDedicated = state.subjects.reduce((sum, s) => {
+      const gc = state.gradeConfigs.find(g => g.grade === s.grade)
+      return sum + (gc ? s.weekly_hours * gc.num_classes : 0)
+    }, 0)
+    const targetHours = state.teachers.length ? Math.round(totalDedicated / state.teachers.length) : 0
+    state.assignmentResult = {
+      result: {
+        assignments: reconstructedAssignments,
+        warnings: [],
+        gradeSummary: state.gradeConfigs.map(gc => {
+          const weeklyTotal = gc.periods_mon + gc.periods_tue + gc.periods_wed + gc.periods_thu + gc.periods_fri
+          const dedicatedHours = state.subjects.filter(s => s.grade === gc.grade).reduce((s2, s) => s2 + s.weekly_hours, 0)
+          return { grade: gc.grade, dedicatedHours, homeRoomHours: weeklyTotal - dedicatedHours }
+        }),
+        teacherSummary: state.teachers.map(t => ({
+          teacherId: t.id,
+          teacherCode: t.code,
+          totalHours: (t.teacher_assignments || []).reduce((s, a) => s + a.weekly_hours, 0),
+          targetHours,
+        })),
+      },
+      edited: null,
+    }
+  }
+
   return state
 }

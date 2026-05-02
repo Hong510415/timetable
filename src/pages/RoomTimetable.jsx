@@ -142,7 +142,7 @@ export default function RoomTimetable() {
             {rooms.map(room => (
               <button
                 key={room.id}
-                onClick={() => setSelectedRoom(room.id)}
+                onClick={() => { setSelectedRoom(room.id); setSelectedTeachers([]); setSelectedSubjects([]) }}
                 className={`h-9 px-4 rounded-sm text-[13px] font-semibold border transition-colors
                   ${selectedRoom === room.id ? 'bg-black text-white border-black' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}
               >
