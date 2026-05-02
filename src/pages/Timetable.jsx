@@ -121,8 +121,10 @@ export default function Timetable() {
           : r
       )
     } else {
-      // 빈 칸에 새로 추가 — 기존 행 덮어쓰기 없이 INSERT
-      updated = [...timetableRows]
+      // 빈 칸에 새로 추가 — 같은 슬롯의 잔여 행 제거 후 INSERT
+      updated = timetableRows.filter(r => !(
+        r.grade === g && r.class_num === cn && r.day_of_week === editModal.day && r.slot === editModal.slot
+      ))
       if (teacherId) {
         updated.push({ id: crypto.randomUUID(), grade: g, class_num: cn, day_of_week: editModal.day, slot: editModal.slot, teacher_id: teacherId, subject_id: subjectId, is_unassigned: false })
       }
