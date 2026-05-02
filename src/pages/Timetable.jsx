@@ -9,7 +9,7 @@ const GRADES = [1, 2, 3, 4, 5, 6]
 
 export default function Timetable() {
   const { state, setTimetableSlots } = useApp()
-  const { gradeConfigs, subjects, teachers, lunchConfig, timetableSlots: timetableRows, roomBlockedSlots } = state
+  const { gradeConfigs, subjects, teachers, lunchConfig, timetableSlots: timetableRows, rooms, roomBlockedSlots } = state
 
   const [generating, setGenerating] = useState(false)
   const [errors, setErrors] = useState([])
@@ -46,7 +46,7 @@ export default function Timetable() {
     setGenerating(true)
     setErrors([])
     try {
-      const result = buildSchedule(gradeConfigs, subjects, teachers, lunchConfig || { split_lunch: false, lunch_groups: [] })
+      const result = buildSchedule(gradeConfigs, subjects, teachers, lunchConfig || { split_lunch: false, lunch_groups: [] }, rooms, roomBlockedSlots)
       const { rows } = flattenResult(result.result, result.gradeLunchSlot, result.totalSlots)
       const flatErrors = (result.errors || []).map(e => `${e.grade}학년 ${e.classNum}반 ${e.unassigned}시수 미배정`)
       setErrors(flatErrors)

@@ -6,7 +6,21 @@ const DAY_LABELS = ['월', '화', '수', '목', '금']
 
 export default function RoomManagement() {
   const { state, setRooms, setRoomBlockedSlots } = useApp()
-  const { rooms, lunchConfig, roomBlockedSlots } = state
+  const { rooms, lunchConfig, roomBlockedSlots, subjects } = state
+  const uniqueSubjectNames = [...new Set(subjects.map(s => s.name))]
+
+  function toggleRoomSubject(roomId, subjectName) {
+    setRooms(rooms.map(r => {
+      if (r.id !== roomId) return r
+      const names = r.subjectNames || []
+      return {
+        ...r,
+        subjectNames: names.includes(subjectName)
+          ? names.filter(n => n !== subjectName)
+          : [...names, subjectName],
+      }
+    }))
+  }
   const [showModal, setShowModal] = useState(false)
   const [editingRoom, setEditingRoom] = useState(null)
   const [form, setForm] = useState({ name: '' })
@@ -101,6 +115,26 @@ export default function RoomManagement() {
                   </button>
                 </div>
               </div>
+
+              {uniqueSubjectNames.length > 0 && (
+                <div className="flex items-center gap-2 flex-wrap mb-4">
+                  <span className="text-[12px] text-gray-500 font-semibold w-[56px] flex-shrink-0">사용 과목</span>
+                  {uniqueSubjectNames.map(name => {
+                    const active = (room.subjectNames || []).includes(name)
+                    return (
+                      <button
+                        key={name}
+                        onClick={() => toggleRoomSubject(room.id, name)}
+                        className={`h-7 px-3 rounded-sm text-[12px] font-semibold border transition-colors
+                          ${active ? 'bg-black text-white border-black' : 'bg-white text-gray-500 border-gray-300 hover:bg-gray-50'}`}
+                      >
+                        {name}
+                      </button>
+                    )
+                  })}
+                  <span className="text-[11px] text-gray-400">선택한 과목의 수업이 사용 불가 시간에 배정되지 않습니다</span>
+                </div>
+              )}
 
               <div className="border border-gray-200 rounded-sm overflow-hidden">
                 <div className="flex bg-gray-50 border-b border-gray-200">

@@ -47,9 +47,9 @@ export function exportFullWorkbook(state) {
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(assignRows), '전담배정')
 
   // 시트6: 특별실
-  const roomRows = [['ID', '특별실명']]
+  const roomRows = [['ID', '특별실명', '사용과목']]
   for (const r of state.rooms) {
-    roomRows.push([r.id, r.name])
+    roomRows.push([r.id, r.name, (r.subjectNames || []).join(',')])
   }
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(roomRows), '특별실')
 
@@ -153,7 +153,11 @@ export async function importFullWorkbook(file) {
 
   // 특별실
   const roomRows = getSheet('특별실').slice(1).filter(r => r[0])
-  state.rooms = roomRows.map(r => ({ id: String(r[0]), name: String(r[1]) }))
+  state.rooms = roomRows.map(r => ({
+    id: String(r[0]),
+    name: String(r[1]),
+    subjectNames: r[2] ? String(r[2]).split(',').filter(Boolean) : [],
+  }))
 
   // 특별실차단
   const blockedRows = getSheet('특별실차단').slice(1).filter(r => r[0])

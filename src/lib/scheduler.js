@@ -5,7 +5,7 @@
  * gradeLunchSlot: { grade: slotIndex } (DB값 3,4,5 그대로)
  */
 
-export function buildSchedule(gradeConfigs, subjects, teachers, lunchConfig) {
+export function buildSchedule(gradeConfigs, subjects, teachers, lunchConfig, rooms = [], roomBlockedSlots = []) {
   const splitLunch = lunchConfig?.split_lunch || false
   const lunchGroups = lunchConfig?.lunch_groups || []
 
@@ -26,6 +26,19 @@ export function buildSchedule(gradeConfigs, subjects, teachers, lunchConfig) {
   const allLunchSlotIndexes = splitLunch
     ? [...new Set(Object.values(gradeLunchSlot))]
     : []
+
+  // 과목ID → 차단 day-slot Set (특별실 사용 불가 시간)
+  const subjectBlockedMap = {}
+  for (const room of rooms) {
+    if (!room.subjectNames?.length) continue
+    const blocked = roomBlockedSlots.filter(b => b.room_id === room.id)
+    if (!blocked.length) continue
+    for (const subj of subjects) {
+      if (!room.subjectNames.includes(subj.name)) continue
+      if (!subjectBlockedMap[subj.id]) subjectBlockedMap[subj.id] = new Set()
+      for (const b of blocked) subjectBlockedMap[subj.id].add(`${b.day_of_week}-${b.slot}`)
+    }
+  }
 
   // 학년·반의 요일별 가용 슬롯
   const gradeClassSlots = {}
@@ -105,11 +118,13 @@ export function buildSchedule(gradeConfigs, subjects, teachers, lunchConfig) {
   // 학급+요일별 전담 수업 수 (담임 시각 균형용)
   const classDayCount = {}
 
-  // 교사 점심 제약 고려하여 슬롯 탐색
-  function findSlot(teacherId, day, classAvailable) {
+  // 교사 점심 제약 + 특별실 사용 불가 시간 고려하여 슬롯 탐색
+  function findSlot(teacherId, subjectId, day, classAvailable) {
+    const subjectBlocked = subjectBlockedMap[subjectId]
     for (let slot = 0; slot < totalSlots; slot++) {
       if (!classAvailable.has(slot)) continue
       if (teacherOccupied[teacherId][day].has(slot)) continue
+      if (subjectBlocked?.has(`${day}-${slot}`)) continue
       if (splitLunch && allLunchSlotIndexes.includes(slot)) {
         const occ = allLunchSlotIndexes.filter(ls => teacherOccupied[teacherId][day].has(ls))
         if (occ.length >= allLunchSlotIndexes.length - 1) continue
@@ -125,7 +140,7 @@ export function buildSchedule(gradeConfigs, subjects, teachers, lunchConfig) {
     for (let day = 0; day < 5; day++) {
       const ca = gradeClassSlots[grade]?.[classNum]?.[day]
       if (!ca) continue
-      const slot = findSlot(teacherId, day, ca)
+      const slot = findSlot(teacherId, subjectId, day, ca)
       if (slot === -1) continue
 
       const teacherLoad = teacherOccupied[teacherId][day].size
