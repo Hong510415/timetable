@@ -129,7 +129,11 @@ export default function Assignment() {
       {warnings.length > 0 && (
         <div className="mb-5 flex flex-col gap-2">
           {warnings.map((w, i) => (
-            <div key={i} className="flex items-start gap-2 p-3 bg-yellow-50 border border-yellow-200 rounded-sm text-[12px] text-yellow-800">
+            <div key={i} className={`flex items-start gap-2 p-3 rounded-sm text-[12px] border ${
+              w.type === 'error'
+                ? 'bg-red-50 border-red-200 text-red-800'
+                : 'bg-yellow-50 border-yellow-200 text-yellow-800'
+            }`}>
               <AlertTriangle size={14} className="mt-0.5 flex-shrink-0" />
               {w.message}
             </div>
@@ -460,6 +464,23 @@ function computeWarnings(assignments, gradeConfigs, subjects, teacherCount) {
     return sum + (gc ? s.weekly_hours * gc.num_classes : 0)
   }, 0)
   const targetHours = teacherCount ? Math.round(totalDedicated / teacherCount) : 0
+
+  // 누락 수업 체크: 모든 과목×반이 배정됐는지 확인
+  for (const subj of subjects) {
+    const gc = gradeConfigs.find(g => g.grade === subj.grade)
+    if (!gc) continue
+    const allClasses = Array.from({ length: gc.num_classes }, (_, i) => i + 1)
+    const assignedClasses = assignments
+      .filter(a => a.subjectId === subj.id)
+      .flatMap(a => a.classNums)
+    const missing = allClasses.filter(c => !assignedClasses.includes(c))
+    if (missing.length > 0) {
+      warnings.push({
+        type: 'error',
+        message: `누락: ${subj.name} ${subj.grade}학년 ${missing.join(', ')}반이 배정되지 않았습니다.`,
+      })
+    }
+  }
 
   const teacherHours = {}
   const teacherCodes = {}

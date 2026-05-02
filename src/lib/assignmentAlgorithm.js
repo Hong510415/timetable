@@ -217,7 +217,8 @@ export function runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assig
   for (const unit of minorUnits) {
     let remaining = [...unit.classNums]
     while (remaining.length > 0) {
-      const available = ts.filter(t => targetHours - t.hours > 0)
+      // 일반과목은 targetHours + hoursPerClass 이내까지 허용 (minor 분산 우선)
+      const available = ts.filter(t => t.hours < targetHours + unit.hoursPerClass)
       const pool = available.length > 0 ? available : ts.slice()
 
       // 교사 선택 우선순위:
@@ -225,11 +226,8 @@ export function runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assig
       // 2) 동점이면 전체 학년 수 가장 적은 교사
       // 3) 동점이면 시수 적은 교사
       const teacher = pickMinorTeacher(pool)
-      const roomLeft = targetHours - teacher.hours
-      const canTake = roomLeft > 0
-        ? Math.min(remaining.length, Math.max(1, Math.floor(roomLeft / unit.hoursPerClass)))
-        : 1
-      addClasses(teacher, unit, remaining.splice(0, canTake))
+      // 1반씩만 배정해서 매 루프마다 재선택 → 골고루 분산
+      addClasses(teacher, unit, remaining.splice(0, 1))
     }
   }
 
@@ -270,12 +268,21 @@ export function runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assig
 
   // ── Step F-2: 일반과목 학년 수 불균형 swap ───────────────────────
   // 일반과목 학년이 많은 교사 → 적은 교사로 반 이동
-  // 이동 후 least 시수가 most 시수보다 많아지는 역전만 방지
+  // most: 일반과목 학년 수 최다 교사
+  // least: 일반과목 학년 수 최소 교사 중 시수 가장 적은 교사
   for (let iter = 0; iter < 50; iter++) {
-    const sorted = ts.slice().sort((a, b) => countMinorGrades(b) - countMinorGrades(a))
-    const most = sorted[0]
-    const least = sorted[sorted.length - 1]
-    if (countMinorGrades(most) - countMinorGrades(least) <= 1) break
+    const byMinorGrades = ts.slice().sort((a, b) => countMinorGrades(b) - countMinorGrades(a))
+    const most = byMinorGrades[0]
+    const maxMinorGrades = countMinorGrades(most)
+
+    // least: 일반과목 학년 수 가장 적고, 그 중 시수 가장 적은 교사
+    const minMinorGrades = countMinorGrades(byMinorGrades[byMinorGrades.length - 1])
+    if (maxMinorGrades - minMinorGrades <= 1) break
+
+    const leastCandidates = byMinorGrades
+      .filter(t => countMinorGrades(t) === minMinorGrades)
+      .sort((a, b) => a.hours - b.hours)
+    const least = leastCandidates[0]
 
     const minorAssigns = most.assignments.filter(a => !a.is_major)
     if (!minorAssigns.length) break
@@ -291,9 +298,9 @@ export function runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assig
     if (!unit) break
 
     const classToMove = fromAssign.classNums[fromAssign.classNums.length - 1]
-    const newMostHours = most.hours - unit.hoursPerClass
     const newLeastHours = least.hours + unit.hoursPerClass
-    // 이동 후 역전(least > most)되면 중단
+    const newMostHours = most.hours - unit.hoursPerClass
+    // 이동 후 least가 most보다 2단위 이상 역전되면 중단
     if (newLeastHours > newMostHours + unit.hoursPerClass) break
 
     removeClasses(most, unit, [classToMove])
