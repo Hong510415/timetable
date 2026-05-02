@@ -220,6 +220,8 @@ export default function Timetable() {
                 totalSlots={totalSlots}
                 gradeLunchSlot={gradeLunchSlot}
                 subjects={subjects}
+                timetableRows={timetableRows}
+                teachers={teachers}
                 onCellClick={(day, slot, cell) => openEditModal(day, slot, cell)}
               />
             </>
@@ -243,8 +245,19 @@ export default function Timetable() {
   )
 }
 
-function TeacherTimetableGrid({ slots, totalSlots, gradeLunchSlot, subjects, onCellClick }) {
+function TeacherTimetableGrid({ slots, totalSlots, gradeLunchSlot, subjects, timetableRows, teachers, onCellClick }) {
   const DAY_LABELS = ['월', '화', '수', '목', '금']
+
+  function getConflicts(cell, day, slot) {
+    if (!cell || !timetableRows) return []
+    return timetableRows.filter(r =>
+      r.grade === cell.grade &&
+      r.class_num === cell.class_num &&
+      r.day_of_week === day &&
+      r.slot === slot &&
+      r.teacher_id !== cell.teacher_id
+    )
+  }
 
   return (
     <div className="border border-gray-200 rounded-sm overflow-hidden bg-white">
@@ -262,16 +275,33 @@ function TeacherTimetableGrid({ slots, totalSlots, gradeLunchSlot, subjects, onC
           {Array.from({ length: 5 }, (_, day) => {
             const cell = slots?.[day]?.[slot]
             const subject = cell?.subject_id ? subjects?.find(s => s.id === cell.subject_id) : null
+            const conflicts = getConflicts(cell, day, slot)
+            const hasConflict = conflicts.length > 0
+            const tooltipText = conflicts.map(c => {
+              const cs = subjects?.find(s => s.id === c.subject_id)
+              const ct = teachers?.find(t => t.id === c.teacher_id)
+              return `${cs?.name ?? '?'} (${ct?.code ?? '?'})`
+            }).join(', ') + '와 겹침'
+
             return (
               <div
                 key={day}
                 onClick={() => onCellClick?.(day, slot, cell)}
-                className="flex-1 border-r border-gray-100 last:border-r-0 flex flex-col items-center justify-center gap-0.5 cursor-pointer hover:bg-blue-50 transition-colors"
+                className="relative group flex-1 border-r border-gray-100 last:border-r-0 flex flex-col items-center justify-center gap-0.5 cursor-pointer hover:bg-blue-50 transition-colors"
               >
                 {cell ? (
                   <>
-                    <span className="text-[13px] font-semibold text-gray-900">{subject?.name ?? '—'}</span>
-                    <span className="text-[11px] text-gray-400">{cell.label}</span>
+                    <span className={`text-[13px] font-semibold ${hasConflict ? 'text-red-600' : 'text-gray-900'}`}>
+                      {subject?.name ?? '—'}
+                    </span>
+                    <span className={`text-[11px] ${hasConflict ? 'text-red-400' : 'text-gray-400'}`}>
+                      {cell.label}
+                    </span>
+                    {hasConflict && (
+                      <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1 z-30 hidden group-hover:block bg-gray-900 text-white text-[11px] rounded px-2 py-1 whitespace-nowrap">
+                        {tooltipText}
+                      </div>
+                    )}
                   </>
                 ) : (
                   <span className="text-[12px] text-gray-200">—</span>
