@@ -1,33 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Plus, X, Trash2, Edit2 } from 'lucide-react'
-import { supabase } from '../lib/supabase'
+import { useApp } from '../context/AppContext'
 
 export default function TeacherManagement() {
-  const [schoolId, setSchoolId] = useState(null)
-  const [teachers, setTeachers] = useState([])
-  const [subjects, setSubjects] = useState([])
-  const [gradeConfigs, setGradeConfigs] = useState([])
+  const { state, setTeachers } = useApp()
+  const { teachers, subjects, gradeConfigs } = state
   const [showModal, setShowModal] = useState(false)
   const [editingTeacher, setEditingTeacher] = useState(null)
   const [form, setForm] = useState({ code: '', assignments: [] })
-
-  useEffect(() => { load() }, [])
-
-  async function load() {
-    const { data: { user } } = await supabase.auth.getUser()
-    const { data: school } = await supabase.from('schools').select('id').eq('user_id', user.id).single()
-    if (!school) return
-    setSchoolId(school.id)
-
-    const [{ data: t }, { data: s }, { data: g }] = await Promise.all([
-      supabase.from('teachers').select('*, teacher_assignments(*, subjects(name, grade))').eq('school_id', school.id).order('created_at'),
-      supabase.from('subjects').select('*').eq('school_id', school.id).order('grade'),
-      supabase.from('grade_configs').select('*').eq('school_id', school.id).order('grade'),
-    ])
-    setTeachers(t || [])
-    setSubjects(s || [])
-    setGradeConfigs(g || [])
-  }
 
   function openAdd() {
     setEditingTeacher(null)
@@ -40,6 +20,7 @@ export default function TeacherManagement() {
     setForm({
       code: teacher.code,
       assignments: teacher.teacher_assignments.map(a => ({
+        id: a.id || crypto.randomUUID(),
         subject_id: a.subject_id,
         grade: a.grade,
         class_num: a.class_num,
@@ -49,49 +30,39 @@ export default function TeacherManagement() {
     setShowModal(true)
   }
 
-  async function handleDelete(teacherId) {
+  function handleDelete(teacherId) {
     if (!confirm('이 교사를 삭제하시겠습니까?')) return
-    await supabase.from('teachers').delete().eq('id', teacherId)
-    load()
+    setTeachers(teachers.filter(t => t.id !== teacherId))
   }
 
-  async function handleSave() {
+  function handleSave() {
     if (!form.code.trim()) return alert('교사 명칭을 입력하세요')
-
-    // 저장 직전 subject_id 재매칭 (과목명+학년 기준)
-    const resolvedAssignments = form.assignments.map(a => {
+    const assignments = form.assignments.map(a => {
       const name = getSubjectName(a.subject_id) || a._subjectName || ''
       const sid = findSubjectId(name, a.grade) || a.subject_id
-      return { ...a, subject_id: sid }
+      const { _subjectName, ...rest } = a
+      return { ...rest, subject_id: sid }
     })
-
     if (editingTeacher) {
-      await supabase.from('teachers').update({ code: form.code }).eq('id', editingTeacher.id)
-      await supabase.from('teacher_assignments').delete().eq('teacher_id', editingTeacher.id)
-      if (resolvedAssignments.length > 0) {
-        await supabase.from('teacher_assignments').insert(
-          resolvedAssignments.map(({ _subjectName, ...a }) => ({ ...a, teacher_id: editingTeacher.id }))
-        )
-      }
+      setTeachers(teachers.map(t =>
+        t.id === editingTeacher.id
+          ? { ...t, code: form.code, teacher_assignments: assignments }
+          : t
+      ))
     } else {
-      const { data: newTeacher } = await supabase
-        .from('teachers')
-        .insert({ code: form.code, school_id: schoolId })
-        .select().single()
-      if (newTeacher && resolvedAssignments.length > 0) {
-        await supabase.from('teacher_assignments').insert(
-          resolvedAssignments.map(({ _subjectName, ...a }) => ({ ...a, teacher_id: newTeacher.id }))
-        )
-      }
+      setTeachers([...teachers, {
+        id: crypto.randomUUID(),
+        code: form.code,
+        teacher_assignments: assignments,
+      }])
     }
     setShowModal(false)
-    load()
   }
 
   function addAssignment() {
     setForm(prev => ({
       ...prev,
-      assignments: [...prev.assignments, { subject_id: '', grade: 1, class_num: 1, weekly_hours: 2 }],
+      assignments: [...prev.assignments, { id: crypto.randomUUID(), subject_id: '', grade: 1, class_num: 1, weekly_hours: 2 }],
     }))
   }
 
@@ -108,15 +79,12 @@ export default function TeacherManagement() {
 
   const maxClasses = (grade) => gradeConfigs.find(g => g.grade === grade)?.num_classes || 6
 
-  // 중복 없는 과목명 목록
   const uniqueSubjectNames = [...new Set(subjects.map(s => s.name))]
 
-  // 과목명 + 학년으로 subject_id 찾기
   function findSubjectId(name, grade) {
     return subjects.find(s => s.name === name && s.grade === grade)?.id || ''
   }
 
-  // assignment에서 과목명 역추적
   function getSubjectName(subjectId) {
     return subjects.find(s => s.id === subjectId)?.name || ''
   }
@@ -150,7 +118,7 @@ export default function TeacherManagement() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-[14px] font-semibold text-gray-900 mb-1.5">
-                  {[...new Set(teacher.teacher_assignments.map(a => a.subjects?.name).filter(Boolean))].join(' · ') || '담당 과목 없음'}
+                  {[...new Set(teacher.teacher_assignments.map(a => getSubjectName(a.subject_id)).filter(Boolean))].join(' · ') || '담당 과목 없음'}
                 </p>
                 <div className="flex flex-wrap gap-1">
                   {teacher.teacher_assignments.map((a, i) => (
@@ -185,7 +153,6 @@ export default function TeacherManagement() {
         </div>
       )}
 
-      {/* 추가/편집 모달 */}
       {showModal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white w-full max-w-[620px] max-h-[85vh] overflow-y-auto rounded-sm border border-gray-200 p-8">
@@ -216,7 +183,7 @@ export default function TeacherManagement() {
               )}
               <div className="flex flex-col gap-2">
                 {form.assignments.map((a, i) => (
-                  <div key={i} className="flex items-center gap-2 bg-gray-50 p-2 rounded-sm flex-wrap">
+                  <div key={a.id || i} className="flex items-center gap-2 bg-gray-50 p-2 rounded-sm flex-wrap">
                     <select
                       value={a.grade}
                       onChange={e => {
