@@ -1,10 +1,12 @@
 /**
- * 전담 배정 알고리즘
+ * 전담 배정 알고리즘 — Greedy "큰 덩어리 우선" 방식
  *
- * 원칙:
- * 1. 같은 과목명은 한 교사에게 몰아줌 (여러 학년 OK, 시수 넘치면 학급 쪼개서 다음 교사)
- * 2. 주요과목 1인 제한 절대 준수 (과목 종류 기준)
- * 3. 일반과목으로 목표시수 정확히 채우기
+ * 1. 주요과목을 과목명 단위로 묶어서, 시수 많은 학년부터 순서대로 한 교사에게 채움
+ *    - 목표시수 도달 시 학급을 쪼개서 다음 교사에게 이어서 배정
+ *    - 한 교사가 받는 학년 수를 최소화
+ * 2. 주요과목 1인 제한 절대 준수
+ * 3. 일반과목으로 나머지 시수 채우기
+ * 4. swap으로 균등화하되 학년 분산이 늘어나지 않게
  */
 export function runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assignmentSettings }) {
   const maxMajor = assignmentSettings?.maxMajorSubjectsPerTeacher ?? 1
@@ -12,7 +14,6 @@ export function runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assig
   if (!teachers.length) return { assignments: [], warnings: [{ type: 'error', message: '교사가 없습니다.' }], gradeSummary: [], teacherSummary: [] }
   if (!subjects.length) return { assignments: [], warnings: [{ type: 'error', message: '과목이 없습니다.' }], gradeSummary: [], teacherSummary: [] }
 
-  // Step A: 배정 단위 생성
   const units = []
   for (const subj of subjects) {
     const gc = gradeConfigs.find(g => g.grade === subj.grade)
@@ -30,7 +31,6 @@ export function runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assig
 
   if (!units.length) return { assignments: [], warnings: [{ type: 'error', message: '배정 가능한 과목이 없습니다.' }], gradeSummary: [], teacherSummary: [] }
 
-  // Step B: 목표 시수
   const totalDedicated = units.reduce((s, u) => s + u.totalHours, 0)
   const targetHours = Math.round(totalDedicated / teachers.length)
 
@@ -38,58 +38,67 @@ export function runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assig
     id: t.id,
     code: t.code,
     hours: 0,
-    majorSubjectNames: new Set(), // 담당 확정된 주요과목 이름
-    assignments: [],
+    majorSubjectNames: new Set(),
+    assignments: [], // { subjectId, subjectName, grade, classNums, hoursPerClass, is_major }
   }))
 
-  function addAssignment(teacher, subjectId, subjectName, grade, hoursPerClass, is_major, classNums) {
-    const existing = teacher.assignments.find(a => a.subjectId === subjectId && a.grade === grade)
+  function addClasses(teacher, unit, classNums) {
+    if (classNums.length === 0) return
+    const existing = teacher.assignments.find(a => a.subjectId === unit.subjectId && a.grade === unit.grade)
     if (existing) {
       existing.classNums = [...existing.classNums, ...classNums].sort((a, b) => a - b)
     } else {
-      teacher.assignments.push({ subjectId, subjectName, grade, classNums: [...classNums].sort((a, b) => a - b), hoursPerClass, is_major })
-      if (is_major) teacher.majorSubjectNames.add(subjectName)
+      teacher.assignments.push({
+        subjectId: unit.subjectId,
+        subjectName: unit.subjectName,
+        grade: unit.grade,
+        classNums: [...classNums].sort((a, b) => a - b),
+        hoursPerClass: unit.hoursPerClass,
+        is_major: unit.is_major,
+      })
+      if (unit.is_major) teacher.majorSubjectNames.add(unit.subjectName)
     }
-    teacher.hours += hoursPerClass * classNums.length
+    teacher.hours += unit.hoursPerClass * classNums.length
   }
 
-  function removeClasses(teacher, subjectId, grade, classNums) {
-    const a = teacher.assignments.find(a => a.subjectId === subjectId && a.grade === grade)
+  function removeClasses(teacher, unit, classNums) {
+    if (classNums.length === 0) return
+    const a = teacher.assignments.find(a => a.subjectId === unit.subjectId && a.grade === unit.grade)
     if (!a) return
     const toRemove = new Set(classNums)
     a.classNums = a.classNums.filter(c => !toRemove.has(c))
-    teacher.hours -= a.hoursPerClass * classNums.length
+    teacher.hours -= unit.hoursPerClass * classNums.length
     if (a.classNums.length === 0) {
       teacher.assignments = teacher.assignments.filter(x => x !== a)
-      if (a.is_major) teacher.majorSubjectNames.delete(a.subjectName)
+      if (unit.is_major) teacher.majorSubjectNames.delete(unit.subjectName)
     }
   }
 
   const warnings = []
 
-  // Step C: 주요과목 배정
-  // 과목명 그룹별로 처리. 각 그룹에서 담당 교사를 순서대로 지정하며 학급을 채움.
-  // 한 교사가 목표시수에 도달하면 그 교사 담당은 끝내고 새 교사에게 이어서 배정.
+  // ── Step C: 주요과목 배정 ──────────────────────────────────────────
+  // 과목명 그룹별로, 각 그룹 내에서 학년별 시수 큰 순으로 정렬
+  // 한 교사가 목표시수 채울 때까지 학년을 순서대로 통째로 배정
+  // 한 학년이 넘치면 그 학년의 학급을 쪼개서 나머지는 다음 교사에게
+
   const majorSubjectNames = [...new Set(units.filter(u => u.is_major).map(u => u.subjectName))]
   const majorGroups = majorSubjectNames.map(name => {
-    const group = units.filter(u => u.is_major && u.subjectName === name)
-      .sort((a, b) => b.totalHours - a.totalHours) // 학년별 시수 큰 순
+    const group = units
+      .filter(u => u.is_major && u.subjectName === name)
+      .sort((a, b) => b.totalHours - a.totalHours) // 시수 많은 학년부터
     return { name, group, total: group.reduce((s, u) => s + u.totalHours, 0) }
-  }).sort((a, b) => b.total - a.total)
+  }).sort((a, b) => b.total - a.total) // 총시수 많은 과목부터
 
   for (const { name, group } of majorGroups) {
-    // 이 과목의 남은 학급 (학년별)
-    const remaining = group.map(u => ({ ...u, classNums: [...u.classNums] }))
-    // 이 과목을 담당할 교사 목록 (순서대로 채움)
-    // currentTeacher: 현재 이 과목을 받고 있는 교사 (null이면 새로 선택)
+    // 각 학년별 남은 학급을 추적
+    const rem = group.map(u => ({ unit: u, classNums: [...u.classNums] }))
     let currentTeacher = null
 
-    while (remaining.some(r => r.classNums.length > 0)) {
+    while (rem.some(r => r.classNums.length > 0)) {
       // 새 교사 선택
       if (currentTeacher === null) {
         const eligible = ts.filter(t => t.majorSubjectNames.size < maxMajor)
         if (eligible.length === 0) {
-          // 교사 수 부족 — 강제 배정
           currentTeacher = ts.slice().sort((a, b) => a.hours - b.hours)[0]
           warnings.push({
             type: 'warning',
@@ -100,59 +109,85 @@ export function runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assig
         }
       }
 
-      let roomLeft = targetHours - currentTeacher.hours
-
-      // 이 교사가 이미 목표시수 도달했으면 다음 교사로
+      const roomLeft = targetHours - currentTeacher.hours
       if (roomLeft <= 0) {
         currentTeacher = null
         continue
       }
 
-      // 남은 학급을 시수 큰 학년부터 목표시수까지 배정
-      for (const rem of remaining) {
-        if (rem.classNums.length === 0) continue
-        if (roomLeft <= 0) break
-        const canTake = Math.max(1, Math.floor(roomLeft / rem.hoursPerClass))
-        const toAssign = rem.classNums.splice(0, canTake)
-        addAssignment(currentTeacher, rem.subjectId, rem.subjectName, rem.grade, rem.hoursPerClass, true, toAssign)
-        roomLeft -= rem.hoursPerClass * toAssign.length
+      // 남은 학년을 순서대로(시수 큰 학년부터) 배정
+      let filled = false
+      for (const r of rem) {
+        if (r.classNums.length === 0) continue
+        const canTake = Math.max(1, Math.floor((targetHours - currentTeacher.hours) / r.unit.hoursPerClass))
+        const toAssign = r.classNums.splice(0, canTake)
+        addClasses(currentTeacher, r.unit, toAssign)
+        filled = true
+        if (currentTeacher.hours >= targetHours) {
+          currentTeacher = null
+          break
+        }
       }
-
-      // 배정 후 목표시수 도달하면 다음 교사로
-      if (targetHours - currentTeacher.hours <= 0) {
-        currentTeacher = null
-      }
+      if (!filled) break
     }
   }
 
-  // Step D: swap — 같은 과목 담당 교사 간 반 교환으로 시수 균등화
+  // ── Step D: swap — 같은 과목 담당 교사 간 정확히 같은 학년·반 교환 ──
+  // 목표: 교사A가 "과학3학년1반 + 과학4학년1반"을 갖고 있고
+  //        교사B가 "과학3학년2~7반 + 과학4학년2~7반"을 가질 때
+  //        교사A의 자투리 반을 교사B의 해당 학년으로 합쳐서 교사B가 통째로 갖게 함
   for (const { name, group } of majorGroups) {
     const subjectTeachers = ts.filter(t => t.majorSubjectNames.has(name))
     if (subjectTeachers.length < 2) continue
 
+    // 각 학년별로, 여러 교사에게 분산된 반을 최대한 한 교사에게 합치기
+    for (const unit of group) {
+      const holders = subjectTeachers
+        .map(t => ({ t, a: t.assignments.find(a => a.subjectId === unit.subjectId && a.grade === unit.grade) }))
+        .filter(x => x.a)
+      if (holders.length <= 1) continue
+
+      // 가장 많은 반을 가진 교사에게 나머지를 합침 (단, 시수 초과 안 되게)
+      holders.sort((a, b) => b.a.classNums.length - a.a.classNums.length)
+      const main = holders[0]
+
+      for (let i = 1; i < holders.length; i++) {
+        const other = holders[i]
+        const classesToMove = [...other.a.classNums]
+        const newHours = main.t.hours + unit.hoursPerClass * classesToMove.length
+        // 합쳤을 때 목표시수 + 여유(hoursPerClass-1)를 넘지 않으면 합침
+        if (newHours <= targetHours + unit.hoursPerClass - 1) {
+          removeClasses(other.t, unit, classesToMove)
+          addClasses(main.t, unit, classesToMove)
+        }
+      }
+    }
+
+    // 합친 후에도 시수 편차가 있으면 단순 swap
     for (let iter = 0; iter < 20; iter++) {
-      subjectTeachers.sort((a, b) => a.hours - b.hours)
-      const least = subjectTeachers[0]
-      const most = subjectTeachers[subjectTeachers.length - 1]
+      const sorted = subjectTeachers.filter(t => t.majorSubjectNames.has(name)).slice().sort((a, b) => a.hours - b.hours)
+      if (sorted.length < 2) break
+      const least = sorted[0]
+      const most = sorted[sorted.length - 1]
       if (most.hours - least.hours <= 2) break
 
-      // most 교사의 이 과목 배정 중 반이 가장 많은 것에서 1반 옮기기
-      const mostAssigns = most.assignments
-        .filter(a => a.subjectName === name && a.classNums.length >= 1)
-        .sort((a, b) => b.classNums.length - a.classNums.length)
-      if (!mostAssigns.length) break
+      // most에서 가장 작은 단위(1반)를 least에게
+      const movable = most.assignments
+        .filter(a => a.subjectName === name)
+        .sort((a, b) => a.classNums.length - b.classNums.length)
+      if (!movable.length) break
 
-      const fromAssign = mostAssigns[0]
+      const fromAssign = movable[0]
       const classToMove = fromAssign.classNums[fromAssign.classNums.length - 1]
       const unit = group.find(u => u.subjectId === fromAssign.subjectId && u.grade === fromAssign.grade)
       if (!unit) break
 
-      removeClasses(most, fromAssign.subjectId, fromAssign.grade, [classToMove])
-      addAssignment(least, unit.subjectId, unit.subjectName, unit.grade, unit.hoursPerClass, true, [classToMove])
+      removeClasses(most, unit, [classToMove])
+      addClasses(least, unit, [classToMove])
     }
   }
 
-  // Step E: 일반과목 배정 — 학급 쪼개서 목표시수 채우기
+  // ── Step E: 일반과목 배정 ──────────────────────────────────────────
   const minorUnits = units.filter(u => !u.is_major).sort((a, b) => b.totalHours - a.totalHours)
 
   for (const unit of minorUnits) {
@@ -163,8 +198,7 @@ export function runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assig
       const canTake = roomLeft > 0
         ? Math.min(remaining.length, Math.max(1, Math.floor(roomLeft / unit.hoursPerClass)))
         : 1
-      const toAssign = remaining.splice(0, canTake)
-      addAssignment(teacher, unit.subjectId, unit.subjectName, unit.grade, unit.hoursPerClass, false, toAssign)
+      addClasses(teacher, unit, remaining.splice(0, canTake))
     }
   }
 
@@ -186,7 +220,7 @@ export function runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assig
     }
   }
 
-  // Step F: 경고
+  // ── Step F: 경고 ──────────────────────────────────────────────────
   const gradeSummary = gradeConfigs.map(gc => {
     const weeklyTotal = gc.periods_mon + gc.periods_tue + gc.periods_wed + gc.periods_thu + gc.periods_fri
     const dedicatedHours = subjects.filter(s => s.grade === gc.grade).reduce((sum, s) => sum + s.weekly_hours, 0)
