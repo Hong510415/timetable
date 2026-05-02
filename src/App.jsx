@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AppProvider } from './context/AppContext'
 import Layout from './components/Layout'
 import SchoolSetup from './pages/SchoolSetup'
+import SubjectSetup from './pages/SubjectSetup'
 import TeacherManagement from './pages/TeacherManagement'
 import Timetable from './pages/Timetable'
 import RoomManagement from './pages/RoomManagement'
@@ -14,6 +15,7 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/setup" element={<Layout><SchoolSetup /></Layout>} />
+          <Route path="/subjects" element={<Layout><SubjectSetup /></Layout>} />
           <Route path="/teachers" element={<Layout><TeacherManagement /></Layout>} />
           <Route path="/assignment" element={<Layout><Assignment /></Layout>} />
           <Route path="/timetable" element={<Layout><Timetable /></Layout>} />

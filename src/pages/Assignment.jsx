@@ -10,6 +10,7 @@ export default function Assignment() {
   const [result, setResult] = useState(null)
   const [editedAssignments, setEditedAssignments] = useState(null)
   const [running, setRunning] = useState(false)
+  const [teacherCount, setTeacherCount] = useState('')
 
   const activeAssignments = editedAssignments ?? result?.assignments ?? []
 
@@ -17,9 +18,21 @@ export default function Assignment() {
     if (editedAssignments !== null) {
       if (!confirm('자동 배정을 재실행하면 수동 수정 내용이 초기화됩니다. 계속하시겠습니까?')) return
     }
+
+    let targetTeachers = teachers
+    const count = Number(teacherCount)
+    if (count > 0 && teachers.length === 0) {
+      targetTeachers = Array.from({ length: count }, (_, i) => ({
+        id: crypto.randomUUID(),
+        code: `교사${i + 1}`,
+        teacher_assignments: [],
+      }))
+      setTeachers(targetTeachers)
+    }
+
     setRunning(true)
     setTimeout(() => {
-      const r = runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assignmentSettings })
+      const r = runAssignmentAlgorithm({ gradeConfigs, subjects, teachers: targetTeachers, assignmentSettings })
       setResult(r)
       setEditedAssignments(null)
       setRunning(false)
@@ -60,12 +73,12 @@ export default function Assignment() {
   }, 0)
   const targetHours = teachers.length ? Math.round(totalDedicated / teachers.length) : 0
 
-  if (!teachers.length || !subjects.length) {
+  if (!subjects.length) {
     return (
       <div className="p-10 bg-gray-50 min-h-full">
         <h1 className="text-[22px] font-bold mb-6">전담 배정</h1>
         <div className="text-center py-20 text-gray-300 text-[14px]">
-          {!teachers.length ? '전담 교사 관리에서 교사를 먼저 추가하세요.' : '학교 설정에서 전담 과목을 먼저 입력하세요.'}
+          전담 과목 설정 탭에서 과목을 먼저 입력하세요.
         </div>
       </div>
     )
@@ -98,22 +111,38 @@ export default function Assignment() {
       {/* 배정 설정 */}
       <div className="bg-white border border-gray-200 rounded-sm p-5 mb-5 flex items-center gap-6 flex-wrap">
         <span className="text-[13px] font-semibold text-gray-700">배정 설정</span>
-        <div className="flex items-center gap-2">
-          <label className="text-[12px] text-gray-500">교사 1명당 주요 과목 최대</label>
-          <select
-            value={assignmentSettings.maxMajorSubjectsPerTeacher}
-            onChange={e => setAssignmentSettings({ ...assignmentSettings, maxMajorSubjectsPerTeacher: Number(e.target.value) })}
-            className="h-8 px-2 border border-gray-300 rounded-sm text-[12px] outline-none bg-white"
-          >
-            <option value={1}>1개</option>
-            <option value={2}>2개</option>
-            <option value={99}>제한없음</option>
-          </select>
-        </div>
+        {teachers.length === 0 && (
+          <div className="flex items-center gap-2">
+            <label className="text-[12px] text-gray-500">전담 교사 수</label>
+            <input
+              type="number" min={1} max={50}
+              value={teacherCount}
+              onChange={e => setTeacherCount(e.target.value)}
+              onClick={e => e.target.select()}
+              placeholder="예: 6"
+              className="w-20 h-8 px-2 border border-gray-300 rounded-sm text-[12px] outline-none focus:border-black text-center"
+            />
+            <span className="text-[12px] text-gray-400">명</span>
+          </div>
+        )}
+        {teachers.length > 0 && (
+          <div className="flex items-center gap-2">
+            <label className="text-[12px] text-gray-500">교사 1명당 주요 과목 최대</label>
+            <select
+              value={assignmentSettings.maxMajorSubjectsPerTeacher}
+              onChange={e => setAssignmentSettings({ ...assignmentSettings, maxMajorSubjectsPerTeacher: Number(e.target.value) })}
+              className="h-8 px-2 border border-gray-300 rounded-sm text-[12px] outline-none bg-white"
+            >
+              <option value={1}>1개</option>
+              <option value={2}>2개</option>
+              <option value={99}>제한없음</option>
+            </select>
+          </div>
+        )}
         <div className="text-[12px] text-gray-400">
-          교사 수: <strong>{teachers.length}명</strong> &nbsp;|&nbsp;
+          교사 수: <strong>{teachers.length > 0 ? `${teachers.length}명` : (teacherCount ? `${teacherCount}명 (입력)` : '미설정')}</strong> &nbsp;|&nbsp;
           전체 전담시수: <strong>{totalDedicated}h</strong> &nbsp;|&nbsp;
-          교사 목표 시수: <strong>{targetHours}h</strong>
+          교사 목표 시수: <strong>{teachers.length > 0 ? `${targetHours}h` : (teacherCount ? `${Math.round(totalDedicated / Number(teacherCount))}h` : '-')}</strong>
         </div>
       </div>
 

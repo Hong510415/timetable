@@ -6,8 +6,8 @@ const GRADES = [1, 2, 3, 4, 5, 6]
 const DAY_KEYS = ['periods_mon', 'periods_tue', 'periods_wed', 'periods_thu', 'periods_fri']
 
 export default function SchoolSetup() {
-  const { state, setSchoolName, setGradeConfigs, setLunchConfig, setSubjects } = useApp()
-  const { schoolName, gradeConfigs, lunchConfig, subjects } = state
+  const { state, setSchoolName, setGradeConfigs, setLunchConfig } = useApp()
+  const { schoolName, gradeConfigs, lunchConfig } = state
   const [tab, setTab] = useState('grade')
   const [saved, setSaved] = useState(false)
 
@@ -41,7 +41,6 @@ export default function SchoolSetup() {
   const tabs = [
     { key: 'grade', label: '학급 정보' },
     { key: 'lunch', label: '점심시간 설정' },
-    { key: 'subjects', label: '전담 과목 설정' },
   ]
 
   return (
@@ -182,60 +181,6 @@ export default function SchoolSetup() {
               </div>
             )}
           </div>
-        </div>
-      )}
-
-      {tab === 'subjects' && (
-        <div className="bg-white border border-gray-200 rounded-sm p-7 flex flex-col gap-4">
-          <div>
-            <h2 className="text-[14px] font-semibold mb-1">학년별 전담 과목 및 주당 시수</h2>
-            <p className="text-[12px] text-gray-400 mb-4">전담 교사가 가르치는 과목과 주당 시수를 입력하세요.</p>
-          </div>
-          {GRADES.map(grade => (
-            <div key={grade} className="border border-gray-200 rounded-sm p-4">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-[13px] font-semibold">{grade}학년</span>
-                <button
-                  onClick={() => setSubjects([...subjects, { id: crypto.randomUUID(), grade, name: '', weekly_hours: 2, is_major: false }])}
-                  className="text-[12px] px-3 h-7 border border-gray-300 rounded-sm hover:bg-gray-50"
-                >+ 과목 추가</button>
-              </div>
-              {subjects.filter(s => s.grade === grade).length === 0 && (
-                <p className="text-[12px] text-gray-300">과목을 추가하세요</p>
-              )}
-              <div className="flex flex-col gap-2">
-                {subjects.map((s, i) => s.grade !== grade ? null : (
-                  <div key={s.id} className="flex items-center gap-2">
-                    <input
-                      placeholder="과목명 (예: 영어)"
-                      value={s.name}
-                      onChange={e => setSubjects(subjects.map((x, j) => j === i ? { ...x, name: e.target.value } : x))}
-                      className="flex-1 h-9 px-3 border border-gray-200 rounded-sm text-[13px] outline-none focus:border-black"
-                    />
-                    <span className="text-[12px] text-gray-400">주당</span>
-                    <input
-                      type="number" min={1} max={10} value={s.weekly_hours}
-                      onChange={e => setSubjects(subjects.map((x, j) => j === i ? { ...x, weekly_hours: Number(e.target.value) } : x))}
-                      className="w-14 h-9 text-center border border-gray-200 rounded-sm text-[13px] outline-none focus:border-black"
-                    />
-                    <span className="text-[12px] text-gray-400">시수</span>
-                    <select
-                      value={s.is_major ? '주요' : '일반'}
-                      onChange={e => setSubjects(subjects.map((x, j) => j === i ? { ...x, is_major: e.target.value === '주요' } : x))}
-                      className="h-9 px-2 border border-gray-200 rounded-sm text-[13px] outline-none focus:border-black"
-                    >
-                      <option>일반</option>
-                      <option>주요</option>
-                    </select>
-                    <button
-                      onClick={() => setSubjects(subjects.filter((_, j) => j !== i))}
-                      className="text-[12px] text-red-400 hover:text-red-600 px-2"
-                    >삭제</button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
         </div>
       )}
 
