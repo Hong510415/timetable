@@ -93,13 +93,15 @@ export default function RoomManagement() {
     <div className="p-10 bg-gray-50 min-h-full">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-[22px] font-bold">특별실 관리</h1>
-        <ManualModal title="특별실 관리" sections={MANUAL} />
-        <button
-          onClick={openAdd}
-          className="flex items-center gap-2 h-10 px-4 bg-black text-white text-[13px] font-semibold rounded-sm hover:bg-gray-800 transition-colors"
-        >
-          <Plus size={14} />특별실 추가
-        </button>
+        <div className="flex items-center gap-2">
+          <ManualModal title="특별실 관리" sections={MANUAL} />
+          <button
+            onClick={openAdd}
+            className="flex items-center gap-2 h-10 px-4 bg-black text-white text-[13px] font-semibold rounded-sm hover:bg-gray-800 transition-colors"
+          >
+            <Plus size={14} />특별실 추가
+          </button>
+        </div>
       </div>
 
       <div className="flex items-center gap-2 p-3 bg-gray-100 rounded-sm mb-5 text-[12px] text-gray-500">
