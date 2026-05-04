@@ -17,6 +17,7 @@ function reducer(state, action) {
     case 'SET_ASSIGNMENT_SETTINGS': return { ...state, assignmentSettings: action.payload }
     case 'SET_ASSIGNMENT_RESULT': return { ...state, assignmentResult: action.payload }
     case 'IMPORT': return { ...initialState, ...action.payload }
+    case 'RESET': return { ...initialState }
     default: return state
   }
 }
@@ -42,6 +43,7 @@ export function AppProvider({ children }) {
     setAssignmentSettings: (v) => dispatch({ type: 'SET_ASSIGNMENT_SETTINGS', payload: v }),
     setAssignmentResult: (v) => dispatch({ type: 'SET_ASSIGNMENT_RESULT', payload: v }),
     importData: (data) => dispatch({ type: 'IMPORT', payload: data }),
+    resetAll: () => dispatch({ type: 'RESET' }),
   }
 
   return <AppContext.Provider value={ctx}>{children}</AppContext.Provider>

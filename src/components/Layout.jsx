@@ -1,6 +1,6 @@
 import { useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { Settings, Calendar, DoorOpen, CalendarCheck, Download, Upload, ClipboardList, BookOpen } from 'lucide-react'
+import { Settings, Calendar, DoorOpen, CalendarCheck, Download, Upload, ClipboardList, BookOpen, RotateCcw } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { exportFullWorkbook, importFullWorkbook } from '../lib/excelIO'
 
@@ -16,7 +16,7 @@ const navItems = [
 export default function Layout({ children }) {
   const navigate = useNavigate()
   const { pathname } = useLocation()
-  const { state, importData } = useApp()
+  const { state, importData, resetAll } = useApp()
   const fileInputRef = useRef(null)
 
   function handleExport() {
@@ -87,6 +87,18 @@ export default function Layout({ children }) {
             onChange={handleImport}
             className="hidden"
           />
+          <div className="h-px bg-gray-100 my-1" />
+          <button
+            onClick={() => {
+              if (confirm('모든 데이터를 초기화합니다. 이 작업은 되돌릴 수 없습니다. 계속하시겠습니까?')) {
+                resetAll()
+                navigate('/setup')
+              }
+            }}
+            className="flex items-center gap-2 h-9 px-3 border border-red-200 rounded-sm text-[12px] text-red-400 hover:bg-red-50 w-full"
+          >
+            <RotateCcw size={12} />전체 초기화
+          </button>
         </div>
       </aside>
 
