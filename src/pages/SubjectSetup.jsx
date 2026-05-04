@@ -1,5 +1,25 @@
 import { useState } from 'react'
 import { useApp } from '../context/AppContext'
+import ManualModal from '../components/ManualModal'
+
+const MANUAL = [
+  {
+    title: '전담 과목',
+    items: [
+      '전담 수업에 사용할 과목을 추가합니다.',
+      '주당 시수: 해당 과목을 일주일에 몇 시간 가르치는지 설정합니다.',
+      '담당 학년을 선택해 해당 학년에만 과목이 배정되도록 합니다.',
+      '⚠ 과목 삭제 시 해당 과목으로 배정된 교사 정보에도 영향을 줍니다.',
+    ],
+  },
+  {
+    title: '전담 교사',
+    items: [
+      '전담을 담당할 교사 총 인원을 입력합니다.',
+      '교사 명칭은 전담 배정 후 지정할 수 있습니다.',
+    ],
+  },
+]
 
 const GRADES = [1, 2, 3, 4, 5, 6]
 
@@ -44,9 +64,12 @@ export default function SubjectSetup() {
 
   return (
     <div className="p-10 bg-gray-50 min-h-full">
-      <div className="mb-6">
-        <h1 className="text-[22px] font-bold">전담 설정</h1>
-        <p className="text-[12px] text-gray-400 mt-1">변경 사항은 자동으로 저장됩니다.</p>
+      <div className="flex items-start justify-between mb-6">
+        <div>
+          <h1 className="text-[22px] font-bold">전담 설정</h1>
+          <p className="text-[12px] text-gray-400 mt-1">변경 사항은 자동으로 저장됩니다.</p>
+        </div>
+        <ManualModal title="전담 설정" sections={MANUAL} />
       </div>
 
       <div className="flex border border-gray-200 bg-white rounded-sm w-fit mb-6">

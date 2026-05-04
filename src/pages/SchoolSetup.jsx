@@ -1,5 +1,31 @@
 import { useState } from 'react'
 import { useApp } from '../context/AppContext'
+import ManualModal from '../components/ManualModal'
+
+const MANUAL = [
+  {
+    title: '학교 이름',
+    items: ['학교명을 입력합니다. 엑셀 내보내기 파일명에 사용됩니다.'],
+  },
+  {
+    title: '학년별 학급 수',
+    items: ['각 학년의 반 수를 설정합니다.'],
+  },
+  {
+    title: '학년별 요일별 수업 시수',
+    items: [
+      '요일마다 수업 교시 수를 다르게 설정할 수 있습니다.',
+      '설정한 교시 수 안에서 전담 수업이 배정됩니다.',
+    ],
+  },
+  {
+    title: '점심시간 분리 배정',
+    items: [
+      '학년마다 점심 시간이 다른 경우 활성화합니다.',
+      '점심 슬롯을 기준으로 오전/오후 수업이 분리됩니다.',
+    ],
+  },
+]
 
 const DAYS = ['월', '화', '수', '목', '금']
 const GRADES = [1, 2, 3, 4, 5, 6]
@@ -41,6 +67,7 @@ export default function SchoolSetup() {
     <div className="p-10 bg-gray-50 min-h-full">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-[22px] font-bold">학교 설정</h1>
+        <ManualModal title="학교 설정" sections={MANUAL} />
       </div>
 
       <div className="mb-5">

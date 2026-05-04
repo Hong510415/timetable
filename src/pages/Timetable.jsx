@@ -4,6 +4,47 @@ import { useApp } from '../context/AppContext'
 import { buildSchedule, flattenResult } from '../lib/scheduler'
 import { exportTimetableByClass, exportTimetableByTeacher } from '../lib/excelExport'
 import TimetableGrid from '../components/TimetableGrid'
+import ManualModal from '../components/ManualModal'
+
+const MANUAL = [
+  {
+    title: '시간표 자동 생성',
+    items: [
+      '자동 생성 버튼을 누르면 배정된 교사 정보를 바탕으로 시간표를 생성합니다.',
+      '과목별로 같은 요일 연속 수업 허용 여부와 하루 최대 배정 수를 설정할 수 있습니다.',
+      '같은 학년 수업은 라운드 로빈 방식으로 배정됩니다 (1반 1회차 → 2반 1회차 → 1반 2회차 순).',
+    ],
+  },
+  {
+    title: '보기 전환',
+    items: [
+      '학급별 보기: 학년·반을 선택해 해당 학급의 전담 시간표를 확인합니다.',
+      '교사별 보기: 교사를 선택해 해당 교사의 주간 수업 현황을 확인합니다.',
+      '교사별 보기에서 빈 칸에 마우스를 올리면 그 시간에 수업 중인 학급 목록이 표시됩니다.',
+    ],
+  },
+  {
+    title: '수동 수정',
+    items: [
+      '셀을 클릭하면 해당 시간의 교사·과목을 직접 수정할 수 있습니다.',
+      '수정 시 교사 중복이 발생하면 빨간색으로 표시됩니다.',
+    ],
+  },
+  {
+    title: '미배정 오류',
+    items: [
+      '교사 시간이 부족하거나 제약 조건이 너무 많으면 일부 수업이 미배정될 수 있습니다.',
+      '미배정 발생 시 오류 목록이 표시됩니다. 교사 수업 시수나 연속 수업 설정을 조정해보세요.',
+    ],
+  },
+  {
+    title: '엑셀 내보내기',
+    items: [
+      '학급별 엑셀: 학급 단위로 시간표를 내보냅니다.',
+      '교사별 엑셀: 교사 단위로 시간표를 내보냅니다.',
+    ],
+  },
+]
 
 const GRADES = [1, 2, 3, 4, 5, 6]
 
@@ -148,6 +189,7 @@ export default function Timetable() {
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-[22px] font-bold">전담 시간표</h1>
         <div className="flex gap-2">
+          <ManualModal title="전담 시간표" sections={MANUAL} />
           <button
             onClick={() => exportTimetableByClass(timetableRows, gradeConfigs, teachers, subjects, gradeLunchSlot, totalSlots)}
             className="flex items-center gap-2 h-10 px-4 border border-gray-300 text-[13px] rounded-sm hover:bg-gray-50"

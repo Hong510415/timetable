@@ -1,6 +1,24 @@
 import { useState } from 'react'
 import { Plus, X, Trash2, Edit2 } from 'lucide-react'
 import { useApp } from '../context/AppContext'
+import ManualModal from '../components/ManualModal'
+
+const MANUAL = [
+  {
+    title: '특별실 등록',
+    items: [
+      '과학실, 음악실, 체육관 등 전담 수업에 사용하는 특별실을 등록합니다.',
+      '특별실과 사용 과목을 연결하면 해당 과목 배정 시 특별실 제약이 적용됩니다.',
+    ],
+  },
+  {
+    title: '사용 불가 시간 설정',
+    items: [
+      '특별실을 사용할 수 없는 시간(예: 타 행사, 청소 등)을 지정합니다.',
+      '설정된 시간에는 해당 특별실을 사용하는 과목이 배정되지 않습니다.',
+    ],
+  },
+]
 
 const DAY_LABELS = ['월', '화', '수', '목', '금']
 
@@ -75,6 +93,7 @@ export default function RoomManagement() {
     <div className="p-10 bg-gray-50 min-h-full">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-[22px] font-bold">특별실 관리</h1>
+        <ManualModal title="특별실 관리" sections={MANUAL} />
         <button
           onClick={openAdd}
           className="flex items-center gap-2 h-10 px-4 bg-black text-white text-[13px] font-semibold rounded-sm hover:bg-gray-800 transition-colors"
