@@ -373,6 +373,66 @@ export function runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assig
     if (!moved) break
   }
 
+  // ── Step G: 크로스-과목 스왑 — 교사 간 과목 교환으로 담당 학년 집중도 최적화 ──
+  // 예: A=과학3학년+영어5학년, B=과학5학년+영어3학년
+  //   → A=과학5학년+영어5학년, B=과학3학년+영어3학년
+  function uniqueGradeCount(teacher) {
+    return new Set(teacher.assignments.map(a => a.grade)).size
+  }
+
+  let swapImproved = true
+  while (swapImproved) {
+    swapImproved = false
+    outer:
+    for (let i = 0; i < ts.length; i++) {
+      for (let j = i + 1; j < ts.length; j++) {
+        const tA = ts[i]
+        const tB = ts[j]
+        for (const aAssign of tA.assignments) {
+          for (const bAssign of tB.assignments) {
+            if (aAssign.subjectId === bAssign.subjectId) continue
+            if (aAssign.grade === bAssign.grade) continue
+            const aHours = aAssign.hoursPerClass * aAssign.classNums.length
+            const bHours = bAssign.hoursPerClass * bAssign.classNums.length
+            if (aHours !== bHours) continue
+
+            // 주요과목 제약 확인
+            const tAMajorsAfter = new Set(
+              tA.assignments.filter(a => a !== aAssign && a.is_major).map(a => a.subjectName)
+            )
+            if (bAssign.is_major) tAMajorsAfter.add(bAssign.subjectName)
+            if (tAMajorsAfter.size > maxMajor) continue
+
+            const tBMajorsAfter = new Set(
+              tB.assignments.filter(a => a !== bAssign && a.is_major).map(a => a.subjectName)
+            )
+            if (aAssign.is_major) tBMajorsAfter.add(aAssign.subjectName)
+            if (tBMajorsAfter.size > maxMajor) continue
+
+            // 스왑 후 학년 다양성 계산
+            const tAGradesAfter = new Set(tA.assignments.filter(a => a !== aAssign).map(a => a.grade))
+            tAGradesAfter.add(bAssign.grade)
+            const tBGradesAfter = new Set(tB.assignments.filter(a => a !== bAssign).map(a => a.grade))
+            tBGradesAfter.add(aAssign.grade)
+            const afterDiv = tAGradesAfter.size + tBGradesAfter.size
+            const beforeDiv = uniqueGradeCount(tA) + uniqueGradeCount(tB)
+
+            if (afterDiv < beforeDiv) {
+              const aIdx = tA.assignments.indexOf(aAssign)
+              const bIdx = tB.assignments.indexOf(bAssign)
+              tA.assignments[aIdx] = { ...bAssign }
+              tB.assignments[bIdx] = { ...aAssign }
+              tA.majorSubjectNames = new Set(tA.assignments.filter(a => a.is_major).map(a => a.subjectName))
+              tB.majorSubjectNames = new Set(tB.assignments.filter(a => a.is_major).map(a => a.subjectName))
+              swapImproved = true
+              break outer
+            }
+          }
+        }
+      }
+    }
+  }
+
   // 결과 변환
   const assignments = []
   for (const t of ts) {
