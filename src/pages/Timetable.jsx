@@ -696,13 +696,13 @@ function EditCellModal({ modal, teachers, subjects, gradeConfigs, rooms, grade, 
   const { day, slot, classLabel, teacherView, defaultTeacherId } = modal
   const DAY_LABELS = ['월', '화', '수', '목', '금']
   const needsGradeClass = teacherView && !modal.grade
-  // 교사별 보기 + 교사 ID 사전 결정 → 교사 선택 dropdown 숨김 (해당 교사 시간표에서 추가하는 흐름)
   const teacherLocked = teacherView && !!defaultTeacherId
+  // 학급별 보기: 학년·반이 사전 결정 + 교사는 과목 선택 시 자동 채워짐
+  const classViewMode = !teacherView && !!grade
 
   const [teacherId, setTeacherId] = useState(modal.current?.teacher_id || defaultTeacherId || '')
   const [subjectId, setSubjectId] = useState(modal.current?.subject_id || '')
   const [roomId, setRoomId] = useState(modal.current?.room_id || '')
-  // 잠긴 교사 모드에서는 그 교사가 실제 가르치는 첫 학년·반을 초기값으로
   const initialGradeClass = (() => {
     if (grade) return { g: grade, c: 1 }
     if (teacherView && defaultTeacherId) {
@@ -720,7 +720,7 @@ function EditCellModal({ modal, teachers, subjects, gradeConfigs, rooms, grade, 
   const effectiveGrade = needsGradeClass ? formGrade : grade
   const effectiveClass = needsGradeClass ? formClass : modal.classNum
 
-  // 잠긴 교사 모드: 해당 교사가 가르치는 (subject, grade, class) 조합만 표시
+  // 허용 과목 산정
   let allowedSubjects
   if (lockedTeacher) {
     const assigns = lockedTeacher.teacher_assignments || []
@@ -728,9 +728,32 @@ function EditCellModal({ modal, teachers, subjects, gradeConfigs, rooms, grade, 
       s.grade === effectiveGrade &&
       assigns.some(a => a.subject_id === s.id && a.grade === s.grade && a.class_num === effectiveClass)
     )
+  } else if (classViewMode) {
+    // 학급별 보기: 이 (학년, 반)에 어느 교사라도 배정된 과목만
+    allowedSubjects = subjects.filter(s =>
+      s.grade === effectiveGrade &&
+      teachers.some(t =>
+        (t.teacher_assignments || []).some(a =>
+          a.subject_id === s.id && a.grade === effectiveGrade && a.class_num === effectiveClass
+        )
+      )
+    )
   } else {
     allowedSubjects = subjects.filter(s => s.grade === effectiveGrade)
   }
+
+  // (subject, grade, class) → 담당 교사 ID
+  function findTeacherForSubject(sid) {
+    if (!sid) return ''
+    const t = teachers.find(t =>
+      (t.teacher_assignments || []).some(a =>
+        a.subject_id === sid && a.grade === effectiveGrade && a.class_num === effectiveClass
+      )
+    )
+    return t?.id || ''
+  }
+
+  const autoTeacher = classViewMode && teacherId ? teachers.find(t => t.id === teacherId) : null
 
   // 잠긴 교사 모드의 학년·반 옵션도 해당 교사가 가르치는 것만
   const allowedGrades = lockedTeacher
@@ -761,6 +784,9 @@ function EditCellModal({ modal, teachers, subjects, gradeConfigs, rooms, grade, 
   function handleSubjectChange(sid) {
     setSubjectId(sid)
     setRoomId('')
+    if (classViewMode) {
+      setTeacherId(findTeacherForSubject(sid))
+    }
   }
 
   return (
@@ -798,19 +824,6 @@ function EditCellModal({ modal, teachers, subjects, gradeConfigs, rooms, grade, 
               </div>
             </>
           )}
-          {!teacherLocked && (
-            <div>
-              <label className="text-[12px] font-semibold text-gray-600 block mb-1">교사</label>
-              <select
-                value={teacherId}
-                onChange={e => setTeacherId(e.target.value)}
-                className="w-full h-9 px-2 border border-gray-300 rounded-sm text-[13px] outline-none bg-white"
-              >
-                <option value="">없음 (미배정)</option>
-                {teachers.map(t => <option key={t.id} value={t.id}>{t.code}</option>)}
-              </select>
-            </div>
-          )}
           <div>
             <label className="text-[12px] font-semibold text-gray-600 block mb-1">과목</label>
             <select
@@ -824,7 +837,34 @@ function EditCellModal({ modal, teachers, subjects, gradeConfigs, rooms, grade, 
             {lockedTeacher && allowedSubjects.length === 0 && (
               <p className="text-[11px] text-gray-400 mt-1">{lockedTeacher.code}에게 {effectiveGrade}학년 {effectiveClass}반에 배정된 과목이 없습니다</p>
             )}
+            {classViewMode && allowedSubjects.length === 0 && (
+              <p className="text-[11px] text-gray-400 mt-1">이 학급에 배정된 전담 과목이 없습니다 (전담 배정 페이지에서 먼저 배정하세요)</p>
+            )}
           </div>
+          {classViewMode ? (
+            subjectId && (
+              <div>
+                <label className="text-[12px] font-semibold text-gray-600 block mb-1">교사 (자동)</label>
+                <div className="w-full h-9 px-2 border border-gray-200 rounded-sm text-[13px] bg-gray-50 flex items-center text-gray-700">
+                  {autoTeacher?.code || '배정된 교사 없음'}
+                </div>
+              </div>
+            )
+          ) : (
+            !teacherLocked && (
+              <div>
+                <label className="text-[12px] font-semibold text-gray-600 block mb-1">교사</label>
+                <select
+                  value={teacherId}
+                  onChange={e => setTeacherId(e.target.value)}
+                  className="w-full h-9 px-2 border border-gray-300 rounded-sm text-[13px] outline-none bg-white"
+                >
+                  <option value="">없음 (미배정)</option>
+                  {teachers.map(t => <option key={t.id} value={t.id}>{t.code}</option>)}
+                </select>
+              </div>
+            )
+          )}
           {selectedSubject && (
             <div>
               <label className="text-[12px] font-semibold text-gray-600 block mb-1">특별실</label>
