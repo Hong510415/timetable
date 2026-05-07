@@ -31,7 +31,7 @@ export default function SubjectPlanComparison({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 print:bg-transparent print:relative print:inset-auto print:block">
+    <div className="print-modal-root fixed inset-0 z-50 flex items-center justify-center bg-black/50 print:bg-transparent print:relative print:inset-auto print:block">
       <div className="bg-white rounded-sm shadow-2xl w-[90vw] h-[90vh] max-w-[1400px] flex flex-col print:w-auto print:h-auto print:max-w-full print:shadow-none">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 print:hidden">
           <h2 className="text-[18px] font-bold">전담 배정안 비교</h2>
