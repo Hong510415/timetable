@@ -68,7 +68,7 @@ export default function Timetable() {
       daySlots[d] = {}
       const relevant = timetableRows.filter(r => r.grade === grade && r.class_num === classNum && r.day_of_week === d)
       for (const r of relevant) {
-        daySlots[d][r.slot] = { teacher_id: r.teacher_id, subject_id: r.subject_id, is_unassigned: r.is_unassigned, id: r.id }
+        daySlots[d][r.slot] = { teacher_id: r.teacher_id, subject_id: r.subject_id, is_unassigned: r.is_unassigned, room_id: r.room_id, id: r.id }
       }
     }
     return daySlots
@@ -80,17 +80,17 @@ export default function Timetable() {
       daySlots[d] = {}
       const relevant = timetableRows.filter(r => r.teacher_id === teacherId && r.day_of_week === d)
       for (const r of relevant) {
-        daySlots[d][r.slot] = { teacher_id: r.teacher_id, subject_id: r.subject_id, is_unassigned: r.is_unassigned, label: `${r.grade}학년 ${r.class_num}반`, grade: r.grade, class_num: r.class_num, id: r.id }
+        daySlots[d][r.slot] = { teacher_id: r.teacher_id, subject_id: r.subject_id, is_unassigned: r.is_unassigned, label: `${r.grade}학년 ${r.class_num}반`, grade: r.grade, class_num: r.class_num, room_id: r.room_id, id: r.id }
       }
     }
     return daySlots
   }
 
-  function openEditModal(day, slot, cell) {
+  function openEditModal(day, slot, cell, defaultTeacherId = null) {
     if (tab === 'class') {
       setEditModal({ day, slot, grade: selectedGrade, classNum: selectedClass, current: cell, rowId: cell?.id || null })
     } else if (tab === 'teacher') {
-      setEditModal({ day, slot, grade: cell?.grade || null, classNum: cell?.class_num || null, current: cell, classLabel: cell?.label || null, teacherView: true, defaultTeacherId: selectedTeacher, rowId: cell?.id || null })
+      setEditModal({ day, slot, grade: cell?.grade || null, classNum: cell?.class_num || null, current: cell, classLabel: cell?.label || null, teacherView: true, defaultTeacherId: defaultTeacherId || selectedTeacher, rowId: cell?.id || null })
     }
   }
 
@@ -208,6 +208,7 @@ export default function Timetable() {
                 gradeLunchSlot={gradeLunchSlot}
                 teachers={teachers}
                 subjects={subjects}
+                rooms={rooms}
                 onCellClick={(day, slot, cell) => openEditModal(day, slot, cell)}
                 grade={selectedGrade}
               />
@@ -215,27 +216,37 @@ export default function Timetable() {
           )}
 
           {tab === 'teacher' && (
-            <>
-              <div className="flex gap-3 mb-5">
-                <select
-                  value={selectedTeacher || ''}
-                  onChange={e => setSelectedTeacher(e.target.value)}
-                  className="h-9 px-3 border border-gray-300 rounded-sm text-[13px] outline-none bg-white"
-                >
-                  {teachers.map(t => <option key={t.id} value={t.id}>{t.code}</option>)}
-                </select>
-              </div>
-              <TeacherTimetableGrid
-                slots={teacherSlots}
-                totalSlots={totalSlots}
-                gradeLunchSlot={gradeLunchSlot}
-                subjects={subjects}
-                timetableRows={timetableRows}
-                teachers={teachers}
-                onCellClick={(day, slot, cell) => openEditModal(day, slot, cell)}
-              />
-            </>
+            <div className="flex flex-col gap-4">
+              {teachers.map(t => {
+                const ts = getSlotsForTeacher(t.id)
+                const scheduled = timetableRows.filter(r => r.teacher_id === t.id && !r.is_unassigned).length
+                const target = (t.teacher_assignments || []).reduce((s, a) => s + (a.weekly_hours || 0) * 1, 0)
+                return (
+                  <div key={t.id} className="flex flex-col gap-1">
+                    <div className="flex items-baseline gap-2 px-1">
+                      <span className="text-[13px] font-bold text-gray-800">{t.code}</span>
+                      <span className={`text-[11px] ${scheduled < target ? 'text-red-500 font-semibold' : 'text-gray-400'}`}>
+                        {scheduled} / {target}h{scheduled < target ? ` (부족 ${target - scheduled}h)` : ''}
+                      </span>
+                    </div>
+                    <TeacherTimetableGrid
+                      slots={ts}
+                      totalSlots={totalSlots}
+                      gradeLunchSlot={gradeLunchSlot}
+                      subjects={subjects}
+                      timetableRows={timetableRows}
+                      teachers={teachers}
+                      rooms={rooms}
+                      compact
+                      onCellClick={(day, slot, cell) => openEditModal(day, slot, cell, t.id)}
+                    />
+                  </div>
+                )
+              })}
+            </div>
           )}
+
+          <UnassignedStats teachers={teachers} subjects={subjects} timetableRows={timetableRows} />
         </>
       )}
 
@@ -255,7 +266,65 @@ export default function Timetable() {
   )
 }
 
-function TeacherTimetableGrid({ slots, totalSlots, gradeLunchSlot, subjects, timetableRows, teachers, onCellClick }) {
+function UnassignedStats({ teachers, subjects, timetableRows }) {
+  // 교사별 (과목, 학년-반)별 목표 vs 배정 시수
+  const rows = []
+  for (const t of teachers) {
+    for (const a of (t.teacher_assignments || [])) {
+      const target = a.weekly_hours || 0
+      const scheduled = timetableRows.filter(r =>
+        r.teacher_id === t.id &&
+        r.subject_id === a.subject_id &&
+        r.grade === a.grade &&
+        r.class_num === a.class_num &&
+        !r.is_unassigned
+      ).length
+      const deficit = target - scheduled
+      const subj = subjects.find(s => s.id === a.subject_id)
+      rows.push({
+        teacherCode: t.code,
+        subjectName: subj?.name || '?',
+        grade: a.grade,
+        classNum: a.class_num,
+        target,
+        scheduled,
+        deficit,
+      })
+    }
+  }
+  // 부족한 것만 우선
+  rows.sort((a, b) => b.deficit - a.deficit || a.teacherCode.localeCompare(b.teacherCode))
+  const deficitRows = rows.filter(r => r.deficit > 0)
+  if (deficitRows.length === 0) return null
+
+  return (
+    <div className="mt-6 max-w-[1100px] bg-white border border-gray-200 rounded-sm overflow-hidden">
+      <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-200 text-[12px] font-semibold text-gray-700">
+        미배정 시수 ({deficitRows.length}건)
+      </div>
+      <div className="grid grid-cols-[100px_100px_120px_80px_80px_80px] bg-gray-50 border-b border-gray-200 text-[11px] font-semibold text-gray-500">
+        <div className="px-3 py-2 border-r border-gray-200">교사</div>
+        <div className="px-3 py-2 border-r border-gray-200">과목</div>
+        <div className="px-3 py-2 border-r border-gray-200">학년 · 반</div>
+        <div className="px-3 py-2 border-r border-gray-200 text-center">목표</div>
+        <div className="px-3 py-2 border-r border-gray-200 text-center">배정</div>
+        <div className="px-3 py-2 text-center">부족</div>
+      </div>
+      {deficitRows.map((r, i) => (
+        <div key={i} className="grid grid-cols-[100px_100px_120px_80px_80px_80px] border-b border-gray-100 last:border-b-0 text-[12px]">
+          <div className="px-3 py-2 border-r border-gray-100 font-semibold">{r.teacherCode}</div>
+          <div className="px-3 py-2 border-r border-gray-100">{r.subjectName}</div>
+          <div className="px-3 py-2 border-r border-gray-100">{r.grade}학년 {r.classNum}반</div>
+          <div className="px-3 py-2 border-r border-gray-100 text-center text-gray-600">{r.target}h</div>
+          <div className="px-3 py-2 border-r border-gray-100 text-center text-gray-600">{r.scheduled}h</div>
+          <div className="px-3 py-2 text-center font-bold text-red-600">−{r.deficit}h</div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function TeacherTimetableGrid({ slots, totalSlots, gradeLunchSlot, subjects, timetableRows, teachers, rooms, compact, onCellClick }) {
   const DAY_LABELS = ['월', '화', '수', '목', '금']
 
   function getConflicts(cell, day, slot) {
@@ -278,13 +347,14 @@ function TeacherTimetableGrid({ slots, totalSlots, gradeLunchSlot, subjects, tim
         ))}
       </div>
       {Array.from({ length: totalSlots }, (_, slot) => (
-        <div key={slot} className="flex border-t border-gray-100 h-[62px]">
-          <div className="w-[72px] flex-shrink-0 border-r border-gray-200 flex items-center justify-center text-[11px] font-semibold text-gray-400 bg-gray-50">
+        <div key={slot} className={`flex border-t border-gray-100 ${compact ? 'h-[44px]' : 'h-[62px]'}`}>
+          <div className={`w-[72px] flex-shrink-0 border-r border-gray-200 flex items-center justify-center text-[11px] font-semibold text-gray-400 bg-gray-50`}>
             {slot + 1}교시
           </div>
           {Array.from({ length: 5 }, (_, day) => {
             const cell = slots?.[day]?.[slot]
             const subject = cell?.subject_id ? subjects?.find(s => s.id === cell.subject_id) : null
+            const room = cell?.room_id ? rooms?.find(r => r.id === cell.room_id) : null
             const conflicts = getConflicts(cell, day, slot)
             const hasConflict = conflicts.length > 0
             const tooltipText = conflicts.map(c => {
@@ -297,16 +367,19 @@ function TeacherTimetableGrid({ slots, totalSlots, gradeLunchSlot, subjects, tim
               <div
                 key={day}
                 onClick={() => onCellClick?.(day, slot, cell)}
-                className="relative group flex-1 border-r border-gray-100 last:border-r-0 flex flex-col items-center justify-center gap-0.5 cursor-pointer hover:bg-blue-50 transition-colors"
+                className="relative group flex-1 border-r border-gray-100 last:border-r-0 flex flex-col items-center justify-center gap-0 cursor-pointer hover:bg-blue-50 transition-colors"
               >
                 {cell ? (
                   <>
-                    <span className={`text-[13px] font-semibold ${hasConflict ? 'text-red-600' : 'text-gray-900'}`}>
+                    <span className={`${compact ? 'text-[12px]' : 'text-[13px]'} font-semibold ${hasConflict ? 'text-red-600' : 'text-gray-900'}`}>
                       {subject?.name ?? '—'}
                     </span>
-                    <span className={`text-[11px] ${hasConflict ? 'text-red-400' : 'text-gray-400'}`}>
+                    <span className={`${compact ? 'text-[10px]' : 'text-[11px]'} ${hasConflict ? 'text-red-400' : 'text-gray-400'}`}>
                       {cell.label}
                     </span>
+                    {room && (
+                      <span className="text-[10px] text-blue-500">{room.name}</span>
+                    )}
                     {hasConflict && (
                       <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1 z-30 hidden group-hover:block bg-gray-900 text-white text-[11px] rounded px-2 py-1 whitespace-nowrap">
                         {tooltipText}

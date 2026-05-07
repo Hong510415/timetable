@@ -27,29 +27,31 @@ export function buildSchedule(gradeConfigs, subjects, teachers, lunchConfig, roo
     ? [...new Set(Object.values(gradeLunchSlot))]
     : []
 
-  // 과목ID → 차단 day-slot Set (특별실 사용 불가 시간)
-  // 한 과목이 여러 특별실에서 사용 가능할 때, 모든 특별실이 동시에 차단된 슬롯만 차단됨 (교집합)
-  // 예: 통합/체육이 2층강당+4층체육관에서 가능하면, 2층강당만 차단된 시간엔 4층체육관 사용 가능
-  const subjectBlockedMap = {}
+  // 과목ID → 사용 가능 특별실 리스트 (이름 매칭)
+  const subjectRooms = {}
   for (const subj of subjects) {
-    const eligibleRooms = rooms.filter(r => r.subjectNames?.includes(subj.name))
-    if (eligibleRooms.length === 0) continue
-    // 각 슬롯에서 차단된 방의 수
-    const blockedCount = {}
-    for (const room of eligibleRooms) {
-      const blocked = roomBlockedSlots.filter(b => b.room_id === room.id)
-      for (const b of blocked) {
-        const key = `${b.day_of_week}-${b.slot}`
-        blockedCount[key] = (blockedCount[key] || 0) + 1
-      }
+    const eligible = rooms.filter(r => r.subjectNames?.includes(subj.name))
+    if (eligible.length > 0) subjectRooms[subj.id] = eligible
+  }
+
+  // 방별 차단 day-slot Set
+  const roomBlockedMap = {}
+  for (const room of rooms) {
+    roomBlockedMap[room.id] = new Set(
+      roomBlockedSlots.filter(b => b.room_id === room.id).map(b => `${b.day_of_week}-${b.slot}`)
+    )
+  }
+
+  // (day, slot)에서 사용 가능한 방 찾기 — 차단되지 않고, 다른 수업이 점유 안 한 방
+  function findAvailableRoom(subjectId, day, slot) {
+    const eligible = subjectRooms[subjectId]
+    if (!eligible || eligible.length === 0) return undefined  // 일반 교실 — 방 필요 없음
+    for (const room of eligible) {
+      if (roomBlockedMap[room.id]?.has(`${day}-${slot}`)) continue
+      if (roomOccupied[room.id][day].has(slot)) continue
+      return room.id
     }
-    // 모든 가능 방이 차단된 슬롯만 과목 차단
-    const totalRooms = eligibleRooms.length
-    const blockedSet = new Set()
-    for (const [key, count] of Object.entries(blockedCount)) {
-      if (count === totalRooms) blockedSet.add(key)
-    }
-    if (blockedSet.size > 0) subjectBlockedMap[subj.id] = blockedSet
+    return null  // 사용 가능 방 없음 → 슬롯 불가
   }
 
   // 학년·반의 요일별 가용 슬롯
@@ -125,18 +127,24 @@ export function buildSchedule(gradeConfigs, subjects, teachers, lunchConfig, roo
     teacherOccupied[teacher.id] = Array.from({ length: 5 }, () => new Set())
   }
 
+  // 방별 점유 슬롯 (특별실 1방=동시간 1수업)
+  const roomOccupied = {}
+  for (const room of rooms) {
+    roomOccupied[room.id] = Array.from({ length: 5 }, () => new Set())
+  }
+
   // 교사+학년+요일별 배정 수 (같은 학년 클러스터링용)
   const teacherGradeDay = {}
   // 학급+요일별 전담 수업 수 (담임 시각 균형용)
   const classDayCount = {}
 
-  // 교사 점심 제약 + 특별실 사용 불가 시간 고려하여 슬롯 탐색
+  // 교사 점심 제약 + 특별실 사용 가능 여부 고려하여 슬롯 탐색
   function findSlot(teacherId, subjectId, day, classAvailable) {
-    const subjectBlocked = subjectBlockedMap[subjectId]
     for (let slot = 0; slot < totalSlots; slot++) {
       if (!classAvailable.has(slot)) continue
       if (teacherOccupied[teacherId][day].has(slot)) continue
-      if (subjectBlocked?.has(`${day}-${slot}`)) continue
+      // 특별실 필요 과목이면 사용 가능한 방이 있어야 함
+      if (subjectRooms[subjectId] && findAvailableRoom(subjectId, day, slot) === null) continue
       if (splitLunch && allLunchSlotIndexes.includes(slot)) {
         const occ = allLunchSlotIndexes.filter(ls => teacherOccupied[teacherId][day].has(ls))
         if (occ.length >= allLunchSlotIndexes.length - 1) continue
@@ -178,9 +186,12 @@ export function buildSchedule(gradeConfigs, subjects, teachers, lunchConfig, roo
     candidates.sort((a, b) => b.score - a.score || Math.random() - 0.5)
     const { day, slot } = candidates[0]
 
-    result[grade][classNum][day][slot] = { teacherId, subjectId }
+    // 특별실 결정 (필요한 경우)
+    const roomId = findAvailableRoom(subjectId, day, slot)
+    result[grade][classNum][day][slot] = { teacherId, subjectId, roomId: roomId || undefined }
     teacherOccupied[teacherId][day].add(slot)
     gradeClassSlots[grade][classNum][day].delete(slot)
+    if (roomId) roomOccupied[roomId][day].add(slot)
 
     if (!teacherGradeDay[teacherId]) teacherGradeDay[teacherId] = {}
     if (!teacherGradeDay[teacherId][grade]) teacherGradeDay[teacherId][grade] = [0, 0, 0, 0, 0]
@@ -232,6 +243,7 @@ export function flattenResult(result, gradeLunchSlot, totalSlots) {
             slot,
             teacher_id: cell.teacherId,
             subject_id: cell.subjectId,
+            room_id: cell.roomId || null,
             is_unassigned: false,
           })
         }

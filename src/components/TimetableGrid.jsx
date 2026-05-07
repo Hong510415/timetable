@@ -1,6 +1,6 @@
 const DAY_LABELS = ['월', '화', '수', '목', '금']
 
-export default function TimetableGrid({ slots, totalSlots, gradeLunchSlot, teachers, subjects, onCellClick, grade }) {
+export default function TimetableGrid({ slots, totalSlots, gradeLunchSlot, teachers, subjects, rooms, onCellClick, grade }) {
   // 해당 학년의 점심 슬롯 (없으면 -1)
   const lunchSlot = (gradeLunchSlot && grade) ? (gradeLunchSlot[grade] ?? -1) : -1
 
@@ -39,19 +39,21 @@ export default function TimetableGrid({ slots, totalSlots, gradeLunchSlot, teach
               const cell = slots?.[day]?.[slot]
               const teacher = cell?.teacher_id ? teachers?.find(t => t.id === cell.teacher_id) : null
               const subject = cell?.subject_id ? subjects?.find(s => s.id === cell.subject_id) : null
+              const room = cell?.room_id ? rooms?.find(r => r.id === cell.room_id) : null
               const unassigned = cell?.is_unassigned
 
               return (
                 <div
                   key={day}
                   onClick={() => onCellClick?.(day, slot, cell)}
-                  className={`flex-1 border-r border-gray-100 last:border-r-0 flex flex-col items-center justify-center gap-0.5 transition-colors
+                  className={`flex-1 border-r border-gray-100 last:border-r-0 flex flex-col items-center justify-center gap-0 transition-colors
                     ${unassigned ? 'bg-red-500 cursor-pointer' : onCellClick ? 'hover:bg-gray-50 cursor-pointer' : ''}`}
                 >
                   {teacher && subject ? (
                     <>
                       <span className={`text-[13px] font-semibold ${unassigned ? 'text-white' : 'text-gray-900'}`}>{subject.name}</span>
                       <span className={`text-[10px] ${unassigned ? 'text-red-200' : 'text-gray-400'}`}>{teacher.code}</span>
+                      {room && <span className="text-[10px] text-blue-500">{room.name}</span>}
                     </>
                   ) : unassigned ? (
                     <span className="text-[11px] font-semibold text-white">미배정</span>
