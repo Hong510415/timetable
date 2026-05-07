@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import { useApp } from '../context/AppContext'
 import { subjectsEqualByContent, getDedicatedHoursForGrade, getWeeklyTotalForGrade, getOverflowGrades } from '../lib/planHelpers'
+import SubjectPlanComparison from '../components/SubjectPlanComparison'
 
 const GRADES = [1, 2, 3, 4, 5, 6]
 
@@ -7,6 +9,7 @@ export default function SubjectSetup() {
   const { state, updatePlanSubjects, setActivePlanTab, applyPlan, setAssignmentSettings } = useApp()
   const { subjects, gradeConfigs, assignmentSettings, subjectPlans } = state
   const { plans, activeTabId, appliedPlanId, appliedAt } = subjectPlans
+  const [showComparison, setShowComparison] = useState(false)
 
   const activePlan = plans.find(p => p.id === activeTabId) || plans[0]
   const planSubjects = activePlan.subjects
@@ -79,6 +82,65 @@ export default function SubjectSetup() {
     applyPlan(activeTabId)
   }
 
+  function handleOpenCompare() {
+    const filledCount = plans.filter(p => p.subjects.length > 0).length
+    if (filledCount === 0) {
+      alert('A·B·C안 모두 비어 있습니다. 먼저 과목을 입력하세요.')
+      return
+    }
+    if (filledCount === 1) {
+      const onlyPlan = plans.find(p => p.subjects.length > 0)
+      const ok = confirm(`비교할 다른 안이 없습니다. ${onlyPlan.name}을 바로 적용할까요?`)
+      if (ok) {
+        setActivePlanTab(onlyPlan.id)
+        const overflows = getOverflowGrades(onlyPlan.subjects, gradeConfigs, gradesToShow)
+        if (overflows.length > 0) {
+          alert(`${onlyPlan.name}에 초과 학년이 있어 적용할 수 없습니다 (${overflows.map(o => `${o.grade}학년 초과 -${o.overBy}시간`).join(', ')}).`)
+          return
+        }
+        applyPlan(onlyPlan.id)
+      }
+      return
+    }
+    setShowComparison(true)
+  }
+
+  function handleApplyFromComparison(planId) {
+    const plan = plans.find(p => p.id === planId)
+    if (!plan) return
+    const overflows = getOverflowGrades(plan.subjects, gradeConfigs, gradesToShow)
+    if (overflows.length > 0) return
+    const isLive = appliedPlanId === planId && subjectsEqualByContent(plan.subjects, subjects)
+    if (isLive) {
+      setShowComparison(false)
+      return
+    }
+    if (subjectsEqualByContent(plan.subjects, subjects)) {
+      applyPlan(planId)
+      setShowComparison(false)
+      return
+    }
+    if (plan.subjects.length === 0) {
+      if (!confirm(
+        `이 안에는 등록된 과목이 없습니다.\n` +
+        `적용 시 전담 과목·배정·시간표가 모두 초기화됩니다.\n\n` +
+        `계속하시겠습니까?`
+      )) return
+    } else {
+      if (!confirm(
+        `${plan.name}을 적용합니다.\n` +
+        `이전 적용 안과 과목 구성이 달라 다음 데이터가 초기화됩니다:\n` +
+        `· 전담 교사 배정\n` +
+        `· 전담 시간표\n` +
+        `· 특별실 시간표\n` +
+        `· 전담 배정 결과\n\n` +
+        `계속하시겠습니까?`
+      )) return
+    }
+    applyPlan(planId)
+    setShowComparison(false)
+  }
+
   return (
     <div className="p-10 bg-gray-50 min-h-full">
       <div className="mb-6">
@@ -132,18 +194,26 @@ export default function SubjectSetup() {
                 </button>
               ))}
             </div>
-            <button
-              onClick={handleApply}
-              disabled={isApplyDisabled}
-              title={hasOverflow ? overflowMsg : ''}
-              className={`px-4 h-9 text-[13px] font-semibold rounded-sm border transition-colors ${
-                isApplyDisabled
-                  ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
-                  : 'bg-black text-white border-black hover:bg-gray-800'
-              }`}
-            >
-              ✓ 이 안 적용
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleOpenCompare}
+                className="px-4 h-9 text-[13px] rounded-sm border border-gray-300 hover:bg-gray-50"
+              >
+                📊 비교 보기
+              </button>
+              <button
+                onClick={handleApply}
+                disabled={isApplyDisabled}
+                title={hasOverflow ? overflowMsg : ''}
+                className={`px-4 h-9 text-[13px] font-semibold rounded-sm border transition-colors ${
+                  isApplyDisabled
+                    ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                    : 'bg-black text-white border-black hover:bg-gray-800'
+                }`}
+              >
+                ✓ 이 안 적용
+              </button>
+            </div>
           </div>
           <p className="text-[11px] text-gray-500 px-1">{statusLine}</p>
         </div>
@@ -221,6 +291,19 @@ export default function SubjectSetup() {
           </div>
         ))}
       </div>
+
+      {showComparison && (
+        <SubjectPlanComparison
+          plans={plans}
+          gradeConfigs={gradeConfigs}
+          gradesToShow={gradesToShow}
+          appliedPlanId={appliedPlanId}
+          liveSubjects={subjects}
+          schoolName={state.schoolName}
+          onClose={() => setShowComparison(false)}
+          onApply={handleApplyFromComparison}
+        />
+      )}
     </div>
   )
 }
