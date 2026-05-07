@@ -244,7 +244,7 @@ export default function SubjectSetup() {
                       담임시수: {homeroom} / {weeklyTotal}
                     </div>
                     <div className={`text-[11px] ${isOver ? 'text-red-500' : 'text-gray-400'}`}>
-                      {isOver ? `(초과 ${homeroom})` : `(전담 ${dedicated}시간)`}
+                      {isOver ? `(초과 ${homeroom}시간)` : `(전담 ${dedicated}시간)`}
                     </div>
                   </div>
                 )
