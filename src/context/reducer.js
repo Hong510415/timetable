@@ -71,17 +71,6 @@ export function reducer(state, action) {
 
     case 'ADD_PLAN_SLOT': {
       const plans = state.subjectPlans.plans
-      const visibleCount = plans.filter(p => p.visible).length
-      if (visibleCount === 0) {
-        return {
-          ...state,
-          subjectPlans: {
-            ...state.subjectPlans,
-            plans: plans.map((p, i) => i < 2 ? { ...p, visible: true } : p),
-            activeTabId: 'plan1',
-          },
-        }
-      }
       const firstInvisibleIdx = plans.findIndex(p => !p.visible)
       if (firstInvisibleIdx === -1) return state
       return {
@@ -89,6 +78,7 @@ export function reducer(state, action) {
         subjectPlans: {
           ...state.subjectPlans,
           plans: plans.map((p, i) => i === firstInvisibleIdx ? { ...p, visible: true } : p),
+          ...(firstInvisibleIdx === 0 ? { activeTabId: 'plan1' } : {}),
         },
       }
     }
