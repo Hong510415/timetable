@@ -87,7 +87,7 @@ const SCENARIO = {
       id: 'room-3small',
       name: '3층 소체육실',
       subjectNames: ['통합'],
-      teacherIds: ['영어전담', '과학전담', '체육전담'],
+      teacherIds: ['영어전담', '과학전담'],
     },
     {
       id: 'room-4gym',
