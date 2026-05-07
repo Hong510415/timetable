@@ -97,25 +97,32 @@ export default function SchoolSetup() {
               <div className="flex bg-gray-50 border-b border-gray-200">
                 <div className="w-[80px] flex-shrink-0 px-3 py-2 text-[11px] font-semibold text-gray-500 border-r border-gray-200">학년</div>
                 {DAYS.map(d => (
-                  <div key={d} className="flex-1 text-center py-2 text-[11px] font-semibold text-gray-500 border-r border-gray-200 last:border-r-0">{d}</div>
+                  <div key={d} className="flex-1 text-center py-2 text-[11px] font-semibold text-gray-500 border-r border-gray-200">{d}</div>
                 ))}
+                <div className="w-[80px] flex-shrink-0 text-center py-2 text-[11px] font-semibold text-gray-500 bg-gray-100">합계</div>
               </div>
-              {gradeConfigs.map(config => (
-                <div key={config.grade} className="flex border-b border-gray-100 last:border-b-0">
-                  <div className="w-[80px] flex-shrink-0 px-3 flex items-center text-[12px] text-gray-600 border-r border-gray-200">{config.grade}학년</div>
-                  {DAY_KEYS.map(key => (
-                    <div key={key} className="flex-1 border-r border-gray-100 last:border-r-0 flex items-center justify-center py-1.5">
-                      <input
-                        type="number" min={1} max={7} value={config[key]}
-                        onChange={e => updateGrade(config.grade, key, e.target.value)}
-                        onClick={e => e.target.select()}
-                        onFocus={e => e.target.select()}
-                        className="w-12 h-8 text-center text-[12px] border border-gray-200 rounded-sm outline-none focus:border-black"
-                      />
+              {gradeConfigs.map(config => {
+                const weekTotal = DAY_KEYS.reduce((sum, key) => sum + (Number(config[key]) || 0), 0)
+                return (
+                  <div key={config.grade} className="flex border-b border-gray-100 last:border-b-0">
+                    <div className="w-[80px] flex-shrink-0 px-3 flex items-center text-[12px] text-gray-600 border-r border-gray-200">{config.grade}학년</div>
+                    {DAY_KEYS.map(key => (
+                      <div key={key} className="flex-1 border-r border-gray-100 flex items-center justify-center py-1.5">
+                        <input
+                          type="number" min={1} max={7} value={config[key]}
+                          onChange={e => updateGrade(config.grade, key, e.target.value)}
+                          onClick={e => e.target.select()}
+                          onFocus={e => e.target.select()}
+                          className="w-12 h-8 text-center text-[12px] border border-gray-200 rounded-sm outline-none focus:border-black"
+                        />
+                      </div>
+                    ))}
+                    <div className="w-[80px] flex-shrink-0 flex items-center justify-center text-[13px] font-semibold text-gray-700 bg-gray-50">
+                      {weekTotal}
                     </div>
-                  ))}
-                </div>
-              ))}
+                  </div>
+                )
+              })}
             </div>
           </div>
         </div>
