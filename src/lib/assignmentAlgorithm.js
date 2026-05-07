@@ -373,6 +373,127 @@ export function runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assig
     if (!moved) break
   }
 
+  // ── Step G: 통합 같은 일반과목의 다학년 분산 해결 (2차 패스) ─────
+  // 1차 결과에서 한 교사가 같은 일반과목명으로 여러 학년을 담당하면,
+  // 해당 과목의 minor 배정을 모두 되돌리고 best-fit 빈 패킹으로 재배정.
+  // 재배정 결과가 더 나쁘면(분산 미감소 또는 시수 편차 악화) 1차 결과 유지.
+  function detectMultiGradeMinor() {
+    const issues = new Map() // subjectName -> count of teachers with multi-grade
+    for (const t of ts) {
+      const minorBySubject = new Map()
+      for (const a of t.assignments) {
+        if (a.is_major) continue
+        if (!minorBySubject.has(a.subjectName)) minorBySubject.set(a.subjectName, new Set())
+        minorBySubject.get(a.subjectName).add(a.grade)
+      }
+      for (const [subjectName, grades] of minorBySubject) {
+        if (grades.size > 1) issues.set(subjectName, (issues.get(subjectName) ?? 0) + 1)
+      }
+    }
+    return issues
+  }
+
+  function snapshotState() {
+    return ts.map(t => ({
+      hours: t.hours,
+      majorSubjectNames: new Set(t.majorSubjectNames),
+      assignments: t.assignments.map(a => ({ ...a, classNums: [...a.classNums] })),
+    }))
+  }
+
+  function restoreState(snap) {
+    for (let i = 0; i < ts.length; i++) {
+      ts[i].hours = snap[i].hours
+      ts[i].majorSubjectNames = snap[i].majorSubjectNames
+      ts[i].assignments = snap[i].assignments
+    }
+  }
+
+  function imbalance() {
+    const hs = ts.map(t => t.hours)
+    return Math.max(...hs) - Math.min(...hs)
+  }
+
+  function binPackMinorSubject(subjectName) {
+    const subjUnits = units.filter(u => !u.is_major && u.subjectName === subjectName)
+    if (subjUnits.length === 0) return
+
+    // 학년별 남은 시수
+    const gradeRemaining = new Map()
+    for (const u of subjUnits) gradeRemaining.set(u.grade, u.totalHours)
+
+    // 교사 → 약속된 학년
+    const teacherGrade = new Map()
+
+    // 시수 여유 큰 순 (best-fit decreasing)
+    const sorted = ts.slice()
+      .map(t => ({ t, capacity: targetHours - t.hours }))
+      .filter(x => x.capacity > 0)
+      .sort((a, b) => b.capacity - a.capacity)
+
+    for (const { t, capacity } of sorted) {
+      const candidates = [...gradeRemaining.entries()]
+        .filter(([_, r]) => r > 0)
+        .sort((a, b) => b[1] - a[1])
+      if (candidates.length === 0) break
+      const [grade, r] = candidates[0]
+      teacherGrade.set(t.id, grade)
+      gradeRemaining.set(grade, r - Math.min(capacity, r))
+    }
+
+    // 실제 반 배정
+    for (const u of subjUnits) {
+      let remaining = [...u.classNums]
+      while (remaining.length > 0) {
+        const eligible = ts.filter(t =>
+          teacherGrade.get(t.id) === u.grade &&
+          t.hours + u.hoursPerClass <= targetHours
+        )
+        let teacher
+        if (eligible.length > 0) {
+          teacher = eligible.slice().sort((a, b) => (targetHours - b.hours) - (targetHours - a.hours))[0]
+        } else {
+          const fallback = ts.filter(t => teacherGrade.get(t.id) === u.grade)
+          if (fallback.length > 0) {
+            teacher = fallback.slice().sort((a, b) => a.hours - b.hours)[0]
+          } else {
+            // 최종 폴백: 분산 발생 가능
+            teacher = pickMinorTeacher(ts.slice(), u)
+          }
+        }
+        addClasses(teacher, u, remaining.splice(0, 1))
+      }
+    }
+  }
+
+  const issues = detectMultiGradeMinor()
+  if (issues.size > 0) {
+    const snap = snapshotState()
+    const oldImbalance = imbalance()
+
+    // 문제 과목명만 minor 배정 되돌리고 빈 패킹으로 재배정
+    const problemSubjects = [...issues.keys()]
+    for (const subjectName of problemSubjects) {
+      for (const t of ts) {
+        const toRemove = t.assignments.filter(a => !a.is_major && a.subjectName === subjectName)
+        for (const a of toRemove) {
+          const unit = units.find(u => u.subjectId === a.subjectId && u.grade === a.grade)
+          if (unit) removeClasses(t, unit, [...a.classNums])
+        }
+      }
+      binPackMinorSubject(subjectName)
+    }
+
+    const newIssues = detectMultiGradeMinor()
+    const newImbalance = imbalance()
+    const oldIssueCount = [...issues.values()].reduce((s, n) => s + n, 0)
+    const newIssueCount = [...newIssues.values()].reduce((s, n) => s + n, 0)
+
+    // 채택 조건: 분산 감소 + 시수 편차 악화 없음
+    const accept = newIssueCount < oldIssueCount && newImbalance <= oldImbalance
+    if (!accept) restoreState(snap)
+  }
+
   // 결과 변환
   const assignments = []
   for (const t of ts) {
