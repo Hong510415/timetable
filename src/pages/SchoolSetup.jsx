@@ -6,8 +6,8 @@ const GRADES = [1, 2, 3, 4, 5, 6]
 const DAY_KEYS = ['periods_mon', 'periods_tue', 'periods_wed', 'periods_thu', 'periods_fri']
 
 export default function SchoolSetup() {
-  const { state, setSchoolName, setGradeConfigs, setLunchConfig } = useApp()
-  const { schoolName, gradeConfigs, lunchConfig } = state
+  const { state, setSchoolName, setGradeConfigs, setLunchConfig, setTeachers } = useApp()
+  const { schoolName, gradeConfigs, lunchConfig, teachers } = state
   const [tab, setTab] = useState('grade')
 
   function updateGrade(grade, field, value) {
@@ -32,9 +32,24 @@ export default function SchoolSetup() {
     return lunchConfig.lunch_groups.some(g => g.slot === slot && g.grades.includes(grade))
   }
 
+  function handleTeacherCountChange(count) {
+    const n = Math.max(0, Number(count))
+    if (n > teachers.length) {
+      const added = Array.from({ length: n - teachers.length }, (_, i) => ({
+        id: crypto.randomUUID(),
+        code: `교사${teachers.length + i + 1}`,
+        teacher_assignments: [],
+      }))
+      setTeachers([...teachers, ...added])
+    } else {
+      setTeachers(teachers.slice(0, n))
+    }
+  }
+
   const tabs = [
     { key: 'grade', label: '학급 정보' },
     { key: 'lunch', label: '점심시간 설정' },
+    { key: 'teachers', label: '전담 교사' },
   ]
 
   return (
@@ -185,6 +200,22 @@ export default function SchoolSetup() {
         </div>
       )}
 
+      {tab === 'teachers' && (
+        <div className="bg-white border border-gray-200 rounded-sm p-7">
+          <h2 className="text-[14px] font-semibold mb-1">전담 교사 인원</h2>
+          <p className="text-[12px] text-gray-400 mb-5">전담 교사 총 인원을 입력하세요. 명칭은 전담 배정 후 지정할 수 있습니다.</p>
+          <div className="flex items-center gap-3">
+            <input
+              type="number" min={0} max={50}
+              value={teachers.length}
+              onChange={e => handleTeacherCountChange(e.target.value)}
+              onClick={e => e.target.select()}
+              className="w-24 h-10 text-center border border-gray-300 rounded-sm text-[18px] font-bold outline-none focus:border-black"
+            />
+            <span className="text-[14px] text-gray-500">명</span>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
