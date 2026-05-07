@@ -1,24 +1,69 @@
 import { useApp } from '../context/AppContext'
+import { subjectsEqualByContent } from '../lib/planHelpers'
 
 const GRADES = [1, 2, 3, 4, 5, 6]
 
 export default function SubjectSetup() {
-  const { state, setSubjects, setAssignmentSettings } = useApp()
-  const { subjects, gradeConfigs, assignmentSettings } = state
+  const { state, updatePlanSubjects, setActivePlanTab, applyPlan, setAssignmentSettings } = useApp()
+  const { subjects, gradeConfigs, assignmentSettings, subjectPlans } = state
+  const { plans, activeTabId, appliedPlanId, appliedAt } = subjectPlans
+
+  const activePlan = plans.find(p => p.id === activeTabId) || plans[0]
+  const planSubjects = activePlan.subjects
 
   const activeGrades = gradeConfigs.filter(g => g.num_classes > 0).map(g => g.grade)
   const gradesToShow = activeGrades.length > 0 ? activeGrades : GRADES
 
+  const isPlanLive = appliedPlanId === activeTabId && subjectsEqualByContent(planSubjects, subjects)
+  const appliedPlan = plans.find(p => p.id === appliedPlanId)
+
+  let statusLine
+  if (!appliedPlanId) {
+    statusLine = `현재 편집: ${activePlan.name} · 적용 전`
+  } else if (isPlanLive) {
+    const time = appliedAt ? ` (${new Date(appliedAt).toLocaleString('ko-KR')})` : ''
+    statusLine = `현재 편집: ${activePlan.name} · 적용됨${time}`
+  } else {
+    statusLine = `현재 편집: ${activePlan.name} · 미적용 (적용된 안: ${appliedPlan?.name || '없음'})`
+  }
+
   function addSubject(grade) {
-    setSubjects([...subjects, { id: crypto.randomUUID(), grade, name: '', weekly_hours: 2, is_major: false }])
+    updatePlanSubjects(activeTabId, [
+      ...planSubjects,
+      { id: crypto.randomUUID(), grade, name: '', weekly_hours: 2, is_major: false },
+    ])
   }
 
   function updateSubject(id, field, value) {
-    setSubjects(subjects.map(s => s.id === id ? { ...s, [field]: value } : s))
+    updatePlanSubjects(activeTabId, planSubjects.map(s => s.id === id ? { ...s, [field]: value } : s))
   }
 
   function removeSubject(id) {
-    setSubjects(subjects.filter(s => s.id !== id))
+    updatePlanSubjects(activeTabId, planSubjects.filter(s => s.id !== id))
+  }
+
+  function handleApply() {
+    if (isPlanLive) return
+    if (planSubjects.length === 0) {
+      const ok = confirm(
+        `이 안에는 등록된 과목이 없습니다.\n` +
+        `적용 시 전담 과목·배정·시간표가 모두 초기화됩니다.\n\n` +
+        `계속하시겠습니까?`
+      )
+      if (!ok) return
+    } else {
+      const ok = confirm(
+        `${activePlan.name}을 적용합니다.\n` +
+        `이전 적용 안과 과목 구성이 달라 다음 데이터가 초기화됩니다:\n` +
+        `· 전담 교사 배정\n` +
+        `· 전담 시간표\n` +
+        `· 특별실 시간표\n` +
+        `· 전담 배정 결과\n\n` +
+        `계속하시겠습니까?`
+      )
+      if (!ok) return
+    }
+    applyPlan(activeTabId)
   }
 
   return (
@@ -59,6 +104,36 @@ export default function SubjectSetup() {
           </div>
         </div>
 
+        <div className="bg-white border border-gray-200 rounded-sm p-3 flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <div className="flex border border-gray-200 bg-white rounded-sm w-fit">
+              {plans.map(p => (
+                <button
+                  key={p.id}
+                  onClick={() => setActivePlanTab(p.id)}
+                  className={`px-5 h-9 text-[13px] transition-colors ${
+                    activeTabId === p.id ? 'bg-black text-white font-semibold' : 'text-gray-400 hover:bg-gray-50'
+                  }`}
+                >
+                  {p.name}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={handleApply}
+              disabled={isPlanLive}
+              className={`px-4 h-9 text-[13px] font-semibold rounded-sm border transition-colors ${
+                isPlanLive
+                  ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                  : 'bg-black text-white border-black hover:bg-gray-800'
+              }`}
+            >
+              ✓ 이 안 적용
+            </button>
+          </div>
+          <p className="text-[11px] text-gray-500 px-1">{statusLine}</p>
+        </div>
+
         {gradesToShow.map(grade => (
           <div key={grade} className="bg-white border border-gray-200 rounded-sm p-5">
             <div className="flex items-center justify-between mb-3">
@@ -70,11 +145,11 @@ export default function SubjectSetup() {
                 + 과목 추가
               </button>
             </div>
-            {subjects.filter(s => s.grade === grade).length === 0 ? (
+            {planSubjects.filter(s => s.grade === grade).length === 0 ? (
               <p className="text-[12px] text-gray-300">과목을 추가하세요</p>
             ) : (
               <div className="flex flex-col gap-2">
-                {subjects.filter(s => s.grade === grade).map(s => (
+                {planSubjects.filter(s => s.grade === grade).map(s => (
                   <div key={s.id} className="flex items-center gap-2">
                     <input
                       placeholder="과목명 (예: 영어)"
