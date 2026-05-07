@@ -15,6 +15,7 @@ export default function SubjectPlanComparison({
   onClose,
   onApply,
   schoolName,
+  teacherCount = 0,
 }) {
   const printDate = new Date().toLocaleDateString('ko-KR')
 
@@ -23,6 +24,7 @@ export default function SubjectPlanComparison({
   }
 
   function isApplyDisabledForPlan(plan) {
+    if (plan.subjects.length === 0) return { disabled: true, reason: 'empty' }
     const overflows = getOverflowGrades(plan.subjects, gradeConfigs, gradesToShow)
     if (overflows.length > 0) return { disabled: true, reason: 'overflow', overflows }
     const isLive = appliedPlanId === plan.id && subjectsEqualByContent(plan.subjects, liveSubjects)
@@ -84,14 +86,19 @@ export default function SubjectPlanComparison({
                   </div>
                 )
               })}
-              <div className="grid grid-cols-[80px_100px_repeat(3,1fr)] bg-gray-50 text-[12px] font-semibold">
-                <div className="px-3 py-2 border-r border-gray-200">전담 합계</div>
-                <div className="px-3 py-2 border-r border-gray-200" />
-                {plans.map(p => (
-                  <div key={p.id} className="px-3 py-2 text-center border-r border-gray-200 last:border-r-0">
-                    {p.subjects.length === 0 ? '—' : `${totalDedicated(p.subjects)}시간`}
-                  </div>
-                ))}
+              <div className="grid grid-cols-[80px_100px_repeat(3,1fr)] bg-gray-50 text-[12px] font-semibold border-t border-gray-200">
+                <div className="px-3 py-2 border-r border-gray-200 col-span-2 text-gray-600">1인당 평균 주당시수</div>
+                {plans.map(p => {
+                  const total = totalDedicated(p.subjects)
+                  const avg = p.subjects.length > 0 && teacherCount > 0
+                    ? (total / teacherCount).toFixed(1)
+                    : null
+                  return (
+                    <div key={p.id} className="px-3 py-2 text-center border-r border-gray-100 last:border-r-0">
+                      {avg !== null ? `${avg}시간` : '—'}
+                    </div>
+                  )
+                })}
               </div>
             </div>
           </section>
@@ -134,13 +141,15 @@ export default function SubjectPlanComparison({
 
         <div className="border-t border-gray-200 px-6 py-4 flex items-center justify-between print:hidden">
           <div className="text-[12px] text-gray-500">
-            현재 적용: {plans.find(p => p.id === appliedPlanId)?.name || '없음'}
+            현재 확정: {plans.find(p => p.id === appliedPlanId)?.name || '없음'}
           </div>
           <div className="flex items-center gap-2">
             {plans.map(p => {
               const { disabled, reason, overflows } = isApplyDisabledForPlan(p)
               const title = reason === 'overflow'
-                ? `초과 학년이 있어 적용할 수 없습니다 (${overflows.map(o => `${o.grade}학년 초과 -${o.overBy}시간`).join(', ')})`
+                ? `초과 학년이 있어 확정할 수 없습니다 (${overflows.map(o => `${o.grade}학년 초과 -${o.overBy}시간`).join(', ')})`
+                : reason === 'empty'
+                ? '과목을 먼저 입력해 주세요.'
                 : ''
               return (
                 <button
@@ -154,7 +163,7 @@ export default function SubjectPlanComparison({
                       : 'bg-black text-white border-black hover:bg-gray-800'
                   }`}
                 >
-                  {p.name} 적용
+                  {p.name} 확정
                 </button>
               )
             })}

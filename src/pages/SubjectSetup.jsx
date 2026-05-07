@@ -7,7 +7,7 @@ const GRADES = [1, 2, 3, 4, 5, 6]
 
 export default function SubjectSetup() {
   const { state, updatePlanSubjects, setActivePlanTab, applyPlan, setAssignmentSettings } = useApp()
-  const { subjects, gradeConfigs, assignmentSettings, subjectPlans } = state
+  const { subjects, gradeConfigs, assignmentSettings, subjectPlans, teachers } = state
   const { plans, activeTabId, appliedPlanId, appliedAt } = subjectPlans
   const [showComparison, setShowComparison] = useState(false)
 
@@ -22,20 +22,26 @@ export default function SubjectSetup() {
 
   const overflowGrades = getOverflowGrades(planSubjects, gradeConfigs, gradesToShow)
   const hasOverflow = overflowGrades.length > 0
-  const overflowMsg = hasOverflow
-    ? `초과 학년이 있어 적용할 수 없습니다 (${overflowGrades.map(o => `${o.grade}학년 초과 -${o.overBy}시간`).join(', ')})`
+  const isEmpty = planSubjects.length === 0
+
+  const isApplyDisabled = isPlanLive || hasOverflow || isEmpty
+
+  const disabledTitle = hasOverflow
+    ? `초과 학년이 있어 확정할 수 없습니다 (${overflowGrades.map(o => `${o.grade}학년 초과 -${o.overBy}시간`).join(', ')})`
+    : isEmpty
+    ? '과목을 먼저 입력해 주세요.'
     : ''
 
-  const isApplyDisabled = isPlanLive || hasOverflow
+  const totalDedicated = planSubjects.reduce((sum, s) => sum + (Number(s.weekly_hours) || 0), 0)
 
   let statusLine
   if (!appliedPlanId) {
     statusLine = `현재 편집: ${activePlan.name} · 적용 전`
   } else if (isPlanLive) {
     const time = appliedAt ? ` (${new Date(appliedAt).toLocaleString('ko-KR')})` : ''
-    statusLine = `현재 편집: ${activePlan.name} · 적용됨${time}`
+    statusLine = `현재 편집: ${activePlan.name} · 확정됨${time}`
   } else {
-    statusLine = `현재 편집: ${activePlan.name} · 미적용 (적용된 안: ${appliedPlan?.name || '없음'})`
+    statusLine = `현재 편집: ${activePlan.name} · 미확정 (확정된 안: ${appliedPlan?.name || '없음'})`
   }
 
   function addSubject(grade) {
@@ -55,30 +61,20 @@ export default function SubjectSetup() {
 
   function handleApply() {
     if (isApplyDisabled) return
-    // Spec §6.1 step 2: when content is equal regardless of appliedPlanId, no confirm, no clearing
     if (subjectsEqualByContent(planSubjects, subjects)) {
       applyPlan(activeTabId)
       return
     }
-    if (planSubjects.length === 0) {
-      const ok = confirm(
-        `이 안에는 등록된 과목이 없습니다.\n` +
-        `적용 시 전담 과목·배정·시간표가 모두 초기화됩니다.\n\n` +
-        `계속하시겠습니까?`
-      )
-      if (!ok) return
-    } else {
-      const ok = confirm(
-        `${activePlan.name}을 적용합니다.\n` +
-        `이전 적용 안과 과목 구성이 달라 다음 데이터가 초기화됩니다:\n` +
-        `· 전담 교사 배정\n` +
-        `· 전담 시간표\n` +
-        `· 특별실 시간표\n` +
-        `· 전담 배정 결과\n\n` +
-        `계속하시겠습니까?`
-      )
-      if (!ok) return
-    }
+    const ok = confirm(
+      `${activePlan.name}을 확정합니다.\n` +
+      `이전 확정 안과 과목 구성이 달라 다음 데이터가 초기화됩니다:\n` +
+      `· 전담 교사 배정\n` +
+      `· 전담 시간표\n` +
+      `· 특별실 시간표\n` +
+      `· 전담 배정 결과\n\n` +
+      `계속하시겠습니까?`
+    )
+    if (!ok) return
     applyPlan(activeTabId)
   }
 
@@ -90,12 +86,12 @@ export default function SubjectSetup() {
     }
     if (filledCount === 1) {
       const onlyPlan = plans.find(p => p.subjects.length > 0)
-      const ok = confirm(`비교할 다른 안이 없습니다. ${onlyPlan.name}을 바로 적용할까요?`)
+      const ok = confirm(`비교할 다른 안이 없습니다. ${onlyPlan.name}을 바로 확정할까요?`)
       if (ok) {
         setActivePlanTab(onlyPlan.id)
         const overflows = getOverflowGrades(onlyPlan.subjects, gradeConfigs, gradesToShow)
         if (overflows.length > 0) {
-          alert(`${onlyPlan.name}에 초과 학년이 있어 적용할 수 없습니다 (${overflows.map(o => `${o.grade}학년 초과 -${o.overBy}시간`).join(', ')}).`)
+          alert(`${onlyPlan.name}에 초과 학년이 있어 확정할 수 없습니다 (${overflows.map(o => `${o.grade}학년 초과 -${o.overBy}시간`).join(', ')}).`)
           return
         }
         applyPlan(onlyPlan.id)
@@ -108,6 +104,7 @@ export default function SubjectSetup() {
   function handleApplyFromComparison(planId) {
     const plan = plans.find(p => p.id === planId)
     if (!plan) return
+    if (plan.subjects.length === 0) return
     const overflows = getOverflowGrades(plan.subjects, gradeConfigs, gradesToShow)
     if (overflows.length > 0) return
     const isLive = appliedPlanId === planId && subjectsEqualByContent(plan.subjects, subjects)
@@ -120,23 +117,15 @@ export default function SubjectSetup() {
       setShowComparison(false)
       return
     }
-    if (plan.subjects.length === 0) {
-      if (!confirm(
-        `이 안에는 등록된 과목이 없습니다.\n` +
-        `적용 시 전담 과목·배정·시간표가 모두 초기화됩니다.\n\n` +
-        `계속하시겠습니까?`
-      )) return
-    } else {
-      if (!confirm(
-        `${plan.name}을 적용합니다.\n` +
-        `이전 적용 안과 과목 구성이 달라 다음 데이터가 초기화됩니다:\n` +
-        `· 전담 교사 배정\n` +
-        `· 전담 시간표\n` +
-        `· 특별실 시간표\n` +
-        `· 전담 배정 결과\n\n` +
-        `계속하시겠습니까?`
-      )) return
-    }
+    if (!confirm(
+      `${plan.name}을 확정합니다.\n` +
+      `이전 확정 안과 과목 구성이 달라 다음 데이터가 초기화됩니다:\n` +
+      `· 전담 교사 배정\n` +
+      `· 전담 시간표\n` +
+      `· 특별실 시간표\n` +
+      `· 전담 배정 결과\n\n` +
+      `계속하시겠습니까?`
+    )) return
     applyPlan(planId)
     setShowComparison(false)
   }
@@ -204,14 +193,14 @@ export default function SubjectSetup() {
               <button
                 onClick={handleApply}
                 disabled={isApplyDisabled}
-                title={hasOverflow ? overflowMsg : ''}
+                title={disabledTitle}
                 className={`px-4 h-9 text-[13px] font-semibold rounded-sm border transition-colors ${
                   isApplyDisabled
                     ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
                     : 'bg-black text-white border-black hover:bg-gray-800'
                 }`}
               >
-                ✓ 이 안 적용
+                ✓ 이 안 확정
               </button>
             </div>
           </div>
@@ -290,6 +279,39 @@ export default function SubjectSetup() {
             )}
           </div>
         ))}
+
+        {totalDedicated > 0 && (
+          <div className="max-w-[720px] bg-white border border-gray-200 rounded-sm p-5">
+            <p className="text-[12px] font-semibold text-gray-600 mb-3">전담 시수 요약</p>
+            <div className="flex items-center gap-5">
+              <div className="text-center">
+                <div className="text-[11px] text-gray-500 mb-0.5">총 전담시수</div>
+                <div className="text-[22px] font-bold text-gray-900">
+                  {totalDedicated}<span className="text-[13px] font-normal text-gray-500 ml-1">시간</span>
+                </div>
+              </div>
+              <div className="text-gray-300 text-[20px] font-light">÷</div>
+              <div className="text-center">
+                <div className="text-[11px] text-gray-500 mb-0.5">전담교사 인원</div>
+                <div className="text-[22px] font-bold text-gray-900">
+                  {teachers.length}<span className="text-[13px] font-normal text-gray-500 ml-1">명</span>
+                </div>
+              </div>
+              <div className="text-gray-300 text-[20px] font-light">=</div>
+              <div className="text-center">
+                <div className="text-[11px] text-gray-500 mb-0.5">1인당 평균 주당시수</div>
+                <div className={`text-[22px] font-bold ${teachers.length > 0 ? 'text-blue-600' : 'text-gray-300'}`}>
+                  {teachers.length > 0
+                    ? <>{(totalDedicated / teachers.length).toFixed(1)}<span className="text-[13px] font-normal text-gray-500 ml-1">시간</span></>
+                    : '—'}
+                </div>
+              </div>
+              {teachers.length === 0 && (
+                <span className="text-[11px] text-gray-400 self-end pb-1">← 학교 설정 &gt; 전담 교사에서 인원 입력</span>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {showComparison && (
@@ -300,6 +322,7 @@ export default function SubjectSetup() {
           appliedPlanId={appliedPlanId}
           liveSubjects={subjects}
           schoolName={state.schoolName}
+          teacherCount={teachers.length}
           onClose={() => setShowComparison(false)}
           onApply={handleApplyFromComparison}
         />

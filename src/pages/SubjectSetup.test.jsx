@@ -37,12 +37,17 @@ describe('SubjectSetup', () => {
     const user = userEvent.setup()
     renderPage()
     await user.click(screen.getByRole('button', { name: 'B안' }))
-    // Status line should now mention B안
     expect(screen.getByText(/현재 편집: B안/)).toBeInTheDocument()
   })
 
-  it('disables 적용 button when plan is already applied and unchanged', async () => {
-    // Seed: plan1 contains a subject, state.subjects matches, appliedPlanId=plan1
+  it('disables 확정 button when plan is empty', () => {
+    renderPage()
+    const applyBtn = screen.getByRole('button', { name: /이 안 확정/ })
+    expect(applyBtn).toBeDisabled()
+    expect(applyBtn).toHaveAttribute('title', '과목을 먼저 입력해 주세요.')
+  })
+
+  it('disables 확정 button when plan is already applied and unchanged', async () => {
     const seedSubject = { id: 'sx', grade: 1, name: '영어', weekly_hours: 3, is_major: true }
     const stored = {
       gradeConfigs: [
@@ -71,13 +76,12 @@ describe('SubjectSetup', () => {
     }
     localStorage.setItem('timetable_app_data', JSON.stringify(stored))
     renderPage()
-    const applyBtn = screen.getByRole('button', { name: /이 안 적용/ })
+    const applyBtn = screen.getByRole('button', { name: /이 안 확정/ })
     expect(applyBtn).toBeDisabled()
   })
 
   it('does not touch state.subjects when editing a plan input', async () => {
     const user = userEvent.setup()
-    // Seed: plan1 already has a subject; state.subjects has different content
     const stored = {
       gradeConfigs: [
         { grade: 1, num_classes: 4, periods_mon: 5, periods_tue: 5, periods_wed: 5, periods_thu: 5, periods_fri: 5 },
@@ -102,11 +106,9 @@ describe('SubjectSetup', () => {
     }
     localStorage.setItem('timetable_app_data', JSON.stringify(stored))
     renderPage()
-    // Edit the subject name in plan1
     const subjectInput = screen.getByDisplayValue('영어')
     await user.clear(subjectInput)
     await user.type(subjectInput, '미술')
-    // The localStorage state.subjects should be unchanged (still 음악) — the edit went to plan1 only
     const persisted = JSON.parse(localStorage.getItem('timetable_app_data'))
     expect(persisted.subjects).toEqual(stored.subjects)
     expect(persisted.subjectPlans.plans[0].subjects[0].name).toBe('미술')
@@ -114,7 +116,6 @@ describe('SubjectSetup', () => {
 
   it('applies plan and clears downstream when subjects differ from live', async () => {
     const user = userEvent.setup()
-    // Seed: state.subjects=[live-X], plan1.subjects=[plan-Y], teachers has assignments, timetable has slots
     const stored = {
       gradeConfigs: [
         { grade: 1, num_classes: 4, periods_mon: 5, periods_tue: 5, periods_wed: 5, periods_thu: 5, periods_fri: 5 },
@@ -140,18 +141,14 @@ describe('SubjectSetup', () => {
       },
     }
     localStorage.setItem('timetable_app_data', JSON.stringify(stored))
-    // jsdom's default window.confirm throws "Not implemented" — stub it to return true
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
     renderPage()
-    await user.click(screen.getByRole('button', { name: /이 안 적용/ }))
+    await user.click(screen.getByRole('button', { name: /이 안 확정/ }))
     confirmSpy.mockRestore()
     const persisted = JSON.parse(localStorage.getItem('timetable_app_data'))
-    // state.subjects copied from plan1
     expect(persisted.subjects[0].name).toBe('영어')
-    // Downstream cleared
     expect(persisted.teachers[0].teacher_assignments).toEqual([])
     expect(persisted.timetableSlots).toEqual([])
-    // Metadata updated
     expect(persisted.subjectPlans.appliedPlanId).toBe('plan1')
     expect(persisted.subjectPlans.appliedAt).not.toBeNull()
   })
@@ -186,7 +183,6 @@ describe('담임시수 widget', () => {
     }
     localStorage.setItem('timetable_app_data', JSON.stringify(stored))
     renderPage()
-    // weeklyTotal=25, dedicated=5 → homeroom=20
     expect(screen.getByText(/담임시수: 20 \/ 25/)).toBeInTheDocument()
     expect(screen.getByText(/전담 5시간/)).toBeInTheDocument()
   })
@@ -220,8 +216,8 @@ describe('overflow handling', () => {
     }
     localStorage.setItem('timetable_app_data', JSON.stringify(stored))
     renderPage()
-    const applyBtn = screen.getByRole('button', { name: /이 안 적용/ })
+    const applyBtn = screen.getByRole('button', { name: /이 안 확정/ })
     expect(applyBtn).toBeDisabled()
-    expect(applyBtn).toHaveAttribute('title', expect.stringMatching(/초과 학년이 있어 적용할 수 없습니다/))
+    expect(applyBtn).toHaveAttribute('title', expect.stringMatching(/초과 학년이 있어 확정할 수 없습니다/))
   })
 })
