@@ -237,7 +237,6 @@ export default function RoomManagement() {
                         </button>
                       )
                     })}
-                    <span className="text-[11px] text-gray-400">선택한 과목의 수업이 사용 불가 시간에 배정되지 않습니다</span>
                   </div>
                 )
               })()}
