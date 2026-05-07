@@ -1,25 +1,8 @@
 import { createContext, useContext, useEffect, useReducer } from 'react'
-import { initialState, loadFromStorage, saveToStorage } from '../lib/storage'
+import { loadFromStorage, saveToStorage } from '../lib/storage'
+import { reducer } from './reducer'
 
 const AppContext = createContext(null)
-
-function reducer(state, action) {
-  switch (action.type) {
-    case 'SET_SCHOOL_NAME': return { ...state, schoolName: action.payload }
-    case 'SET_GRADE_CONFIGS': return { ...state, gradeConfigs: action.payload }
-    case 'SET_LUNCH_CONFIG': return { ...state, lunchConfig: action.payload }
-    case 'SET_SUBJECTS': return { ...state, subjects: action.payload }
-    case 'SET_TEACHERS': return { ...state, teachers: action.payload }
-    case 'SET_ROOMS': return { ...state, rooms: action.payload }
-    case 'SET_ROOM_BLOCKED_SLOTS': return { ...state, roomBlockedSlots: action.payload }
-    case 'SET_TIMETABLE_SLOTS': return { ...state, timetableSlots: action.payload }
-    case 'SET_ROOM_TIMETABLE_SLOTS': return { ...state, roomTimetableSlots: action.payload }
-    case 'SET_ASSIGNMENT_SETTINGS': return { ...state, assignmentSettings: action.payload }
-    case 'SET_ASSIGNMENT_RESULT': return { ...state, assignmentResult: action.payload }
-    case 'IMPORT': return { ...initialState, ...action.payload }
-    default: return state
-  }
-}
 
 export function AppProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, null, loadFromStorage)
@@ -42,6 +25,9 @@ export function AppProvider({ children }) {
     setAssignmentSettings: (v) => dispatch({ type: 'SET_ASSIGNMENT_SETTINGS', payload: v }),
     setAssignmentResult: (v) => dispatch({ type: 'SET_ASSIGNMENT_RESULT', payload: v }),
     importData: (data) => dispatch({ type: 'IMPORT', payload: data }),
+    setActivePlanTab: (tabId) => dispatch({ type: 'SET_ACTIVE_PLAN_TAB', payload: tabId }),
+    updatePlanSubjects: (planId, subjects) => dispatch({ type: 'UPDATE_PLAN_SUBJECTS', payload: { planId, subjects } }),
+    applyPlan: (planId) => dispatch({ type: 'APPLY_PLAN', payload: { planId } }),
   }
 
   return <AppContext.Provider value={ctx}>{children}</AppContext.Provider>
