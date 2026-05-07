@@ -15,6 +15,8 @@ export default function TimetableGrid({ slots, totalSlots, gradeLunchSlot, teach
   function getConflicts(cell, day, slot) {
     if (!cell || !timetableRows || !cell.teacher_id) return []
     return timetableRows.filter(r =>
+      r.teacher_id &&
+      !r.is_unassigned &&
       r.teacher_id === cell.teacher_id &&
       r.day_of_week === day &&
       r.slot === slot &&
