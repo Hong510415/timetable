@@ -169,15 +169,7 @@ export default function SubjectSetup() {
           </div>
         </div>
 
-        {visiblePlans.length === 0 ? (
-          <button
-            onClick={addPlanSlot}
-            className="max-w-[720px] h-11 px-5 border border-dashed border-gray-300 rounded-sm text-[13px] text-gray-400 hover:bg-gray-50 hover:border-gray-400 hover:text-gray-600 transition-colors text-left"
-          >
-            + 과목 설정 추가
-          </button>
-        ) : (
-          <div className="max-w-[720px] bg-white border border-gray-200 rounded-sm p-3 flex flex-col gap-2">
+        <div className="max-w-[720px] bg-white border border-gray-200 rounded-sm p-3 flex flex-col gap-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 {visiblePlans.length > 1 && (
@@ -240,9 +232,8 @@ export default function SubjectSetup() {
             </div>
             {visiblePlans.length > 1 && <p className="text-[11px] text-gray-500 px-1">{statusLine}</p>}
           </div>
-        )}
 
-        {visiblePlans.length > 0 && gradesToShow.map(grade => (
+        {gradesToShow.map(grade => (
           <div key={grade} className="bg-white border border-gray-200 rounded-sm p-5 max-w-[720px]">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-3">
@@ -318,7 +309,7 @@ export default function SubjectSetup() {
           </div>
         ))}
 
-        {visiblePlans.length > 0 && totalDedicated > 0 && (
+        {totalDedicated > 0 && (
           <div className="max-w-[720px] bg-white border border-gray-200 rounded-sm p-5">
             <p className="text-[12px] font-semibold text-gray-600 mb-3">전담 시수 요약</p>
             <div className="flex items-center gap-5">

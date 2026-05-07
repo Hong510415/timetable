@@ -21,7 +21,7 @@ describe('SubjectSetup', () => {
     expect(screen.getByText('전담 과목 설정')).toBeInTheDocument()
   })
 
-  it('shows "과목 설정 추가" button on first launch (visiblePlanCount=0)', () => {
+  it('shows "과목 설정 추가" button on first launch with no tabs', () => {
     renderPage()
     expect(screen.getByRole('button', { name: /과목 설정 추가/ })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'A안' })).not.toBeInTheDocument()

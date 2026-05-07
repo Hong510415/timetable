@@ -7,7 +7,7 @@ describe('initialState.subjectPlans', () => {
   it('contains 3 plans named A안, B안, C안 with empty subjects', () => {
     expect(initialState.subjectPlans).toBeDefined()
     expect(initialState.subjectPlans.plans).toHaveLength(3)
-    expect(initialState.subjectPlans.plans[0]).toEqual({ id: 'plan1', name: 'A안', subjects: [], visible: false })
+    expect(initialState.subjectPlans.plans[0]).toEqual({ id: 'plan1', name: 'A안', subjects: [], visible: true })
     expect(initialState.subjectPlans.plans[1]).toEqual({ id: 'plan2', name: 'B안', subjects: [], visible: false })
     expect(initialState.subjectPlans.plans[2]).toEqual({ id: 'plan3', name: 'C안', subjects: [], visible: false })
   })

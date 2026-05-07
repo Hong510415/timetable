@@ -26,7 +26,7 @@ export const initialState = {
   assignmentResult: null,
   subjectPlans: {
     plans: [
-      { id: 'plan1', name: 'A안', subjects: [], visible: false },
+      { id: 'plan1', name: 'A안', subjects: [], visible: true },
       { id: 'plan2', name: 'B안', subjects: [], visible: false },
       { id: 'plan3', name: 'C안', subjects: [], visible: false },
     ],
@@ -58,7 +58,7 @@ export function loadFromStorage() {
       const sp = merged.subjectPlans
       const hasVisibleFlags = Array.isArray(sp.plans) && sp.plans.length > 0 && Object.prototype.hasOwnProperty.call(sp.plans[0], 'visible')
       if (!hasVisibleFlags) {
-        const count = sp.visiblePlanCount !== undefined ? sp.visiblePlanCount : 3
+        const count = sp.visiblePlanCount !== undefined ? Math.max(sp.visiblePlanCount, 1) : 3
         const newPlans = sp.plans.map((p, i) => ({ ...p, visible: i < count }))
         const { visiblePlanCount: _removed, ...rest } = sp
         merged.subjectPlans = { ...rest, plans: newPlans }
