@@ -402,10 +402,11 @@ export function runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assig
   }
 
   function restoreState(snap) {
+    // 깊은 복사로 복원 — 이후 mutation이 snap에 역으로 영향 주지 않게
     for (let i = 0; i < ts.length; i++) {
       ts[i].hours = snap[i].hours
-      ts[i].majorSubjectNames = snap[i].majorSubjectNames
-      ts[i].assignments = snap[i].assignments
+      ts[i].majorSubjectNames = new Set(snap[i].majorSubjectNames)
+      ts[i].assignments = snap[i].assignments.map(a => ({ ...a, classNums: [...a.classNums] }))
     }
   }
 
@@ -414,7 +415,7 @@ export function runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assig
     return Math.max(...hs) - Math.min(...hs)
   }
 
-  function binPackMinorSubject(subjectName) {
+  function binPackMinorSubject(subjectName, heuristic = 'max') {
     const subjUnits = units.filter(u => !u.is_major && u.subjectName === subjectName)
     if (subjUnits.length === 0) return
 
@@ -432,13 +433,28 @@ export function runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assig
       .sort((a, b) => b.capacity - a.capacity)
 
     for (const { t, capacity } of sorted) {
-      const candidates = [...gradeRemaining.entries()]
-        .filter(([_, r]) => r > 0)
-        .sort((a, b) => b[1] - a[1])
-      if (candidates.length === 0) break
-      const [grade, r] = candidates[0]
-      teacherGrade.set(t.id, grade)
-      gradeRemaining.set(grade, r - Math.min(capacity, r))
+      const remaining = [...gradeRemaining.entries()].filter(([_, r]) => r > 0)
+      if (remaining.length === 0) break
+
+      let chosenGrade
+      if (heuristic === 'fit') {
+        // 캐파에 완전히 들어가는 학년 중 가장 큰 것 (작은 학년을 한 교사에 몰아주기)
+        const fits = remaining.filter(([_, r]) => r <= capacity)
+        if (fits.length > 0) {
+          fits.sort((a, b) => b[1] - a[1])
+          chosenGrade = fits[0][0]
+        } else {
+          remaining.sort((a, b) => b[1] - a[1])
+          chosenGrade = remaining[0][0]
+        }
+      } else {
+        // 'max': 가장 많이 남은 학년부터
+        remaining.sort((a, b) => b[1] - a[1])
+        chosenGrade = remaining[0][0]
+      }
+      teacherGrade.set(t.id, chosenGrade)
+      const r = gradeRemaining.get(chosenGrade)
+      gradeRemaining.set(chosenGrade, r - Math.min(capacity, r))
     }
 
     // 실제 반 배정
@@ -468,30 +484,35 @@ export function runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assig
 
   const issues = detectMultiGradeMinor()
   if (issues.size > 0) {
-    const snap = snapshotState()
-    const oldImbalance = imbalance()
-
-    // 문제 과목명만 minor 배정 되돌리고 빈 패킹으로 재배정
+    const originalSnap = snapshotState()
+    const originalIssueCount = [...issues.values()].reduce((s, n) => s + n, 0)
+    const originalImbalance = imbalance()
     const problemSubjects = [...issues.keys()]
-    for (const subjectName of problemSubjects) {
-      for (const t of ts) {
-        const toRemove = t.assignments.filter(a => !a.is_major && a.subjectName === subjectName)
-        for (const a of toRemove) {
-          const unit = units.find(u => u.subjectId === a.subjectId && u.grade === a.grade)
-          if (unit) removeClasses(t, unit, [...a.classNums])
+
+    function tryHeuristic(heuristic) {
+      restoreState(originalSnap)
+      for (const subjectName of problemSubjects) {
+        for (const t of ts) {
+          const toRemove = t.assignments.filter(a => !a.is_major && a.subjectName === subjectName)
+          for (const a of toRemove) {
+            const unit = units.find(u => u.subjectId === a.subjectId && u.grade === a.grade)
+            if (unit) removeClasses(t, unit, [...a.classNums])
+          }
         }
+        binPackMinorSubject(subjectName, heuristic)
       }
-      binPackMinorSubject(subjectName)
+      const ic = [...detectMultiGradeMinor().values()].reduce((s, n) => s + n, 0)
+      return { snap: snapshotState(), issueCount: ic, imbalance: imbalance() }
     }
 
-    const newIssues = detectMultiGradeMinor()
-    const newImbalance = imbalance()
-    const oldIssueCount = [...issues.values()].reduce((s, n) => s + n, 0)
-    const newIssueCount = [...newIssues.values()].reduce((s, n) => s + n, 0)
-
-    // 채택 조건: 분산 감소 + 시수 편차 악화 없음
-    const accept = newIssueCount < oldIssueCount && newImbalance <= oldImbalance
-    if (!accept) restoreState(snap)
+    const candidates = [
+      { snap: originalSnap, issueCount: originalIssueCount, imbalance: originalImbalance },
+      tryHeuristic('max'),
+      tryHeuristic('fit'),
+    ]
+    // 우선순위: 분산 적은 것 → 시수 편차 적은 것
+    candidates.sort((a, b) => a.issueCount - b.issueCount || a.imbalance - b.imbalance)
+    restoreState(candidates[0].snap)
   }
 
   // ── Step H: 반 번호 인접화 ─────────────────────────────────────

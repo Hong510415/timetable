@@ -170,7 +170,16 @@ export default function Assignment() {
             </div>
 
             {teachers.map(teacher => {
-              const teacherAssigns = activeAssignments.filter(a => a.teacherId === teacher.id)
+              const teacherAssigns = activeAssignments
+                .filter(a => a.teacherId === teacher.id)
+                .slice()
+                .sort((a, b) => {
+                  const aMajor = subjects.find(s => s.id === a.subjectId)?.is_major ?? false
+                  const bMajor = subjects.find(s => s.id === b.subjectId)?.is_major ?? false
+                  if (aMajor !== bMajor) return aMajor ? -1 : 1
+                  if (a.grade !== b.grade) return a.grade - b.grade
+                  return (a.subjectName || '').localeCompare(b.subjectName || '')
+                })
               const totalH = teacherAssigns.reduce((s, a) => s + a.weeklyHours, 0)
               const isOver = totalH > targetHours + 3
               const isUnder = totalH < targetHours - 3 && totalH > 0
