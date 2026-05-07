@@ -189,9 +189,8 @@ export default function Timetable() {
           : r
       )
     } else {
-      updated = timetableRows.filter(r => !(
-        r.grade === g && r.class_num === cn && r.day_of_week === editModal.day && r.slot === editModal.slot
-      ))
+      // 빈 셀에 새 행 추가 — 다른 교사가 같은 (반·요일·교시)에 가진 행은 보존하여 충돌 표시
+      updated = [...timetableRows]
       if (teacherId) {
         updated.push({ id: crypto.randomUUID(), grade: g, class_num: cn, day_of_week: editModal.day, slot: editModal.slot, teacher_id: teacherId, subject_id: subjectId, room_id: roomId || null, is_unassigned: false })
       }
@@ -689,16 +688,49 @@ function EditCellModal({ modal, teachers, subjects, gradeConfigs, rooms, grade, 
   const { day, slot, classLabel, teacherView, defaultTeacherId } = modal
   const DAY_LABELS = ['월', '화', '수', '목', '금']
   const needsGradeClass = teacherView && !modal.grade
+  // 교사별 보기 + 교사 ID 사전 결정 → 교사 선택 dropdown 숨김 (해당 교사 시간표에서 추가하는 흐름)
+  const teacherLocked = teacherView && !!defaultTeacherId
 
   const [teacherId, setTeacherId] = useState(modal.current?.teacher_id || defaultTeacherId || '')
   const [subjectId, setSubjectId] = useState(modal.current?.subject_id || '')
   const [roomId, setRoomId] = useState(modal.current?.room_id || '')
-  const [formGrade, setFormGrade] = useState(grade || 1)
-  const [formClass, setFormClass] = useState(1)
+  // 잠긴 교사 모드에서는 그 교사가 실제 가르치는 첫 학년·반을 초기값으로
+  const initialGradeClass = (() => {
+    if (grade) return { g: grade, c: 1 }
+    if (teacherView && defaultTeacherId) {
+      const t = teachers.find(x => x.id === defaultTeacherId)
+      const first = (t?.teacher_assignments || [])[0]
+      if (first) return { g: first.grade, c: first.class_num }
+    }
+    return { g: 1, c: 1 }
+  })()
+  const [formGrade, setFormGrade] = useState(initialGradeClass.g)
+  const [formClass, setFormClass] = useState(initialGradeClass.c)
 
+  const lockedTeacher = teacherLocked ? teachers.find(t => t.id === defaultTeacherId) : null
   const numClasses = gradeConfigs?.find(g => g.grade === formGrade)?.num_classes || 1
   const effectiveGrade = needsGradeClass ? formGrade : grade
-  const gradeSubjects = subjects.filter(s => s.grade === effectiveGrade)
+  const effectiveClass = needsGradeClass ? formClass : modal.classNum
+
+  // 잠긴 교사 모드: 해당 교사가 가르치는 (subject, grade, class) 조합만 표시
+  let allowedSubjects
+  if (lockedTeacher) {
+    const assigns = lockedTeacher.teacher_assignments || []
+    allowedSubjects = subjects.filter(s =>
+      s.grade === effectiveGrade &&
+      assigns.some(a => a.subject_id === s.id && a.grade === s.grade && a.class_num === effectiveClass)
+    )
+  } else {
+    allowedSubjects = subjects.filter(s => s.grade === effectiveGrade)
+  }
+
+  // 잠긴 교사 모드의 학년·반 옵션도 해당 교사가 가르치는 것만
+  const allowedGrades = lockedTeacher
+    ? [...new Set((lockedTeacher.teacher_assignments || []).map(a => a.grade))].sort((a, b) => a - b)
+    : [1, 2, 3, 4, 5, 6]
+  const allowedClasses = lockedTeacher
+    ? [...new Set((lockedTeacher.teacher_assignments || []).filter(a => a.grade === formGrade).map(a => a.class_num))].sort((a, b) => a - b)
+    : Array.from({ length: numClasses }, (_, i) => i + 1)
 
   // 선택된 과목·교사에 사용 가능한 특별실 목록
   const selectedSubject = subjects.find(s => s.id === subjectId)
@@ -728,6 +760,11 @@ function EditCellModal({ modal, teachers, subjects, gradeConfigs, rooms, grade, 
       <div className="bg-white w-full max-w-[400px] rounded-sm border border-gray-200 p-6">
         <h2 className="text-[16px] font-bold mb-1">{DAY_LABELS[day]}요일 {slot + 1}교시 편집</h2>
         {classLabel && <p className="text-[12px] text-gray-400 mb-4">{classLabel}</p>}
+        {lockedTeacher && (
+          <p className="text-[12px] text-gray-500 mb-4">
+            교사: <span className="font-semibold text-gray-800">{lockedTeacher.code}</span>
+          </p>
+        )}
         <div className="flex flex-col gap-3 mb-5">
           {needsGradeClass && (
             <>
@@ -738,32 +775,34 @@ function EditCellModal({ modal, teachers, subjects, gradeConfigs, rooms, grade, 
                   onChange={e => handleGradeChange(Number(e.target.value))}
                   className="w-full h-9 px-2 border border-gray-300 rounded-sm text-[13px] outline-none bg-white"
                 >
-                  {[1,2,3,4,5,6].map(g => <option key={g} value={g}>{g}학년</option>)}
+                  {allowedGrades.map(g => <option key={g} value={g}>{g}학년</option>)}
                 </select>
               </div>
               <div>
                 <label className="text-[12px] font-semibold text-gray-600 block mb-1">반</label>
                 <select
                   value={formClass}
-                  onChange={e => setFormClass(Number(e.target.value))}
+                  onChange={e => { setFormClass(Number(e.target.value)); setSubjectId(''); setRoomId('') }}
                   className="w-full h-9 px-2 border border-gray-300 rounded-sm text-[13px] outline-none bg-white"
                 >
-                  {Array.from({ length: numClasses }, (_, i) => i + 1).map(c => <option key={c} value={c}>{c}반</option>)}
+                  {allowedClasses.map(c => <option key={c} value={c}>{c}반</option>)}
                 </select>
               </div>
             </>
           )}
-          <div>
-            <label className="text-[12px] font-semibold text-gray-600 block mb-1">교사</label>
-            <select
-              value={teacherId}
-              onChange={e => setTeacherId(e.target.value)}
-              className="w-full h-9 px-2 border border-gray-300 rounded-sm text-[13px] outline-none bg-white"
-            >
-              <option value="">없음 (미배정)</option>
-              {teachers.map(t => <option key={t.id} value={t.id}>{t.code}</option>)}
-            </select>
-          </div>
+          {!teacherLocked && (
+            <div>
+              <label className="text-[12px] font-semibold text-gray-600 block mb-1">교사</label>
+              <select
+                value={teacherId}
+                onChange={e => setTeacherId(e.target.value)}
+                className="w-full h-9 px-2 border border-gray-300 rounded-sm text-[13px] outline-none bg-white"
+              >
+                <option value="">없음 (미배정)</option>
+                {teachers.map(t => <option key={t.id} value={t.id}>{t.code}</option>)}
+              </select>
+            </div>
+          )}
           <div>
             <label className="text-[12px] font-semibold text-gray-600 block mb-1">과목</label>
             <select
@@ -772,8 +811,11 @@ function EditCellModal({ modal, teachers, subjects, gradeConfigs, rooms, grade, 
               className="w-full h-9 px-2 border border-gray-300 rounded-sm text-[13px] outline-none bg-white"
             >
               <option value="">없음</option>
-              {gradeSubjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              {allowedSubjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
+            {lockedTeacher && allowedSubjects.length === 0 && (
+              <p className="text-[11px] text-gray-400 mt-1">{lockedTeacher.code}에게 {effectiveGrade}학년 {effectiveClass}반에 배정된 과목이 없습니다</p>
+            )}
           </div>
           {selectedSubject && (
             <div>
