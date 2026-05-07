@@ -6,16 +6,36 @@
 body { margin: 0; font-family: -apple-system, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; }
 
 @media print {
-  body * {
-    visibility: hidden;
-  }
+  body * { visibility: hidden; }
+
   .print-modal-root,
-  .print-modal-root * {
-    visibility: visible;
-  }
+  .print-modal-root * { visibility: visible; }
+
   .print-modal-root {
-    position: absolute;
-    inset: 0;
+    position: fixed !important;
+    inset: 0 !important;
     background: white !important;
+    overflow: visible !important;
+    display: block !important;
+  }
+
+  /* white inner box: fill the page, no height limit */
+  .print-modal-root > div {
+    width: 100% !important;
+    height: auto !important;
+    max-width: none !important;
+    max-height: none !important;
+    overflow: visible !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    display: block !important;
+  }
+
+  /* scrollable content area: expand to full content height */
+  .print-scroll-content {
+    overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
+    flex: none !important;
   }
 }

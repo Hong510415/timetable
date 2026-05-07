@@ -51,7 +51,7 @@ export default function SubjectPlanComparison({
           {schoolName || '학교'} · {printDate} 출력
         </div>
 
-        <div className="flex-1 overflow-auto p-6 flex flex-col gap-8 print:overflow-visible">
+        <div className="print-scroll-content flex-1 overflow-auto p-6 flex flex-col gap-8 print:overflow-visible">
           <section>
             <h3 className="text-[14px] font-semibold mb-3">학년별 담임시수 비교</h3>
             <div className="border border-gray-200 rounded-sm overflow-hidden">
