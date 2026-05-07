@@ -308,7 +308,13 @@ export default function Timetable() {
             </div>
           )}
 
-          <UnassignedStats teachers={teachers} subjects={subjects} timetableRows={timetableRows} />
+          <UnassignedStats
+            teachers={teachers}
+            subjects={subjects}
+            timetableRows={timetableRows}
+            filterGrade={tab === 'class' ? selectedGrade : null}
+            filterClass={tab === 'class' ? selectedClass : null}
+          />
         </>
       )}
 
@@ -338,11 +344,12 @@ export default function Timetable() {
   )
 }
 
-function UnassignedStats({ teachers, subjects, timetableRows }) {
+function UnassignedStats({ teachers, subjects, timetableRows, filterGrade, filterClass }) {
   // 교사별 (과목, 학년-반)별 목표 vs 배정 시수
   const rows = []
   for (const t of teachers) {
     for (const a of (t.teacher_assignments || [])) {
+      if (filterGrade != null && (a.grade !== filterGrade || a.class_num !== filterClass)) continue
       const target = a.weekly_hours || 0
       const scheduled = timetableRows.filter(r =>
         r.teacher_id === t.id &&
@@ -369,24 +376,29 @@ function UnassignedStats({ teachers, subjects, timetableRows }) {
   const deficitRows = rows.filter(r => r.deficit > 0)
   if (deficitRows.length === 0) return null
 
+  const isClassView = filterGrade != null
+  const gridStyle = isClassView
+    ? { gridTemplateColumns: '1fr 1fr 70px 70px 70px' }
+    : { gridTemplateColumns: '1fr 1fr 110px 60px 60px 60px' }
+
   return (
-    <div className="mt-6 max-w-[1100px] bg-white border border-gray-200 rounded-sm overflow-hidden">
+    <div className="mt-6 max-w-[540px] bg-white border border-gray-200 rounded-sm overflow-hidden">
       <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-200 text-[12px] font-semibold text-gray-700">
-        미배정 시수 ({deficitRows.length}건)
+        미배정 시수 ({deficitRows.length}건){isClassView ? ` — ${filterGrade}학년 ${filterClass}반` : ''}
       </div>
-      <div className="grid grid-cols-[100px_100px_120px_80px_80px_80px] bg-gray-50 border-b border-gray-200 text-[11px] font-semibold text-gray-500">
+      <div className="grid bg-gray-50 border-b border-gray-200 text-[11px] font-semibold text-gray-500" style={gridStyle}>
         <div className="px-3 py-2 border-r border-gray-200">교사</div>
         <div className="px-3 py-2 border-r border-gray-200">과목</div>
-        <div className="px-3 py-2 border-r border-gray-200">학년 · 반</div>
+        {!isClassView && <div className="px-3 py-2 border-r border-gray-200">학년 · 반</div>}
         <div className="px-3 py-2 border-r border-gray-200 text-center">목표</div>
         <div className="px-3 py-2 border-r border-gray-200 text-center">배정</div>
         <div className="px-3 py-2 text-center">부족</div>
       </div>
       {deficitRows.map((r, i) => (
-        <div key={i} className="grid grid-cols-[100px_100px_120px_80px_80px_80px] border-b border-gray-100 last:border-b-0 text-[12px]">
+        <div key={i} className="grid border-b border-gray-100 last:border-b-0 text-[12px]" style={gridStyle}>
           <div className="px-3 py-2 border-r border-gray-100 font-semibold">{r.teacherCode}</div>
           <div className="px-3 py-2 border-r border-gray-100">{r.subjectName}</div>
-          <div className="px-3 py-2 border-r border-gray-100">{r.grade}학년 {r.classNum}반</div>
+          {!isClassView && <div className="px-3 py-2 border-r border-gray-100">{r.grade}학년 {r.classNum}반</div>}
           <div className="px-3 py-2 border-r border-gray-100 text-center text-gray-600">{r.target}h</div>
           <div className="px-3 py-2 border-r border-gray-100 text-center text-gray-600">{r.scheduled}h</div>
           <div className="px-3 py-2 text-center font-bold text-red-600">−{r.deficit}h</div>
