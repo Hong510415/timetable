@@ -10,7 +10,7 @@
  *   1. 전처리 (학급 가용 슬롯, 특별실, 점심)
  *   2. 패턴 결정 + 블록 분해 (#11, #12)
  *   3. 라운드로빈 순서로 블록 배치
- *   4. 각 배치 시 하드 #1~#12 검증 + 소프트 (a)~(h) 점수
+ *   4. 각 배치 시 하드 #1~#13 검증 + 소프트 (a)(c)(d)(e)(f)(g)(h)(i) 점수
  *   5. 결과 반환
  */
 
@@ -338,17 +338,8 @@ export function buildSchedule(
     }
     score += 5 * sameSubjSameDay
 
-    // (b) 인접 슬롯 다른 과목 페널티
-    let adjDiffSubj = 0
-    for (const slot of slots) {
-      for (const adj of [slot - 1, slot + 1]) {
-        if (adj < 0 || adj >= totalSlots) continue
-        if (slots.includes(adj)) continue
-        const adjSubj = teacherSlotSubject[teacherId]?.[day]?.[adj]
-        if (adjSubj && adjSubj !== subjectId) adjDiffSubj++
-      }
-    }
-    score -= 3 * adjDiffSubj
+    // (b) 제거됨 — (a)가 같은 과목 클러스터링을 이미 유도하므로 잉여.
+    // (b) 페널티가 (h) gap 페널티보다 커서 빈 시간이 생기던 문제 해결.
 
     // (c) 같은 학년+과목 같은 날 보너스
     let sameGradeSubjSameDay = 0
@@ -389,15 +380,22 @@ export function buildSchedule(
       score -= Math.max(0, blockIdx - minOtherProgress)
     }
 
-    // (h) 교사 같은 날 gap 최소화
-    const dayOcc = new Set(Object.keys(teacherOccupied[teacherId][day]))
-    teacherOccupied[teacherId][day].forEach(s => dayOcc.add(String(s)))
-    for (const s of slots) dayOcc.add(String(s))
-    const slotNums = [...dayOcc].map(Number).sort((a, b) => a - b)
+    // (h) 교사 같은 날 gap 최소화 — 강화됨 (-5/gap)
+    // 빈 시간 없이 연속 배치 유도. (b) 제거되면서 더 강한 압박 필요.
+    const dayOcc = new Set()
+    teacherOccupied[teacherId][day].forEach(s => dayOcc.add(s))
+    for (const s of slots) dayOcc.add(s)
+    const slotNums = [...dayOcc].sort((a, b) => a - b)
     if (slotNums.length >= 2) {
       const span = slotNums[slotNums.length - 1] - slotNums[0] + 1
       const gap = span - slotNums.length
-      score -= 1 * gap
+      score -= 5 * gap
+    }
+
+    // (i) 1교시부터 땡기기 — 슬롯 인덱스 작을수록 선호
+    // 전담교사가 하루를 일찍 끝낼 수 있게
+    for (const slot of slots) {
+      score -= 1 * slot
     }
 
     return score

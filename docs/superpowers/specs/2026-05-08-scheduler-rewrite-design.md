@@ -120,13 +120,11 @@
 - 학년이 달라도 같은 과목이면 모이는 게 좋음
 - **bonus = +5** per 같은 (교사, 과목) 같은 날 추가 배치
 
-### (b) 인접 슬롯 다른 과목 페널티 — 가중치 **중간**
+### ~~(b) 인접 슬롯 다른 과목 페널티~~ — **제거됨**
 
-같은 교사가 같은 날 인접한 두 슬롯에서 **다른 과목**을 가르치면 페널티.
+(a) 같은 과목 같은 날 보너스(+5)가 이미 같은 과목 클러스터링을 강하게 유도하므로 (b)는 잉여.
 
-- 예: 1교시 영어, 2교시 통합 → 페널티 (자료/멘탈 컨텍스트 스위치)
-- 예: 1교시 영어 5-1, 2교시 영어 5-2 → 페널티 없음 (학년 달라도 OK)
-- **penalty = −3** per 인접 슬롯 다른 과목 발생
+또한 (b)−3 vs (h)−1 가중치 비대칭 때문에 알고리즘이 **다른 과목 인접보다 빈 시간(gap) 만들기를 선호**하는 부작용 있었음. 사용자 화면에서 1-2교시 영어, 3교시 통합, 4-5교시 영어 같은 케이스 발생 → 사용자 지적으로 제거.
 
 ### (c) 같은 학년 같은 과목 같은 날 보너스 — 가중치 **중간**
 
@@ -185,11 +183,19 @@
   - **penalty = −1 × max(0, N − min(block_progress[다른 학년]))**
 - 작은 가중치라 (a)~(f)와 충돌 시 양보, 동점일 때 타이브레이커
 
-### (h) 교사 같은 날 슬롯 gap 최소화 — 가중치 **낮음**
+### (h) 교사 같은 날 슬롯 gap 최소화 — 가중치 **중간** (강화됨)
 
-같은 교사가 같은 날 수업할 때 슬롯이 연속이 좋고 떨어진 게 안 좋음.
-- 예: 1-2-3교시 연속 ✓ vs 1교시 + 5교시 ✗
-- **penalty = −1** per gap slot (교사 첫 슬롯 ~ 마지막 슬롯 사이 빈 슬롯 수)
+같은 교사가 같은 날 수업할 때 슬롯이 연속이 좋고 빈 시간 끼는 게 안 좋음.
+- 예: 1-2-3교시 연속 ✓ vs 1교시 + 5교시 (사이 빈 시간) ✗
+- **penalty = −5** per gap slot (교사 첫 슬롯 ~ 마지막 슬롯 사이 빈 슬롯 수)
+- (b) 제거되면서 (h)를 강화 (−1 → −5). 빈 시간 페널티가 커져서 알고리즘이 자연스럽게 빽빽 채움
+
+### (i) 1교시부터 땡기기 — 가중치 **낮음** (NEW)
+
+전담 교사가 하루를 일찍 끝낼 수 있게 슬롯 인덱스 작은 쪽 선호.
+- 예: 1-2-3교시 연속 vs 3-4-5교시 연속 → 1-2-3 더 선호
+- **penalty = −1 × slot index** (각 placement 슬롯에 대해)
+- pair는 두 슬롯 합산
 
 ---
 
@@ -198,13 +204,13 @@
 ```
 score = 0
   + 5 × (same subject same day count for this teacher)         // (a)
-  − 3 × (adjacent different subject count for this teacher)    // (b)
   + 2 × (same grade+subject same day count for this teacher)   // (c)
   − 2 × |actual_day − target_day(N)|                           // (d)
   − 2 × max(0, teacher_day_count[d] − ceil(T_teacher/5))       // (e)
   − 2 × max(0, class_day_count[g][c][d] − ceil(T_class/5))     // (f)
   − 1 × max(0, block_N − min(other_grades_block_progress))     // (g)
-  − 1 × (gap slot count for this teacher this day)             // (h)
+  − 5 × (gap slot count for this teacher this day)             // (h)
+  − 1 × (sum of slot indices in this placement)                // (i)
 ```
 
 배치 후보 중 `score` 최대값 선택. 동점이면 랜덤.
