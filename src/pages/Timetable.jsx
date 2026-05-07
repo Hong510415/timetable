@@ -183,20 +183,20 @@ export default function Timetable() {
 
     let updated
     if (editModal.rowId) {
-      // 교사를 비워서 저장 → 행 삭제 (찌꺼기 미배정 행이 남지 않게)
-      if (!teacherId) {
+      // 교사 또는 과목을 비워서 저장 → 행 삭제 (찌꺼기 행이 빨간 label로 남지 않게)
+      if (!teacherId || !subjectId) {
         updated = timetableRows.filter(r => r.id !== editModal.rowId)
       } else {
         updated = timetableRows.map(r =>
           r.id === editModal.rowId
-            ? { ...r, teacher_id: teacherId, subject_id: subjectId || null, room_id: roomId || null, is_unassigned: false }
+            ? { ...r, teacher_id: teacherId, subject_id: subjectId, room_id: roomId || null, is_unassigned: false }
             : r
         )
       }
     } else {
       // 빈 셀에 새 행 추가 — 다른 교사가 같은 (반·요일·교시)에 가진 행은 보존하여 충돌 표시
       updated = [...timetableRows]
-      if (teacherId) {
+      if (teacherId && subjectId) {
         updated.push({ id: crypto.randomUUID(), grade: g, class_num: cn, day_of_week: editModal.day, slot: editModal.slot, teacher_id: teacherId, subject_id: subjectId, room_id: roomId || null, is_unassigned: false })
       }
     }
@@ -519,6 +519,7 @@ function TeacherTimetableGrid({ slots, totalSlots, gradeLunchSlot, subjects, tim
     if (!cell || !timetableRows) return []
     return timetableRows.filter(r =>
       r.teacher_id &&
+      r.subject_id &&
       !r.is_unassigned &&
       r.grade === cell.grade &&
       r.class_num === cell.class_num &&
