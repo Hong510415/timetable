@@ -165,7 +165,7 @@ export default function Assignment() {
               <div className="w-[60px] flex-shrink-0 px-3 py-2.5 border-r border-gray-200">학년</div>
               <div className="flex-1 px-3 py-2.5 border-r border-gray-200">담당 반</div>
               <div className="w-[80px] flex-shrink-0 px-3 py-2.5 border-r border-gray-200">합계</div>
-              <div className="w-[60px] flex-shrink-0 px-3 py-2.5">편집</div>
+              <div className="w-[80px] flex-shrink-0 px-3 py-2.5">편집</div>
             </div>
 
             {teachers.map(teacher => {
@@ -198,7 +198,7 @@ export default function Assignment() {
                         />
                       </div>
                       <div className="w-[80px] flex-shrink-0 px-3 text-[12px] font-bold text-gray-400 border-r border-gray-100">0h</div>
-                      <div className="w-[60px]" />
+                      <div className="w-[80px]" />
                     </div>
                   ) : (
                     <>
@@ -237,7 +237,7 @@ export default function Assignment() {
                             <div className={`w-[80px] flex-shrink-0 px-3 text-[12px] font-bold border-r border-gray-100 ${localIdx === 0 && (isOver || isUnder) ? 'text-yellow-700' : 'text-gray-900'}`}>
                               {localIdx === 0 ? `${totalH}h` : ''}
                             </div>
-                            <div className="w-[60px] flex-shrink-0 px-3">
+                            <div className="w-[80px] flex-shrink-0 px-3 flex items-center gap-2">
                               <EditClassNumsButton
                                 assignment={a}
                                 gradeConfigs={gradeConfigs}
@@ -246,6 +246,17 @@ export default function Assignment() {
                                 setOpenPopupId={setOpenPopupId}
                                 onUpdate={(classNums) => updateAssignment(globalIdx, 'classNums', classNums)}
                               />
+                              <button
+                                onClick={() => {
+                                  if (confirm(`${a.subjectName} ${a.grade}학년 ${classDisplay} 배정을 삭제할까요?`)) {
+                                    updateAssignment(globalIdx, 'classNums', [])
+                                  }
+                                }}
+                                title="이 배정 삭제"
+                                className="text-[14px] leading-none text-gray-300 hover:text-red-500 transition-colors"
+                              >
+                                ×
+                              </button>
                             </div>
                           </div>
                         )
