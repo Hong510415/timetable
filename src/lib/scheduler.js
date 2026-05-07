@@ -41,17 +41,32 @@ export function buildSchedule(gradeConfigs, subjects, teachers, lunchConfig, roo
     ? [...new Set(Object.values(gradeLunchSlot))]
     : []
 
-  // 과목ID → 차단 day-slot Set (특별실 사용 불가 시간)
-  const subjectBlockedMap = {}
+  // 과목ID → 사용 가능 특별실 리스트 (이름 매칭)
+  const subjectRooms = {}
+  for (const subj of subjects) {
+    const eligible = rooms.filter(r => r.subjectNames?.includes(subj.name))
+    if (eligible.length > 0) subjectRooms[subj.id] = eligible
+  }
+
+  // 방별 차단 day-slot Set
+  const roomBlockedMap = {}
   for (const room of rooms) {
-    if (!room.subjectNames?.length) continue
-    const blocked = roomBlockedSlots.filter(b => b.room_id === room.id)
-    if (!blocked.length) continue
-    for (const subj of subjects) {
-      if (!room.subjectNames.includes(subj.name)) continue
-      if (!subjectBlockedMap[subj.id]) subjectBlockedMap[subj.id] = new Set()
-      for (const b of blocked) subjectBlockedMap[subj.id].add(`${b.day_of_week}-${b.slot}`)
+    roomBlockedMap[room.id] = new Set(
+      roomBlockedSlots.filter(b => b.room_id === room.id).map(b => `${b.day_of_week}-${b.slot}`)
+    )
+  }
+
+  // (day, slot)에서 사용 가능한 방 찾기 — 차단되지 않고, 다른 수업이 점유 안 한 방
+  // 한 과목이 여러 방에서 가능할 때 모든 방이 동시에 차단된 경우만 슬롯 불가
+  function findAvailableRoom(subjectId, day, slot) {
+    const eligible = subjectRooms[subjectId]
+    if (!eligible || eligible.length === 0) return undefined  // 일반 교실 — 방 필요 없음
+    for (const room of eligible) {
+      if (roomBlockedMap[room.id]?.has(`${day}-${slot}`)) continue
+      if (roomOccupied[room.id][day].has(slot)) continue
+      return room.id
     }
+    return null  // 사용 가능 방 없음 → 슬롯 불가
   }
 
   // 학년·반의 요일별 가용 슬롯
@@ -125,6 +140,12 @@ export function buildSchedule(gradeConfigs, subjects, teachers, lunchConfig, roo
     teacherOccupied[teacher.id] = Array.from({ length: 5 }, () => new Set())
   }
 
+  // 방별 점유 슬롯 (특별실 1방=동시간 1수업)
+  const roomOccupied = {}
+  for (const room of rooms) {
+    roomOccupied[room.id] = Array.from({ length: 5 }, () => new Set())
+  }
+
   const teacherGradeDay = {}
   const classDayCount = {}
   const teacherSubjectDaySlots = {}
@@ -160,7 +181,7 @@ export function buildSchedule(gradeConfigs, subjects, teachers, lunchConfig, roo
   function isSlotValid(teacherId, subjectId, day, slot, classAvailable) {
     if (!classAvailable.has(slot)) return false
     if (teacherOccupied[teacherId][day].has(slot)) return false
-    if (subjectBlockedMap[subjectId]?.has(`${day}-${slot}`)) return false
+    if (subjectRooms[subjectId] && findAvailableRoom(subjectId, day, slot) === null) return false
     if (splitLunch && allLunchSlotIndexes.includes(slot)) {
       const occ = allLunchSlotIndexes.filter(ls => teacherOccupied[teacherId][day].has(ls))
       if (occ.length >= allLunchSlotIndexes.length - 1) return false
@@ -234,7 +255,7 @@ export function buildSchedule(gradeConfigs, subjects, teachers, lunchConfig, roo
           if (adj < 0 || adj >= totalSlots) continue
           if (!ca.has(adj)) continue
           if (teacherOccupied[teacherId][day].has(adj)) continue
-          if (subjectBlockedMap[subjectId]?.has(`${day}-${adj}`)) continue
+          if (subjectRooms[subjectId] && findAvailableRoom(subjectId, day, adj) === null) continue
           if (splitLunch && allLunchSlotIndexes.includes(adj)) continue
           pairBonus = 5
           break
@@ -256,9 +277,12 @@ export function buildSchedule(gradeConfigs, subjects, teachers, lunchConfig, roo
     candidates.sort((a, b) => b.score - a.score || Math.random() - 0.5)
     const { day, slot } = candidates[0]
 
-    result[grade][classNum][day][slot] = { teacherId, subjectId }
+    // 특별실 결정 (필요한 경우)
+    const roomId = findAvailableRoom(subjectId, day, slot)
+    result[grade][classNum][day][slot] = { teacherId, subjectId, roomId: roomId || undefined }
     teacherOccupied[teacherId][day].add(slot)
     gradeClassSlots[grade][classNum][day].delete(slot)
+    if (roomId) roomOccupied[roomId][day].add(slot)
     if (!teacherSlotGrade[teacherId]) teacherSlotGrade[teacherId] = Array.from({ length: 5 }, () => ({}))
     teacherSlotGrade[teacherId][day][slot] = grade
 
@@ -348,6 +372,7 @@ export function flattenResult(result, gradeLunchSlot, totalSlots) {
             slot,
             teacher_id: cell.teacherId,
             subject_id: cell.subjectId,
+            room_id: cell.roomId || null,
             is_unassigned: false,
           })
         }
