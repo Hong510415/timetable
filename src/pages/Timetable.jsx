@@ -58,7 +58,7 @@ export default function Timetable() {
 
   const [generating, setGenerating] = useState(false)
   const [errors, setErrors] = useState([])
-  const [tab, setTab] = useState('class')
+  const [tab, setTab] = useState('teacher')
   const [showGenerateModal, setShowGenerateModal] = useState(false)
   const [generateOptions, setGenerateOptions] = useState({ subjectSettings: {} })
   const [selectedGrade, setSelectedGrade] = useState(1)
@@ -198,16 +198,16 @@ export default function Timetable() {
         <div className="flex gap-2">
           <ManualModal title="전담 시간표" sections={MANUAL} />
           <button
-            onClick={() => exportTimetableByClass(timetableRows, gradeConfigs, teachers, subjects, gradeLunchSlot, totalSlots)}
-            className="flex items-center gap-2 h-10 px-4 border border-gray-300 text-[13px] rounded-sm hover:bg-gray-50"
-          >
-            <Download size={14} />학급별 엑셀
-          </button>
-          <button
             onClick={() => exportTimetableByTeacher(timetableRows, teachers, subjects, gradeConfigs, gradeLunchSlot, totalSlots)}
             className="flex items-center gap-2 h-10 px-4 border border-gray-300 text-[13px] rounded-sm hover:bg-gray-50"
           >
             <Download size={14} />교사별 엑셀
+          </button>
+          <button
+            onClick={() => exportTimetableByClass(timetableRows, gradeConfigs, teachers, subjects, gradeLunchSlot, totalSlots)}
+            className="flex items-center gap-2 h-10 px-4 border border-gray-300 text-[13px] rounded-sm hover:bg-gray-50"
+          >
+            <Download size={14} />학급별 엑셀
           </button>
           <button
             onClick={handleGenerate}
@@ -233,7 +233,7 @@ export default function Timetable() {
       ) : (
         <>
           <div className="flex border border-gray-200 bg-white rounded-sm w-fit mb-5">
-            {[{ key: 'class', label: '학급별 보기' }, { key: 'teacher', label: '교사별 보기' }].map(t => (
+            {[{ key: 'teacher', label: '교사별 보기' }, { key: 'class', label: '학급별 보기' }].map(t => (
               <button
                 key={t.key}
                 onClick={() => setTab(t.key)}
