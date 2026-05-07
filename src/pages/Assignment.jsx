@@ -85,7 +85,7 @@ export default function Assignment() {
 
   if (!subjects.length) {
     return (
-      <div className="p-10 bg-gray-50 min-h-full">
+      <div className="p-4 md:p-10 bg-gray-50 min-h-full">
         <h1 className="text-[22px] font-bold mb-6">전담 배정</h1>
         <div className="text-center py-20 text-gray-300 text-[14px]">
           전담 과목 설정 탭에서 과목을 먼저 입력하세요.
@@ -95,8 +95,8 @@ export default function Assignment() {
   }
 
   return (
-    <div className="p-10 bg-gray-50 min-h-full">
-      <div className="flex items-center justify-between mb-6">
+    <div className="p-4 md:p-10 bg-gray-50 min-h-full">
+      <div className="max-w-[1100px] flex items-center justify-between mb-6">
         <h1 className="text-[22px] font-bold">전담 배정</h1>
         <div className="flex gap-2">
           {result && (
@@ -119,7 +119,7 @@ export default function Assignment() {
       </div>
 
       {/* 배정 정보 */}
-      <div className="bg-white border border-gray-200 rounded-sm p-4 mb-5 text-[12px] text-gray-500 flex gap-6 flex-wrap">
+      <div className="max-w-[1100px] bg-white border border-gray-200 rounded-sm p-4 mb-5 text-[12px] text-gray-500 flex gap-6 flex-wrap">
         <span>교사 수: <strong className="text-gray-800">{teachers.length}명</strong></span>
         <span>전체 전담시수: <strong className="text-gray-800">{totalDedicated}h</strong></span>
         <span>교사 목표 시수: <strong className="text-gray-800">{targetHours}h</strong></span>
@@ -128,7 +128,7 @@ export default function Assignment() {
 
       {/* 경고 */}
       {warnings.length > 0 && (
-        <div className="mb-5 flex flex-col gap-2">
+        <div className="max-w-[1100px] mb-5 flex flex-col gap-2">
           {warnings.map((w, i) => (
             <div key={i} className={`flex items-start gap-2 p-3 rounded-sm text-[12px] border ${
               w.type === 'error'
@@ -143,7 +143,7 @@ export default function Assignment() {
       )}
 
       {result && warnings.length === 0 && (
-        <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-sm text-[12px] text-green-700 mb-5">
+        <div className="max-w-[1100px] flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-sm text-[12px] text-green-700 mb-5">
           <CheckCircle size={14} />
           배정이 균형 기준을 만족합니다.
         </div>
@@ -158,7 +158,7 @@ export default function Assignment() {
       {result && (
         <>
           {/* 배정 결과 테이블 */}
-          <div className="bg-white border border-gray-200 rounded-sm mb-5">
+          <div className="max-w-[1100px] bg-white border border-gray-200 rounded-sm mb-5 overflow-x-auto">
             <div className="flex bg-gray-50 border-b border-gray-200 text-[11px] font-semibold text-gray-500">
               <div className="w-[110px] flex-shrink-0 px-4 py-2.5 border-r border-gray-200">교사</div>
               <div className="w-[90px] flex-shrink-0 px-3 py-2.5 border-r border-gray-200">과목</div>
@@ -285,7 +285,7 @@ export default function Assignment() {
           </div>
 
           {/* 담임 시수 현황 */}
-          <div className="bg-white border border-gray-200 rounded-sm p-5">
+          <div className="max-w-[1100px] bg-white border border-gray-200 rounded-sm p-5">
             <h3 className="text-[13px] font-semibold mb-3">학년별 담임 시수 현황</h3>
             <div className="flex gap-6 flex-wrap">
               {gradeSummary.map(g => (

@@ -83,7 +83,7 @@ export default function SchoolSetup() {
       </div>
 
       {tab === 'grade' && (
-        <div className="bg-white border border-gray-200 rounded-sm p-7 flex flex-col gap-6">
+        <div className="max-w-[720px] bg-white border border-gray-200 rounded-sm p-7 flex flex-col gap-6">
           <div>
             <h2 className="text-[14px] font-semibold mb-1">학년별 학급 수</h2>
             <p className="text-[12px] text-gray-400 mb-4">각 학년의 학급 수를 입력하세요.</p>
@@ -144,7 +144,7 @@ export default function SchoolSetup() {
       )}
 
       {tab === 'lunch' && (
-        <div className="bg-white border border-gray-200 rounded-sm p-7 flex flex-col gap-6">
+        <div className="max-w-[720px] bg-white border border-gray-200 rounded-sm p-7 flex flex-col gap-6">
           <div>
             <h2 className="text-[14px] font-semibold mb-4">점심시간 분리 배정</h2>
             <div className="flex gap-6 mb-6">
@@ -201,7 +201,7 @@ export default function SchoolSetup() {
       )}
 
       {tab === 'teachers' && (
-        <div className="bg-white border border-gray-200 rounded-sm p-7">
+        <div className="max-w-[720px] bg-white border border-gray-200 rounded-sm p-7">
           <h2 className="text-[14px] font-semibold mb-1">전담 교사 인원</h2>
           <p className="text-[12px] text-gray-400 mb-5">전담 교사 총 인원을 입력하세요. 명칭은 전담 배정 후 지정할 수 있습니다.</p>
           <div className="flex items-center gap-3">
