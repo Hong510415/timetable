@@ -288,9 +288,11 @@ export default function SubjectSetup() {
                     />
                     <span className="text-[12px] text-gray-400">주당</span>
                     <input
-                      type="number" min={1} max={10} value={s.weekly_hours}
-                      onChange={e => updateSubject(s.id, 'weekly_hours', Number(e.target.value))}
-                      onClick={e => e.target.select()}
+                      type="text" inputMode="numeric" pattern="[0-9]*" value={s.weekly_hours}
+                      onChange={e => {
+                        const n = parseInt(e.target.value, 10)
+                        if (!isNaN(n) && n >= 1 && n <= 10) updateSubject(s.id, 'weekly_hours', n)
+                      }}
                       onFocus={e => e.target.select()}
                       className="w-14 h-9 text-center border border-gray-200 rounded-sm text-[13px] outline-none focus:border-black"
                     />
