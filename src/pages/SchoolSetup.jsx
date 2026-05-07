@@ -53,7 +53,7 @@ export default function SchoolSetup() {
   ]
 
   return (
-    <div className="p-10 bg-gray-50 min-h-full">
+    <div className="p-4 md:p-10 bg-gray-50 min-h-full">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-[22px] font-bold">학교 설정</h1>
       </div>
@@ -210,6 +210,7 @@ export default function SchoolSetup() {
               value={teachers.length}
               onChange={e => handleTeacherCountChange(e.target.value)}
               onClick={e => e.target.select()}
+              onFocus={e => e.target.select()}
               className="w-24 h-10 text-center border border-gray-300 rounded-sm text-[18px] font-bold outline-none focus:border-black"
             />
             <span className="text-[14px] text-gray-500">명</span>

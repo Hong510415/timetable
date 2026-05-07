@@ -47,6 +47,15 @@ export function getOverflowGrades(planSubjects, gradeConfigs, gradesToCheck) {
   return result
 }
 
+export function getTotalDedicatedHours(planSubjects, gradeConfigs) {
+  if (!Array.isArray(planSubjects)) return 0
+  return planSubjects.reduce((sum, s) => {
+    const config = (gradeConfigs || []).find(c => c.grade === s.grade)
+    const numClasses = Number(config?.num_classes) || 0
+    return sum + (Number(s.weekly_hours) || 0) * numClasses
+  }, 0)
+}
+
 // classifySubjectsAcrossPlans(plans, grade)
 // Returns a 2D array: result[planIndex] = [{ subject, differs }, ...]
 // "differs" means this exact subject (by name+hours+is_major) does NOT appear in every other plan.

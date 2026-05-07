@@ -4,6 +4,7 @@ import {
   getOverflowGrades,
   classifySubjectsAcrossPlans,
   subjectsEqualByContent,
+  getTotalDedicatedHours,
 } from '../lib/planHelpers'
 
 export default function SubjectPlanComparison({
@@ -20,7 +21,7 @@ export default function SubjectPlanComparison({
   const printDate = new Date().toLocaleDateString('ko-KR')
 
   function totalDedicated(planSubjects) {
-    return planSubjects.reduce((sum, s) => sum + (Number(s.weekly_hours) || 0), 0)
+    return getTotalDedicatedHours(planSubjects, gradeConfigs)
   }
 
   function isApplyDisabledForPlan(plan) {

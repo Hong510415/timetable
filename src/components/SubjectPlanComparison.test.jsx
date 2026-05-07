@@ -48,9 +48,11 @@ describe('SubjectPlanComparison', () => {
 
   it('shows average hours per teacher when teacherCount > 0', () => {
     renderModal({ teacherCount: 2 })
-    // A안: 3 / 2 = 1.5시간, B안: 4 / 2 = 2.0시간
-    expect(screen.getByText('1.5시간')).toBeInTheDocument()
-    expect(screen.getByText('2.0시간')).toBeInTheDocument()
+    // gradeConfigs: grade1 num_classes=4
+    // A안: 3h × 4 = 12 total → 12/2 = 6.0시간
+    // B안: 4h × 4 = 16 total → 16/2 = 8.0시간
+    expect(screen.getByText('6.0시간')).toBeInTheDocument()
+    expect(screen.getByText('8.0시간')).toBeInTheDocument()
   })
 
   it('shows — for average when teacherCount is 0', () => {

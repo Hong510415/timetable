@@ -1,6 +1,6 @@
-import { useRef } from 'react'
+import { useState, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { Settings, Calendar, DoorOpen, CalendarCheck, Download, Upload, ClipboardList, BookOpen } from 'lucide-react'
+import { Settings, Calendar, DoorOpen, CalendarCheck, Download, Upload, ClipboardList, BookOpen, Menu, X } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { exportFullWorkbook, importFullWorkbook } from '../lib/excelIO'
 
@@ -18,6 +18,7 @@ export default function Layout({ children }) {
   const { pathname } = useLocation()
   const { state, importData } = useApp()
   const fileInputRef = useRef(null)
+  const [menuOpen, setMenuOpen] = useState(false)
 
   function handleExport() {
     exportFullWorkbook(state)
@@ -40,22 +41,21 @@ export default function Layout({ children }) {
     e.target.value = ''
   }
 
-  return (
-    <div className="flex h-screen bg-gray-50">
-      <aside className="w-[220px] bg-white border-r border-gray-200 flex flex-col py-7 flex-shrink-0">
-        <div className="flex items-center gap-2 px-6 pb-4">
-          <div className="w-4 h-4 bg-black flex-shrink-0" />
-          <span className="text-[13px] font-bold text-gray-900">시간표 자동 작성</span>
-        </div>
-        <div className="h-px bg-gray-200 mb-3" />
+  function handleNavigate(path) {
+    navigate(path)
+    setMenuOpen(false)
+  }
 
+  function renderNav() {
+    return (
+      <>
         <nav className="flex flex-col gap-0.5">
           {navItems.map(({ path, label, icon: Icon }) => {
             const active = pathname === path
             return (
               <button
                 key={path}
-                onClick={() => navigate(path)}
+                onClick={() => handleNavigate(path)}
                 className={`flex items-center gap-2.5 px-6 h-10 text-[13px] text-left w-full transition-colors ${
                   active ? 'bg-black text-white font-semibold' : 'text-gray-500 hover:bg-gray-50'
                 }`}
@@ -80,17 +80,70 @@ export default function Layout({ children }) {
           >
             <Upload size={12} />불러오기 (엑셀 가져오기)
           </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".xlsx"
-            onChange={handleImport}
-            className="hidden"
-          />
         </div>
+      </>
+    )
+  }
+
+  return (
+    <div className="flex h-screen bg-gray-50">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".xlsx"
+        onChange={handleImport}
+        className="hidden"
+      />
+
+      {/* Desktop sidebar */}
+      <aside className="hidden md:flex w-[220px] bg-white border-r border-gray-200 flex-col py-7 flex-shrink-0">
+        <div className="flex items-center gap-2 px-6 pb-4">
+          <span className="text-[18px] leading-none">🗓️</span>
+          <span className="text-[13px] font-bold text-gray-900">시간표 자동 작성</span>
+        </div>
+        <div className="h-px bg-gray-200 mb-3" />
+        {renderNav()}
       </aside>
 
-      <main className="flex-1 overflow-auto">
+      {/* Mobile top bar */}
+      <header className="md:hidden fixed top-0 left-0 right-0 z-30 h-12 bg-white border-b border-gray-200 flex items-center px-4 gap-3 flex-shrink-0">
+        <button
+          onClick={() => setMenuOpen(true)}
+          className="p-1 text-gray-600 hover:text-gray-900"
+          aria-label="메뉴 열기"
+        >
+          <Menu size={20} />
+        </button>
+        <span className="text-[16px] leading-none">🗓️</span>
+        <span className="text-[13px] font-bold text-gray-900">시간표 자동 작성</span>
+      </header>
+
+      {/* Mobile drawer */}
+      {menuOpen && (
+        <div className="md:hidden fixed inset-0 z-40">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setMenuOpen(false)} />
+          <aside className="absolute left-0 top-0 bottom-0 w-[220px] bg-white flex flex-col py-7 shadow-xl">
+            <div className="flex items-center justify-between px-6 pb-4">
+              <div className="flex items-center gap-2">
+                <span className="text-[16px] leading-none">🗓️</span>
+                <span className="text-[13px] font-bold text-gray-900">시간표 자동 작성</span>
+              </div>
+              <button
+                onClick={() => setMenuOpen(false)}
+                className="text-gray-400 hover:text-gray-700"
+                aria-label="메뉴 닫기"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="h-px bg-gray-200 mb-3" />
+            {renderNav()}
+          </aside>
+        </div>
+      )}
+
+      {/* Main content */}
+      <main className="flex-1 overflow-auto pt-12 md:pt-0">
         {children}
       </main>
     </div>

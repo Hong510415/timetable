@@ -7,6 +7,7 @@ import {
   getHomeroomHoursForGrade,
   getOverflowGrades,
   classifySubjectsAcrossPlans,
+  getTotalDedicatedHours,
 } from './planHelpers'
 
 const sampleSubjects = [
@@ -177,5 +178,30 @@ describe('classifySubjectsAcrossPlans', () => {
     expect(result[0][0].differs).toBe(true)
     expect(result[1][0].differs).toBe(true)
     expect(result[2][0].differs).toBe(true)
+  })
+})
+
+describe('getTotalDedicatedHours', () => {
+  const gc = [
+    { grade: 1, num_classes: 4 },
+    { grade: 2, num_classes: 3 },
+  ]
+
+  it('multiplies weekly_hours by num_classes per grade', () => {
+    const subjects = [
+      { grade: 1, weekly_hours: 3 }, // 3 × 4 = 12
+      { grade: 1, weekly_hours: 2 }, // 2 × 4 = 8
+      { grade: 2, weekly_hours: 5 }, // 5 × 3 = 15
+    ]
+    expect(getTotalDedicatedHours(subjects, gc)).toBe(35)
+  })
+
+  it('returns 0 for empty subjects', () => {
+    expect(getTotalDedicatedHours([], gc)).toBe(0)
+  })
+
+  it('ignores grades with no config', () => {
+    const subjects = [{ grade: 9, weekly_hours: 5 }]
+    expect(getTotalDedicatedHours(subjects, gc)).toBe(0)
   })
 })

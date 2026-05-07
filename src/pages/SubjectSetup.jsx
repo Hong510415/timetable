@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useApp } from '../context/AppContext'
-import { subjectsEqualByContent, getDedicatedHoursForGrade, getWeeklyTotalForGrade, getOverflowGrades } from '../lib/planHelpers'
+import { subjectsEqualByContent, getDedicatedHoursForGrade, getWeeklyTotalForGrade, getOverflowGrades, getTotalDedicatedHours } from '../lib/planHelpers'
 import SubjectPlanComparison from '../components/SubjectPlanComparison'
 
 const GRADES = [1, 2, 3, 4, 5, 6]
@@ -32,7 +32,7 @@ export default function SubjectSetup() {
     ? '과목을 먼저 입력해 주세요.'
     : ''
 
-  const totalDedicated = planSubjects.reduce((sum, s) => sum + (Number(s.weekly_hours) || 0), 0)
+  const totalDedicated = getTotalDedicatedHours(planSubjects, gradeConfigs)
 
   let statusLine
   if (!appliedPlanId) {
@@ -131,7 +131,7 @@ export default function SubjectSetup() {
   }
 
   return (
-    <div className="p-10 bg-gray-50 min-h-full">
+    <div className="p-4 md:p-10 bg-gray-50 min-h-full">
       <div className="mb-6">
         <h1 className="text-[22px] font-bold">전담 과목 설정</h1>
         <p className="text-[12px] text-gray-400 mt-1">변경 사항은 자동으로 저장됩니다.</p>
@@ -256,6 +256,7 @@ export default function SubjectSetup() {
                       type="number" min={1} max={10} value={s.weekly_hours}
                       onChange={e => updateSubject(s.id, 'weekly_hours', Number(e.target.value))}
                       onClick={e => e.target.select()}
+                      onFocus={e => e.target.select()}
                       className="w-14 h-9 text-center border border-gray-200 rounded-sm text-[13px] outline-none focus:border-black"
                     />
                     <span className="text-[12px] text-gray-400">시수</span>
