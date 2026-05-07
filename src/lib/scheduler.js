@@ -176,6 +176,8 @@ export function buildSchedule(gradeConfigs, subjects, teachers, lunchConfig, roo
   const classDayCount = {}
   const teacherSubjectDaySlots = {}
   const teacherSlotGrade = {}
+  // 교사 하루 안에서 슬롯별 과목 추적 — 과목 끼어들기(예: 영어-통합-영어) 방지용
+  const teacherSlotSubject = {}
 
   // 하드 제약 1: 학년 끼어들기 금지
   // slot s를 grade G로 배정하면 그 날 다른 학년의 범위 안에 G가 들어가는지,
@@ -225,6 +227,48 @@ export function buildSchedule(gradeConfigs, subjects, teachers, lunchConfig, roo
     return false
   }
 
+  // 과목 끼어들기 검사 — 같은 교사의 하루 안에서 ABA 패턴(영어-통합-영어 등) 금지
+  function wouldCauseSubjectSandwich(teacherId, day, newSlot, newSubjectId) {
+    const existing = teacherSlotSubject[teacherId]?.[day]
+    if (!existing) return false
+    const hypothetical = { ...existing, [newSlot]: newSubjectId }
+    const occupiedSlots = Object.keys(hypothetical).map(Number)
+    const ranges = {}
+    for (const s of occupiedSlots) {
+      const subj = hypothetical[s]
+      if (!ranges[subj]) ranges[subj] = [s, s]
+      else { ranges[subj][0] = Math.min(ranges[subj][0], s); ranges[subj][1] = Math.max(ranges[subj][1], s) }
+    }
+    for (const s of occupiedSlots) {
+      const subj = hypothetical[s]
+      for (const [other, [minH, maxH]] of Object.entries(ranges)) {
+        if (other === String(subj)) continue
+        if (s > minH && s < maxH) return true
+      }
+    }
+    return false
+  }
+
+  function pairWouldCauseSubjectSandwich(teacherId, day, slotA, slotB, newSubjectId) {
+    const existing = teacherSlotSubject[teacherId]?.[day] || {}
+    const hypothetical = { ...existing, [slotA]: newSubjectId, [slotB]: newSubjectId }
+    const occupiedSlots = Object.keys(hypothetical).map(Number)
+    const ranges = {}
+    for (const s of occupiedSlots) {
+      const subj = hypothetical[s]
+      if (!ranges[subj]) ranges[subj] = [s, s]
+      else { ranges[subj][0] = Math.min(ranges[subj][0], s); ranges[subj][1] = Math.max(ranges[subj][1], s) }
+    }
+    for (const s of occupiedSlots) {
+      const subj = hypothetical[s]
+      for (const [other, [minH, maxH]] of Object.entries(ranges)) {
+        if (other === String(subj)) continue
+        if (s > minH && s < maxH) return true
+      }
+    }
+    return false
+  }
+
   function isSlotValid(teacherId, subjectId, day, slot, classAvailable) {
     if (!classAvailable.has(slot)) return false
     if (teacherOccupied[teacherId][day].has(slot)) return false
@@ -261,7 +305,8 @@ export function buildSchedule(gradeConfigs, subjects, teachers, lunchConfig, roo
       const validSlots = []
       const trySlot = (slot) => {
         if (!isSlotValid(teacherId, subjectId, day, slot, ca)) return
-        if (wouldCauseGradeSandwich(teacherId, day, slot, grade)) return  // 하드 제약 1
+        if (wouldCauseGradeSandwich(teacherId, day, slot, grade)) return  // 하드 제약 1: 학년 끼어들기
+        if (wouldCauseSubjectSandwich(teacherId, day, slot, subjectId)) return  // 하드 제약 1-2: 과목 끼어들기
         validSlots.push(slot)
       }
 
@@ -332,6 +377,8 @@ export function buildSchedule(gradeConfigs, subjects, teachers, lunchConfig, roo
     if (roomId) roomOccupied[roomId][day].add(slot)
     if (!teacherSlotGrade[teacherId]) teacherSlotGrade[teacherId] = Array.from({ length: 5 }, () => ({}))
     teacherSlotGrade[teacherId][day][slot] = grade
+    if (!teacherSlotSubject[teacherId]) teacherSlotSubject[teacherId] = Array.from({ length: 5 }, () => ({}))
+    teacherSlotSubject[teacherId][day][slot] = subjectId
 
     if (!teacherGradeDay[teacherId]) teacherGradeDay[teacherId] = {}
     if (!teacherGradeDay[teacherId][grade]) teacherGradeDay[teacherId][grade] = [0, 0, 0, 0, 0]
@@ -364,6 +411,7 @@ export function buildSchedule(gradeConfigs, subjects, teachers, lunchConfig, roo
         if (!isSlotValid(teacherId, subjectId, day, slot, ca)) continue
         if (!isSlotValid(teacherId, subjectId, day, slot + 1, ca)) continue
         if (pairWouldCauseGradeSandwich(teacherId, day, slot, slot + 1, grade)) continue
+        if (pairWouldCauseSubjectSandwich(teacherId, day, slot, slot + 1, subjectId)) continue
 
         const teacherLoad = teacherOccupied[teacherId][day].size
         const sameGradeLoad = teacherGradeDay[teacherId]?.[grade]?.[day] || 0
@@ -399,6 +447,8 @@ export function buildSchedule(gradeConfigs, subjects, teachers, lunchConfig, roo
       if (roomId) roomOccupied[roomId][day].add(s)
       if (!teacherSlotGrade[teacherId]) teacherSlotGrade[teacherId] = Array.from({ length: 5 }, () => ({}))
       teacherSlotGrade[teacherId][day][s] = grade
+      if (!teacherSlotSubject[teacherId]) teacherSlotSubject[teacherId] = Array.from({ length: 5 }, () => ({}))
+      teacherSlotSubject[teacherId][day][s] = subjectId
 
       if (!teacherGradeDay[teacherId]) teacherGradeDay[teacherId] = {}
       if (!teacherGradeDay[teacherId][grade]) teacherGradeDay[teacherId][grade] = [0, 0, 0, 0, 0]
