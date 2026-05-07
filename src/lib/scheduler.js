@@ -142,6 +142,8 @@ export function buildSchedule(
   for (const b of blocks) teacherTotalBlocks[b.teacherId] = (teacherTotalBlocks[b.teacherId] || 0) + 1
   blocks.sort((a, b) => {
     if (a.blockIdx !== b.blockIdx) return a.blockIdx - b.blockIdx
+    // 같은 블록 인덱스 안에서: 총 블록 많은 학급 먼저 (cal order + cap 충돌 회피)
+    if (a.totalBlocks !== b.totalBlocks) return b.totalBlocks - a.totalBlocks
     const aT = teacherTotalBlocks[a.teacherId] || 0
     const bT = teacherTotalBlocks[b.teacherId] || 0
     if (aT !== bT) return bT - aT
@@ -216,6 +218,16 @@ export function buildSchedule(
     return occLunch.length >= allLunchSlotIndexes.length - 1
   }
 
+  // 교사 요일 부하 균형 (#13): 한 요일의 교사 시수가 ceil(T/5) 초과 금지
+  // 결과적으로 max-min ≤ 1 (T가 5의 배수에 가까울 때) ~ 2 정도로 균형 유지
+  function violatesDayBalance(teacherId, day, slotsCount) {
+    const T = teacherTotalHours[teacherId] || 0
+    if (T === 0) return false
+    const cap = Math.ceil(T / 5)
+    const newCount = (teacherDayCount[teacherId]?.[day] || 0) + slotsCount
+    return newCount > cap
+  }
+
   // 학년 sandwich (#9): teacher slot grade 시뮬레이션 후 grade range 검사
   function wouldGradeSandwich(teacherId, day, addSlots, addGrade) {
     const existing = teacherSlotGrade[teacherId]?.[day]
@@ -284,6 +296,9 @@ export function buildSchedule(
         if (findAvailableRoom(subjectId, day, slot, teacherId) === null) return false
       }
     }
+
+    // #13 교사 요일 부하 cap = ceil(T/5)
+    if (violatesDayBalance(teacherId, day, slots.length)) return false
 
     // 같은 placement 내 슬롯들끼리 점심 누적 확인 (pair=2 슬롯이 둘 다 점심슬롯이면 위반)
     if (splitLunch && slots.length > 1) {

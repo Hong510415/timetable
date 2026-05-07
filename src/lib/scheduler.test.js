@@ -131,6 +131,46 @@ describe('Hard #5: lunch protection (split_lunch only)', () => {
   })
 })
 
+describe('Hard #8: subject sandwich — realistic 영어전담 scenario from user screenshot', () => {
+  it('reproduces 영어-영어-통합-영어-영어 case', () => {
+    const s1 = makeSubject('영어', '영어', 1)
+    const s2 = makeSubject('통합', '통합', 1)
+    const t1 = makeTeacher('t1', '영어전담', [
+      { subject_id: '영어', grade: 3, class_num: 1, weekly_hours: 1 },
+      { subject_id: '영어', grade: 3, class_num: 2, weekly_hours: 1 },
+      { subject_id: '영어', grade: 4, class_num: 1, weekly_hours: 1 },
+      { subject_id: '영어', grade: 4, class_num: 2, weekly_hours: 1 },
+      { subject_id: '통합', grade: 2, class_num: 4, weekly_hours: 1 },
+    ])
+    // 모든 학급 월요일에 5교시만 → 강제로 같은 교사가 한 날에 다 몰리게
+    const grades = [
+      { grade: 2, num_classes: 4, periods_mon: 5, periods_tue: 0, periods_wed: 0, periods_thu: 0, periods_fri: 0 },
+      { grade: 3, num_classes: 2, periods_mon: 5, periods_tue: 0, periods_wed: 0, periods_thu: 0, periods_fri: 0 },
+      { grade: 4, num_classes: 2, periods_mon: 5, periods_tue: 0, periods_wed: 0, periods_thu: 0, periods_fri: 0 },
+    ]
+    const res = buildSchedule(grades, [s1, s2], [t1], noLunch)
+    const rows = flatRows(res)
+    const monRows = rows.filter(r => r.teacher_id === 't1' && r.day_of_week === 0)
+    monRows.sort((a, b) => a.slot - b.slot)
+
+    // sandwich 검사
+    const subjRange = {}
+    for (const r of monRows) {
+      if (!subjRange[r.subject_id]) subjRange[r.subject_id] = [r.slot, r.slot]
+      else subjRange[r.subject_id][1] = r.slot
+    }
+    for (const r of monRows) {
+      for (const [otherSj, [minS, maxS]] of Object.entries(subjRange)) {
+        if (otherSj === r.subject_id) continue
+        const inside = r.slot > minS && r.slot < maxS
+        if (inside) {
+          throw new Error(`Sandwich: ${r.subject_id}@${r.slot} inside ${otherSj}[${minS},${maxS}] | all: ${monRows.map(x => `${x.slot}:${x.subject_id}`).join(' ')}`)
+        }
+      }
+    }
+  })
+})
+
 describe('Hard #8: subject sandwich forbidden', () => {
   it('does not allow A-B-A subject pattern in same teacher same day', () => {
     // 영어 2시간, 통합 1시간 — 같은 교사, 같은 학년, 같은 학급 다 다르게
@@ -269,6 +309,40 @@ describe('Hard #12: same class+subject same-day rule based on maxSameDay', () =>
         expect(slots[1] - slots[0]).toBe(1) // 연속
       }
     }
+  })
+})
+
+describe('Hard #13: teacher day load balance (cap = ceil(T/5))', () => {
+  it('no day exceeds ceil(T/5) for any teacher', () => {
+    // T=19 → cap=4
+    const s1 = makeSubject('영어', '영어', 1)
+    const s2 = makeSubject('통합', '통합', 1)
+    const t1 = makeTeacher('t1', '영어전담', [
+      ...[3, 4].flatMap(g => [1, 2].map(c => ({ subject_id: '영어', grade: g, class_num: c, weekly_hours: 2 }))),
+      ...[5].flatMap(g => [1, 2].map(c => ({ subject_id: '영어', grade: g, class_num: c, weekly_hours: 3 }))),
+      { subject_id: '영어', grade: 6, class_num: 1, weekly_hours: 3 },
+      { subject_id: '통합', grade: 2, class_num: 4, weekly_hours: 2 },
+    ])
+    // total: 4*2 + 2*3 + 3 + 2 = 8+6+3+2 = 19h
+    const grades = [
+      { grade: 2, num_classes: 4, periods_mon: 5, periods_tue: 5, periods_wed: 5, periods_thu: 5, periods_fri: 5 },
+      { grade: 3, num_classes: 2, periods_mon: 5, periods_tue: 5, periods_wed: 5, periods_thu: 5, periods_fri: 5 },
+      { grade: 4, num_classes: 2, periods_mon: 5, periods_tue: 5, periods_wed: 5, periods_thu: 5, periods_fri: 5 },
+      { grade: 5, num_classes: 2, periods_mon: 5, periods_tue: 5, periods_wed: 5, periods_thu: 5, periods_fri: 5 },
+      { grade: 6, num_classes: 1, periods_mon: 5, periods_tue: 5, periods_wed: 5, periods_thu: 5, periods_fri: 5 },
+    ]
+    const res = buildSchedule(grades, [s1, s2], [t1], noLunch)
+    const rows = flatRows(res)
+    const tRows = rows.filter(r => r.teacher_id === 't1')
+    const dayLoads = [0, 0, 0, 0, 0]
+    for (const r of tRows) dayLoads[r.day_of_week]++
+    const T = 19
+    const cap = Math.ceil(T / 5) // = 4
+    for (let d = 0; d < 5; d++) {
+      expect(dayLoads[d]).toBeLessThanOrEqual(cap)
+    }
+    // 미배정 0 확인 (총 19h)
+    expect(tRows.length).toBe(19)
   })
 })
 
