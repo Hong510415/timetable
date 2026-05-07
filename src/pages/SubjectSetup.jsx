@@ -6,9 +6,10 @@ import SubjectPlanComparison from '../components/SubjectPlanComparison'
 const GRADES = [1, 2, 3, 4, 5, 6]
 
 export default function SubjectSetup() {
-  const { state, updatePlanSubjects, setActivePlanTab, applyPlan, setAssignmentSettings } = useApp()
+  const { state, updatePlanSubjects, setActivePlanTab, applyPlan, setAssignmentSettings, addPlanSlot } = useApp()
   const { subjects, gradeConfigs, assignmentSettings, subjectPlans, teachers } = state
-  const { plans, activeTabId, appliedPlanId, appliedAt } = subjectPlans
+  const { plans, activeTabId, appliedPlanId, appliedAt, visiblePlanCount } = subjectPlans
+  const visiblePlans = plans.slice(0, visiblePlanCount)
   const [showComparison, setShowComparison] = useState(false)
 
   const activePlan = plans.find(p => p.id === activeTabId) || plans[0]
@@ -79,13 +80,13 @@ export default function SubjectSetup() {
   }
 
   function handleOpenCompare() {
-    const filledCount = plans.filter(p => p.subjects.length > 0).length
+    const filledCount = visiblePlans.filter(p => p.subjects.length > 0).length
     if (filledCount === 0) {
       alert('A·B·C안 모두 비어 있습니다. 먼저 과목을 입력하세요.')
       return
     }
     if (filledCount === 1) {
-      const onlyPlan = plans.find(p => p.subjects.length > 0)
+      const onlyPlan = visiblePlans.find(p => p.subjects.length > 0)
       const ok = confirm(`비교할 다른 안이 없습니다. ${onlyPlan.name}을 바로 적용할까요?`)
       if (ok) {
         setActivePlanTab(onlyPlan.id)
@@ -168,46 +169,65 @@ export default function SubjectSetup() {
           </div>
         </div>
 
-        <div className="max-w-[720px] bg-white border border-gray-200 rounded-sm p-3 flex flex-col gap-2">
-          <div className="flex items-center justify-between">
-            <div className="flex border border-gray-200 bg-white rounded-sm w-fit">
-              {plans.map(p => (
+        {visiblePlanCount === 0 ? (
+          <button
+            onClick={addPlanSlot}
+            className="max-w-[720px] h-11 px-5 border border-dashed border-gray-300 rounded-sm text-[13px] text-gray-400 hover:bg-gray-50 hover:border-gray-400 hover:text-gray-600 transition-colors text-left"
+          >
+            + 과목 설정 추가
+          </button>
+        ) : (
+          <div className="max-w-[720px] bg-white border border-gray-200 rounded-sm p-3 flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="flex border border-gray-200 bg-white rounded-sm w-fit">
+                  {visiblePlans.map(p => (
+                    <button
+                      key={p.id}
+                      onClick={() => setActivePlanTab(p.id)}
+                      className={`px-5 h-9 text-[13px] transition-colors ${
+                        activeTabId === p.id ? 'bg-black text-white font-semibold' : 'text-gray-400 hover:bg-gray-50'
+                      }`}
+                    >
+                      {p.name}
+                    </button>
+                  ))}
+                </div>
+                {visiblePlanCount < 3 && (
+                  <button
+                    onClick={addPlanSlot}
+                    className="px-3 h-9 text-[12px] border border-dashed border-gray-300 rounded-sm text-gray-400 hover:bg-gray-50 hover:border-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    + 과목 설정 추가
+                  </button>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
                 <button
-                  key={p.id}
-                  onClick={() => setActivePlanTab(p.id)}
-                  className={`px-5 h-9 text-[13px] transition-colors ${
-                    activeTabId === p.id ? 'bg-black text-white font-semibold' : 'text-gray-400 hover:bg-gray-50'
+                  onClick={handleOpenCompare}
+                  className="px-4 h-9 text-[13px] rounded-sm border border-gray-300 hover:bg-gray-50"
+                >
+                  📊 비교 보기
+                </button>
+                <button
+                  onClick={handleApply}
+                  disabled={isApplyDisabled}
+                  title={disabledTitle}
+                  className={`px-4 h-9 text-[13px] font-semibold rounded-sm border transition-colors ${
+                    isApplyDisabled
+                      ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                      : 'bg-black text-white border-black hover:bg-gray-800'
                   }`}
                 >
-                  {p.name}
+                  ✓ {activePlan.name} 적용
                 </button>
-              ))}
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleOpenCompare}
-                className="px-4 h-9 text-[13px] rounded-sm border border-gray-300 hover:bg-gray-50"
-              >
-                📊 비교 보기
-              </button>
-              <button
-                onClick={handleApply}
-                disabled={isApplyDisabled}
-                title={disabledTitle}
-                className={`px-4 h-9 text-[13px] font-semibold rounded-sm border transition-colors ${
-                  isApplyDisabled
-                    ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
-                    : 'bg-black text-white border-black hover:bg-gray-800'
-                }`}
-              >
-                ✓ {activePlan.name} 적용
-              </button>
-            </div>
+            <p className="text-[11px] text-gray-500 px-1">{statusLine}</p>
           </div>
-          <p className="text-[11px] text-gray-500 px-1">{statusLine}</p>
-        </div>
+        )}
 
-        {gradesToShow.map(grade => (
+        {visiblePlanCount > 0 && gradesToShow.map(grade => (
           <div key={grade} className="bg-white border border-gray-200 rounded-sm p-5 max-w-[720px]">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-3">
@@ -281,7 +301,7 @@ export default function SubjectSetup() {
           </div>
         ))}
 
-        {totalDedicated > 0 && (
+        {visiblePlanCount > 0 && totalDedicated > 0 && (
           <div className="max-w-[720px] bg-white border border-gray-200 rounded-sm p-5">
             <p className="text-[12px] font-semibold text-gray-600 mb-3">전담 시수 요약</p>
             <div className="flex items-center gap-5">
@@ -317,7 +337,7 @@ export default function SubjectSetup() {
 
       {showComparison && (
         <SubjectPlanComparison
-          plans={plans}
+          plans={visiblePlans}
           gradeConfigs={gradeConfigs}
           gradesToShow={gradesToShow}
           appliedPlanId={appliedPlanId}

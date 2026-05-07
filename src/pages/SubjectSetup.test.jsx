@@ -21,26 +21,92 @@ describe('SubjectSetup', () => {
     expect(screen.getByText('전담 과목 설정')).toBeInTheDocument()
   })
 
-  it('renders 3 plan tabs (A안, B안, C안)', () => {
+  it('shows "과목 설정 추가" button on first launch (visiblePlanCount=0)', () => {
+    renderPage()
+    expect(screen.getByRole('button', { name: /과목 설정 추가/ })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'A안' })).not.toBeInTheDocument()
+  })
+
+  it('renders plan tabs after adding slots', () => {
+    const stored = {
+      gradeConfigs: [], subjects: [], teachers: [], rooms: [], roomBlockedSlots: [],
+      timetableSlots: [], roomTimetableSlots: [],
+      assignmentSettings: { maxMajorSubjectsPerTeacher: 1 }, assignmentResult: null,
+      lunchConfig: { split_lunch: false, lunch_groups: [] }, schoolName: '',
+      subjectPlans: {
+        plans: [
+          { id: 'plan1', name: 'A안', subjects: [] },
+          { id: 'plan2', name: 'B안', subjects: [] },
+          { id: 'plan3', name: 'C안', subjects: [] },
+        ],
+        activeTabId: 'plan1', appliedPlanId: null, appliedAt: null, visiblePlanCount: 3,
+      },
+    }
+    localStorage.setItem('timetable_app_data', JSON.stringify(stored))
     renderPage()
     expect(screen.getByRole('button', { name: 'A안' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'B안' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'C안' })).toBeInTheDocument()
   })
 
-  it('shows "적용 전" status on first launch with empty plans', () => {
+  it('shows "적용 전" status when visiblePlanCount > 0', () => {
+    const stored = {
+      gradeConfigs: [], subjects: [], teachers: [], rooms: [], roomBlockedSlots: [],
+      timetableSlots: [], roomTimetableSlots: [],
+      assignmentSettings: { maxMajorSubjectsPerTeacher: 1 }, assignmentResult: null,
+      lunchConfig: { split_lunch: false, lunch_groups: [] }, schoolName: '',
+      subjectPlans: {
+        plans: [
+          { id: 'plan1', name: 'A안', subjects: [] },
+          { id: 'plan2', name: 'B안', subjects: [] },
+          { id: 'plan3', name: 'C안', subjects: [] },
+        ],
+        activeTabId: 'plan1', appliedPlanId: null, appliedAt: null, visiblePlanCount: 2,
+      },
+    }
+    localStorage.setItem('timetable_app_data', JSON.stringify(stored))
     renderPage()
     expect(screen.getByText(/적용 전/)).toBeInTheDocument()
   })
 
   it('switches active plan tab on click', async () => {
     const user = userEvent.setup()
+    const stored = {
+      gradeConfigs: [], subjects: [], teachers: [], rooms: [], roomBlockedSlots: [],
+      timetableSlots: [], roomTimetableSlots: [],
+      assignmentSettings: { maxMajorSubjectsPerTeacher: 1 }, assignmentResult: null,
+      lunchConfig: { split_lunch: false, lunch_groups: [] }, schoolName: '',
+      subjectPlans: {
+        plans: [
+          { id: 'plan1', name: 'A안', subjects: [] },
+          { id: 'plan2', name: 'B안', subjects: [] },
+          { id: 'plan3', name: 'C안', subjects: [] },
+        ],
+        activeTabId: 'plan1', appliedPlanId: null, appliedAt: null, visiblePlanCount: 3,
+      },
+    }
+    localStorage.setItem('timetable_app_data', JSON.stringify(stored))
     renderPage()
     await user.click(screen.getByRole('button', { name: 'B안' }))
     expect(screen.getByText(/현재 편집: B안/)).toBeInTheDocument()
   })
 
   it('disables 확정 button when plan is empty', () => {
+    const stored = {
+      gradeConfigs: [{ grade: 1, num_classes: 4, periods_mon: 5, periods_tue: 5, periods_wed: 5, periods_thu: 5, periods_fri: 5 }],
+      subjects: [], teachers: [], rooms: [], roomBlockedSlots: [], timetableSlots: [], roomTimetableSlots: [],
+      assignmentSettings: { maxMajorSubjectsPerTeacher: 1 }, assignmentResult: null,
+      lunchConfig: { split_lunch: false, lunch_groups: [] }, schoolName: '',
+      subjectPlans: {
+        plans: [
+          { id: 'plan1', name: 'A안', subjects: [] },
+          { id: 'plan2', name: 'B안', subjects: [] },
+          { id: 'plan3', name: 'C안', subjects: [] },
+        ],
+        activeTabId: 'plan1', appliedPlanId: null, appliedAt: null, visiblePlanCount: 2,
+      },
+    }
+    localStorage.setItem('timetable_app_data', JSON.stringify(stored))
     renderPage()
     const applyBtn = screen.getByRole('button', { name: /안 적용/ })
     expect(applyBtn).toBeDisabled()
@@ -72,6 +138,7 @@ describe('SubjectSetup', () => {
         activeTabId: 'plan1',
         appliedPlanId: 'plan1',
         appliedAt: new Date().toISOString(),
+        visiblePlanCount: 3,
       },
     }
     localStorage.setItem('timetable_app_data', JSON.stringify(stored))
@@ -101,7 +168,7 @@ describe('SubjectSetup', () => {
           { id: 'plan2', name: 'B안', subjects: [] },
           { id: 'plan3', name: 'C안', subjects: [] },
         ],
-        activeTabId: 'plan1', appliedPlanId: null, appliedAt: null,
+        activeTabId: 'plan1', appliedPlanId: null, appliedAt: null, visiblePlanCount: 3,
       },
     }
     localStorage.setItem('timetable_app_data', JSON.stringify(stored))
@@ -137,7 +204,7 @@ describe('SubjectSetup', () => {
           { id: 'plan2', name: 'B안', subjects: [] },
           { id: 'plan3', name: 'C안', subjects: [] },
         ],
-        activeTabId: 'plan1', appliedPlanId: null, appliedAt: null,
+        activeTabId: 'plan1', appliedPlanId: null, appliedAt: null, visiblePlanCount: 3,
       },
     }
     localStorage.setItem('timetable_app_data', JSON.stringify(stored))
@@ -178,7 +245,7 @@ describe('담임시수 widget', () => {
           { id: 'plan2', name: 'B안', subjects: [] },
           { id: 'plan3', name: 'C안', subjects: [] },
         ],
-        activeTabId: 'plan1', appliedPlanId: null, appliedAt: null,
+        activeTabId: 'plan1', appliedPlanId: null, appliedAt: null, visiblePlanCount: 3,
       },
     }
     localStorage.setItem('timetable_app_data', JSON.stringify(stored))
@@ -211,7 +278,7 @@ describe('overflow handling', () => {
           { id: 'plan2', name: 'B안', subjects: [] },
           { id: 'plan3', name: 'C안', subjects: [] },
         ],
-        activeTabId: 'plan1', appliedPlanId: null, appliedAt: null,
+        activeTabId: 'plan1', appliedPlanId: null, appliedAt: null, visiblePlanCount: 3,
       },
     }
     localStorage.setItem('timetable_app_data', JSON.stringify(stored))

@@ -69,6 +69,19 @@ export function reducer(state, action) {
       }
     }
 
+    case 'ADD_PLAN_SLOT': {
+      const cur = state.subjectPlans.visiblePlanCount
+      const next = cur === 0 ? 2 : Math.min(cur + 1, 3)
+      return {
+        ...state,
+        subjectPlans: {
+          ...state.subjectPlans,
+          visiblePlanCount: next,
+          ...(cur === 0 ? { activeTabId: 'plan1' } : {}),
+        },
+      }
+    }
+
     default: return state
   }
 }

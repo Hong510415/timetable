@@ -28,6 +28,7 @@ export function AppProvider({ children }) {
     setActivePlanTab: (tabId) => dispatch({ type: 'SET_ACTIVE_PLAN_TAB', payload: tabId }),
     updatePlanSubjects: (planId, subjects) => dispatch({ type: 'UPDATE_PLAN_SUBJECTS', payload: { planId, subjects } }),
     applyPlan: (planId) => dispatch({ type: 'APPLY_PLAN', payload: { planId } }),
+    addPlanSlot: () => dispatch({ type: 'ADD_PLAN_SLOT' }),
   }
 
   return <AppContext.Provider value={ctx}>{children}</AppContext.Provider>

@@ -33,6 +33,7 @@ export const initialState = {
     activeTabId: 'plan1',
     appliedPlanId: null,
     appliedAt: null,
+    visiblePlanCount: 0,
   },
 }
 
@@ -53,7 +54,10 @@ export function loadFromStorage() {
         activeTabId: 'plan1',
         appliedPlanId: liveSubjects.length > 0 ? 'plan1' : null,
         appliedAt: null,
+        visiblePlanCount: 3,
       }
+    } else if (merged.subjectPlans.visiblePlanCount === undefined) {
+      merged.subjectPlans = { ...merged.subjectPlans, visiblePlanCount: 3 }
     }
     return merged
   } catch {
