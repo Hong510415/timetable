@@ -38,11 +38,17 @@ describe('UPDATE_PLAN_SUBJECTS', () => {
     expect(next.subjectPlans.plans[2].subjects).toEqual([])
   })
 
-  it('does not touch state.subjects (live data) or downstream state', () => {
+  it('does not touch state.subjects (live data) when 2+ plans visible', () => {
     const stateWithDownstream = {
       ...initialState,
       subjects: [{ id: 'live', grade: 1, name: '음악', weekly_hours: 2, is_major: false }],
       teachers: [{ id: 't1', code: '교사1', teacher_assignments: [{ id: 'a', subject_id: 'live', grade: 1, class_num: 1, weekly_hours: 2 }] }],
+      subjectPlans: {
+        ...initialState.subjectPlans,
+        plans: initialState.subjectPlans.plans.map(p =>
+          p.id === 'plan1' || p.id === 'plan2' ? { ...p, visible: true } : p
+        ),
+      },
     }
     const next = reducer(stateWithDownstream, {
       type: 'UPDATE_PLAN_SUBJECTS',
@@ -50,6 +56,22 @@ describe('UPDATE_PLAN_SUBJECTS', () => {
     })
     expect(next.subjects).toEqual(stateWithDownstream.subjects)
     expect(next.teachers).toEqual(stateWithDownstream.teachers)
+  })
+
+  it('auto-syncs state.subjects when only 1 plan is visible', () => {
+    // 1개 플랜만 visible이면 플랜 = live (auto-apply 모드)
+    const stateOnePlan = {
+      ...initialState,
+      subjects: [{ id: 'old', grade: 1, name: '음악', weekly_hours: 2, is_major: false }],
+    }
+    const newSubjects = [{ id: 'new', grade: 2, name: '영어', weekly_hours: 3, is_major: true }]
+    const next = reducer(stateOnePlan, {
+      type: 'UPDATE_PLAN_SUBJECTS',
+      payload: { planId: 'plan1', subjects: newSubjects },
+    })
+    expect(next.subjects).toEqual(newSubjects)
+    expect(next.subjects[0]).not.toBe(newSubjects[0]) // deep copy
+    expect(next.subjectPlans.appliedPlanId).toBe('plan1')
   })
 })
 

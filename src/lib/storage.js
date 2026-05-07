@@ -64,6 +64,16 @@ export function loadFromStorage() {
         merged.subjectPlans = { ...rest, plans: newPlans }
       }
     }
+    // 1개 플랜만 visible이면 state.subjects를 그 플랜과 동기화 (auto-apply 모드)
+    const visiblePlans = merged.subjectPlans.plans.filter(p => p.visible)
+    if (visiblePlans.length === 1) {
+      const onlyPlan = visiblePlans[0]
+      merged.subjects = cloneSubjects(onlyPlan.subjects)
+      merged.subjectPlans = {
+        ...merged.subjectPlans,
+        appliedPlanId: onlyPlan.id,
+      }
+    }
     return merged
   } catch {
     return initialState

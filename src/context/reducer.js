@@ -1,6 +1,28 @@
 import { initialState } from '../lib/storage'
 import { cloneSubjects, subjectsEqualByContent } from '../lib/planHelpers'
 
+function syncIfSinglePlan(state, newPlans, planId, subjects) {
+  // 1개 플랜만 visible이고 그게 활성/업데이트된 플랜이면 live state.subjects도 동기화
+  const visible = newPlans.filter(p => p.visible)
+  const updatedPlan = newPlans.find(p => p.id === planId)
+  if (visible.length === 1 && updatedPlan?.visible) {
+    return {
+      ...state,
+      subjects: cloneSubjects(subjects),
+      subjectPlans: {
+        ...state.subjectPlans,
+        plans: newPlans,
+        appliedPlanId: planId,
+        appliedAt: new Date().toISOString(),
+      },
+    }
+  }
+  return {
+    ...state,
+    subjectPlans: { ...state.subjectPlans, plans: newPlans },
+  }
+}
+
 export function reducer(state, action) {
   switch (action.type) {
     case 'SET_SCHOOL_NAME': return { ...state, schoolName: action.payload }
@@ -24,15 +46,10 @@ export function reducer(state, action) {
 
     case 'UPDATE_PLAN_SUBJECTS': {
       const { planId, subjects } = action.payload
-      return {
-        ...state,
-        subjectPlans: {
-          ...state.subjectPlans,
-          plans: state.subjectPlans.plans.map(p =>
-            p.id === planId ? { ...p, subjects } : p
-          ),
-        },
-      }
+      const newPlans = state.subjectPlans.plans.map(p =>
+        p.id === planId ? { ...p, subjects } : p
+      )
+      return syncIfSinglePlan(state, newPlans, planId, subjects)
     }
 
     case 'APPLY_PLAN': {
