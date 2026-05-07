@@ -3,12 +3,13 @@ import { reducer } from './reducer'
 import { initialState } from '../lib/storage'
 
 function makeStateWithPlan(planId, subjects) {
+  // 모든 플랜을 visible로 설정 — single-plan auto-sync를 우회해 APPLY_PLAN 같은 multi-plan 시나리오 테스트 가능
   return {
     ...initialState,
     subjectPlans: {
       ...initialState.subjectPlans,
       plans: initialState.subjectPlans.plans.map(p =>
-        p.id === planId ? { ...p, subjects } : p
+        p.id === planId ? { ...p, subjects, visible: true } : { ...p, visible: true }
       ),
     },
   }
@@ -167,9 +168,10 @@ describe('APPLY_PLAN', () => {
       timetableSlots: [{ id: 'tt1', grade: 1, class_num: 1, day_of_week: 0, slot: 0, teacher_id: 't1', subject_id: 's1' }],
       subjectPlans: {
         ...initialState.subjectPlans,
-        plans: initialState.subjectPlans.plans.map(p =>
-          p.id === 'plan2' ? { ...p, subjects: [{ ...sharedSubject, id: 'different-id' }] } : p
-        ),
+        plans: initialState.subjectPlans.plans.map(p => {
+          if (p.id === 'plan2') return { ...p, subjects: [{ ...sharedSubject, id: 'different-id' }], visible: true }
+          return { ...p, visible: true }
+        }),
         appliedPlanId: 'plan1',
       },
     }

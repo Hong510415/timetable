@@ -23,7 +23,30 @@ function syncIfSinglePlan(state, newPlans, planId, subjects) {
   }
 }
 
+// 모든 액션 후 invariant 보장:
+// 1개 플랜만 visible이고 state.subjects가 그 플랜 subjects와 어긋나면 동기화 (auto-apply 모드)
+// 콘텐츠가 이미 일치하면 appliedPlanId 등 메타데이터는 손대지 않음.
+function ensureSinglePlanSync(state) {
+  if (!state?.subjectPlans?.plans) return state
+  const visible = state.subjectPlans.plans.filter(p => p.visible)
+  if (visible.length !== 1) return state
+  const only = visible[0]
+  if (subjectsEqualByContent(state.subjects, only.subjects)) return state
+  return {
+    ...state,
+    subjects: cloneSubjects(only.subjects),
+    subjectPlans: {
+      ...state.subjectPlans,
+      appliedPlanId: only.id,
+    },
+  }
+}
+
 export function reducer(state, action) {
+  return ensureSinglePlanSync(rawReducer(state, action))
+}
+
+function rawReducer(state, action) {
   switch (action.type) {
     case 'SET_SCHOOL_NAME': return { ...state, schoolName: action.payload }
     case 'SET_GRADE_CONFIGS': return { ...state, gradeConfigs: action.payload }
