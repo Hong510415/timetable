@@ -6,10 +6,10 @@ import SubjectPlanComparison from '../components/SubjectPlanComparison'
 const GRADES = [1, 2, 3, 4, 5, 6]
 
 export default function SubjectSetup() {
-  const { state, updatePlanSubjects, setActivePlanTab, applyPlan, setAssignmentSettings, addPlanSlot } = useApp()
+  const { state, updatePlanSubjects, setActivePlanTab, applyPlan, setAssignmentSettings, addPlanSlot, removePlanSlot } = useApp()
   const { subjects, gradeConfigs, assignmentSettings, subjectPlans, teachers } = state
-  const { plans, activeTabId, appliedPlanId, appliedAt, visiblePlanCount } = subjectPlans
-  const visiblePlans = plans.slice(0, visiblePlanCount)
+  const { plans, activeTabId, appliedPlanId, appliedAt } = subjectPlans
+  const visiblePlans = plans.filter(p => p.visible)
   const [showComparison, setShowComparison] = useState(false)
 
   const activePlan = plans.find(p => p.id === activeTabId) || plans[0]
@@ -169,7 +169,7 @@ export default function SubjectSetup() {
           </div>
         </div>
 
-        {visiblePlanCount === 0 ? (
+        {visiblePlans.length === 0 ? (
           <button
             onClick={addPlanSlot}
             className="max-w-[720px] h-11 px-5 border border-dashed border-gray-300 rounded-sm text-[13px] text-gray-400 hover:bg-gray-50 hover:border-gray-400 hover:text-gray-600 transition-colors text-left"
@@ -182,18 +182,31 @@ export default function SubjectSetup() {
               <div className="flex items-center gap-2">
                 <div className="flex border border-gray-200 bg-white rounded-sm w-fit">
                   {visiblePlans.map(p => (
-                    <button
+                    <div
                       key={p.id}
-                      onClick={() => setActivePlanTab(p.id)}
-                      className={`px-5 h-9 text-[13px] transition-colors ${
-                        activeTabId === p.id ? 'bg-black text-white font-semibold' : 'text-gray-400 hover:bg-gray-50'
+                      className={`flex items-center border-r border-gray-200 last:border-r-0 transition-colors ${
+                        activeTabId === p.id ? 'bg-black text-white' : 'text-gray-400 hover:bg-gray-50'
                       }`}
                     >
-                      {p.name}
-                    </button>
+                      <button
+                        onClick={() => setActivePlanTab(p.id)}
+                        className={`pl-4 pr-2 h-9 text-[13px] ${activeTabId === p.id ? 'font-semibold' : ''}`}
+                      >
+                        {p.name}
+                      </button>
+                      <button
+                        onClick={() => removePlanSlot(p.id)}
+                        title={`${p.name} 삭제`}
+                        className={`pr-2 h-9 text-[12px] leading-none transition-opacity ${
+                          activeTabId === p.id ? 'opacity-50 hover:opacity-100' : 'opacity-30 hover:opacity-70'
+                        }`}
+                      >
+                        ×
+                      </button>
+                    </div>
                   ))}
                 </div>
-                {visiblePlanCount < 3 && (
+                {visiblePlans.length < 3 && (
                   <button
                     onClick={addPlanSlot}
                     className="px-3 h-9 text-[12px] border border-dashed border-gray-300 rounded-sm text-gray-400 hover:bg-gray-50 hover:border-gray-400 hover:text-gray-600 transition-colors"
@@ -227,7 +240,7 @@ export default function SubjectSetup() {
           </div>
         )}
 
-        {visiblePlanCount > 0 && gradesToShow.map(grade => (
+        {visiblePlans.length > 0 && gradesToShow.map(grade => (
           <div key={grade} className="bg-white border border-gray-200 rounded-sm p-5 max-w-[720px]">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-3">
@@ -301,7 +314,7 @@ export default function SubjectSetup() {
           </div>
         ))}
 
-        {visiblePlanCount > 0 && totalDedicated > 0 && (
+        {visiblePlans.length > 0 && totalDedicated > 0 && (
           <div className="max-w-[720px] bg-white border border-gray-200 rounded-sm p-5">
             <p className="text-[12px] font-semibold text-gray-600 mb-3">전담 시수 요약</p>
             <div className="flex items-center gap-5">

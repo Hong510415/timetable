@@ -70,14 +70,51 @@ export function reducer(state, action) {
     }
 
     case 'ADD_PLAN_SLOT': {
-      const cur = state.subjectPlans.visiblePlanCount
-      const next = cur === 0 ? 2 : Math.min(cur + 1, 3)
+      const plans = state.subjectPlans.plans
+      const visibleCount = plans.filter(p => p.visible).length
+      if (visibleCount === 0) {
+        return {
+          ...state,
+          subjectPlans: {
+            ...state.subjectPlans,
+            plans: plans.map((p, i) => i < 2 ? { ...p, visible: true } : p),
+            activeTabId: 'plan1',
+          },
+        }
+      }
+      const firstInvisibleIdx = plans.findIndex(p => !p.visible)
+      if (firstInvisibleIdx === -1) return state
       return {
         ...state,
         subjectPlans: {
           ...state.subjectPlans,
-          visiblePlanCount: next,
-          ...(cur === 0 ? { activeTabId: 'plan1' } : {}),
+          plans: plans.map((p, i) => i === firstInvisibleIdx ? { ...p, visible: true } : p),
+        },
+      }
+    }
+
+    case 'REMOVE_PLAN_SLOT': {
+      const { planId } = action.payload
+      const plans = state.subjectPlans.plans
+      const target = plans.find(p => p.id === planId)
+      if (!target || !target.visible) return state
+      const newPlans = plans.map(p =>
+        p.id === planId ? { ...p, visible: false, subjects: [] } : p
+      )
+      const remaining = newPlans.filter(p => p.visible)
+      const newActiveTabId = state.subjectPlans.activeTabId === planId
+        ? (remaining[0]?.id ?? 'plan1')
+        : state.subjectPlans.activeTabId
+      const newAppliedPlanId = state.subjectPlans.appliedPlanId === planId
+        ? null
+        : state.subjectPlans.appliedPlanId
+      return {
+        ...state,
+        subjectPlans: {
+          ...state.subjectPlans,
+          plans: newPlans,
+          activeTabId: newActiveTabId,
+          appliedPlanId: newAppliedPlanId,
         },
       }
     }

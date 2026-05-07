@@ -26,14 +26,13 @@ export const initialState = {
   assignmentResult: null,
   subjectPlans: {
     plans: [
-      { id: 'plan1', name: 'A안', subjects: [] },
-      { id: 'plan2', name: 'B안', subjects: [] },
-      { id: 'plan3', name: 'C안', subjects: [] },
+      { id: 'plan1', name: 'A안', subjects: [], visible: false },
+      { id: 'plan2', name: 'B안', subjects: [], visible: false },
+      { id: 'plan3', name: 'C안', subjects: [], visible: false },
     ],
     activeTabId: 'plan1',
     appliedPlanId: null,
     appliedAt: null,
-    visiblePlanCount: 0,
   },
 }
 
@@ -47,17 +46,23 @@ export function loadFromStorage() {
       const liveSubjects = merged.subjects || []
       merged.subjectPlans = {
         plans: [
-          { id: 'plan1', name: 'A안', subjects: cloneSubjects(liveSubjects) },
-          { id: 'plan2', name: 'B안', subjects: [] },
-          { id: 'plan3', name: 'C안', subjects: [] },
+          { id: 'plan1', name: 'A안', subjects: cloneSubjects(liveSubjects), visible: true },
+          { id: 'plan2', name: 'B안', subjects: [], visible: true },
+          { id: 'plan3', name: 'C안', subjects: [], visible: true },
         ],
         activeTabId: 'plan1',
         appliedPlanId: liveSubjects.length > 0 ? 'plan1' : null,
         appliedAt: null,
-        visiblePlanCount: 3,
       }
-    } else if (merged.subjectPlans.visiblePlanCount === undefined) {
-      merged.subjectPlans = { ...merged.subjectPlans, visiblePlanCount: 3 }
+    } else {
+      const sp = merged.subjectPlans
+      const hasVisibleFlags = Array.isArray(sp.plans) && sp.plans.length > 0 && Object.prototype.hasOwnProperty.call(sp.plans[0], 'visible')
+      if (!hasVisibleFlags) {
+        const count = sp.visiblePlanCount !== undefined ? sp.visiblePlanCount : 3
+        const newPlans = sp.plans.map((p, i) => ({ ...p, visible: i < count }))
+        const { visiblePlanCount: _removed, ...rest } = sp
+        merged.subjectPlans = { ...rest, plans: newPlans }
+      }
     }
     return merged
   } catch {
