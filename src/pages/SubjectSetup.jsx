@@ -215,7 +215,7 @@ export default function SubjectSetup() {
                   </button>
                 )}
               </div>
-              <div className="flex items-center gap-2">
+              {visiblePlans.length > 1 && <div className="flex items-center gap-2">
                 <button
                   onClick={handleOpenCompare}
                   className="px-4 h-9 text-[13px] rounded-sm border border-gray-300 hover:bg-gray-50"
@@ -234,7 +234,7 @@ export default function SubjectSetup() {
                 >
                   ✓ {activePlan.name} 적용
                 </button>
-              </div>
+              </div>}
             </div>
             <p className="text-[11px] text-gray-500 px-1">{statusLine}</p>
           </div>
