@@ -28,16 +28,28 @@ export function buildSchedule(gradeConfigs, subjects, teachers, lunchConfig, roo
     : []
 
   // 과목ID → 차단 day-slot Set (특별실 사용 불가 시간)
+  // 한 과목이 여러 특별실에서 사용 가능할 때, 모든 특별실이 동시에 차단된 슬롯만 차단됨 (교집합)
+  // 예: 통합/체육이 2층강당+4층체육관에서 가능하면, 2층강당만 차단된 시간엔 4층체육관 사용 가능
   const subjectBlockedMap = {}
-  for (const room of rooms) {
-    if (!room.subjectNames?.length) continue
-    const blocked = roomBlockedSlots.filter(b => b.room_id === room.id)
-    if (!blocked.length) continue
-    for (const subj of subjects) {
-      if (!room.subjectNames.includes(subj.name)) continue
-      if (!subjectBlockedMap[subj.id]) subjectBlockedMap[subj.id] = new Set()
-      for (const b of blocked) subjectBlockedMap[subj.id].add(`${b.day_of_week}-${b.slot}`)
+  for (const subj of subjects) {
+    const eligibleRooms = rooms.filter(r => r.subjectNames?.includes(subj.name))
+    if (eligibleRooms.length === 0) continue
+    // 각 슬롯에서 차단된 방의 수
+    const blockedCount = {}
+    for (const room of eligibleRooms) {
+      const blocked = roomBlockedSlots.filter(b => b.room_id === room.id)
+      for (const b of blocked) {
+        const key = `${b.day_of_week}-${b.slot}`
+        blockedCount[key] = (blockedCount[key] || 0) + 1
+      }
     }
+    // 모든 가능 방이 차단된 슬롯만 과목 차단
+    const totalRooms = eligibleRooms.length
+    const blockedSet = new Set()
+    for (const [key, count] of Object.entries(blockedCount)) {
+      if (count === totalRooms) blockedSet.add(key)
+    }
+    if (blockedSet.size > 0) subjectBlockedMap[subj.id] = blockedSet
   }
 
   // 학년·반의 요일별 가용 슬롯

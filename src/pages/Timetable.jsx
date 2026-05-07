@@ -48,7 +48,10 @@ export default function Timetable() {
     try {
       const result = buildSchedule(gradeConfigs, subjects, teachers, lunchConfig || { split_lunch: false, lunch_groups: [] }, rooms, roomBlockedSlots)
       const { rows } = flattenResult(result.result, result.gradeLunchSlot, result.totalSlots)
-      const flatErrors = (result.errors || []).map(e => `${e.grade}학년 ${e.classNum}반 ${e.unassigned}시수 미배정`)
+      const flatErrors = (result.errors || []).map(e => {
+        const subjName = subjects.find(s => s.id === e.subjectId)?.name || '과목 미상'
+        return `${e.grade}학년 ${e.classNum}반 ${subjName} ${e.unassigned}시수 미배정`
+      })
       setErrors(flatErrors)
       const rowsWithId = rows.map(r => ({ ...r, id: crypto.randomUUID() }))
       setTimetableSlots(rowsWithId)
