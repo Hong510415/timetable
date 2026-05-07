@@ -92,40 +92,23 @@ export function buildSchedule(gradeConfigs, subjects, teachers, lunchConfig, roo
     }
   }
 
-  // 배정 단위: pair (2시간 연속) 또는 single (1시간)
-  // 같은 (과목, 학년)은 모든 반이 같은 패턴을 따른다 — maxSameDay >= 2 이고 weekly_hours >= 2 이면 pair로 묶음
+  // 배정 단위: 모든 시수를 개별 session으로 만든다 (singleton round-robin)
+  // 같은 학년 모든 반이 session N을 다 마친 뒤 session N+1로 넘어가도록 정렬
+  // pair 패턴(연속 2시간)은 doAssign 내부에서 인접 슬롯 검사 + score 보너스로 soft 처리
   const units = []
   for (const teacher of teachers) {
     for (const a of (teacher.teacher_assignments || [])) {
       const wh = a.weekly_hours || 0
       if (wh <= 0) continue
-      const maxSame = getSubjectMaxSameDay(a.subject_id)
-      const useStruct = maxSame >= 2 && wh >= 2
-      const pairsCount = useStruct ? Math.floor(wh / 2) : 0
-      const leftover = wh - pairsCount * 2
-
-      let unitIdx = 0
-      for (let p = 0; p < pairsCount; p++, unitIdx++) {
-        units.push({
-          teacherId: teacher.id,
-          subjectId: a.subject_id,
-          grade: a.grade,
-          classNum: a.class_num,
-          kind: 'pair',
-          unitIdx,
-          sessionEquiv: unitIdx * 2,
-          maxSession: wh,
-        })
-      }
-      for (let s = 0; s < leftover; s++, unitIdx++) {
+      for (let s = 0; s < wh; s++) {
         units.push({
           teacherId: teacher.id,
           subjectId: a.subject_id,
           grade: a.grade,
           classNum: a.class_num,
           kind: 'single',
-          unitIdx,
-          sessionEquiv: pairsCount * 2 + s,
+          unitIdx: s,
+          sessionEquiv: s,
           maxSession: wh,
         })
       }
@@ -135,13 +118,12 @@ export function buildSchedule(gradeConfigs, subjects, teachers, lunchConfig, roo
   // 교사별 총 시수
   const teacherTotalHours = {}
   for (const u of units) {
-    teacherTotalHours[u.teacherId] = (teacherTotalHours[u.teacherId] || 0) + (u.kind === 'pair' ? 2 : 1)
+    teacherTotalHours[u.teacherId] = (teacherTotalHours[u.teacherId] || 0) + 1
   }
 
-  // 정렬: unitIdx (라운드로빈) → pair 먼저 → 총시수 desc → 교사ID → 학년 → 반
+  // 정렬: unitIdx (세션 라운드로빈) → 총시수 desc → 교사ID → 학년 → 반
   units.sort((a, b) => {
     if (a.unitIdx !== b.unitIdx) return a.unitIdx - b.unitIdx
-    if (a.kind !== b.kind) return a.kind === 'pair' ? -1 : 1
     const aH = teacherTotalHours[a.teacherId] || 0
     const bH = teacherTotalHours[b.teacherId] || 0
     if (aH !== bH) return bH - aH
