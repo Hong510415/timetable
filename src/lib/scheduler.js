@@ -357,10 +357,15 @@ export function buildSchedule(
     score += 2 * sameGradeSubjSameDay
 
     // (d) 학급 회차별 target 요일 (−3, 강화됨)
-    // 이전 −2였는데 (a) 클러스터링과 (h) gap 페널티 조합으로 day 선택이 target 어긋나는 문제
-    // (d)를 더 강하게 해서 day 선택 시 target이 우선시되게.
+    // 2-block은 월/목 (0/3) 사용. 월/금이면 3-block의 block 2(Fri target)와 충돌해서 Fri 포화 → 미배정 발생.
+    // 다른 N-block은 round(N×4/(blocks-1)) 표준 공식.
     if (totalBlocks >= 2) {
-      const target = Math.round((blockIdx * 4) / (totalBlocks - 1))
+      let target
+      if (totalBlocks === 2) {
+        target = blockIdx === 0 ? 0 : 3 // 월/목
+      } else {
+        target = Math.round((blockIdx * 4) / (totalBlocks - 1))
+      }
       score -= 3 * Math.abs(day - target) * slots.length
     }
 
