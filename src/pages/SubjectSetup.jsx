@@ -180,32 +180,34 @@ export default function SubjectSetup() {
           <div className="max-w-[720px] bg-white border border-gray-200 rounded-sm p-3 flex flex-col gap-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="flex border border-gray-200 bg-white rounded-sm w-fit">
-                  {visiblePlans.map(p => (
-                    <div
-                      key={p.id}
-                      className={`flex items-center border-r border-gray-200 last:border-r-0 transition-colors ${
-                        activeTabId === p.id ? 'bg-black text-white' : 'text-gray-400 hover:bg-gray-50'
-                      }`}
-                    >
-                      <button
-                        onClick={() => setActivePlanTab(p.id)}
-                        className={`pl-4 pr-2 h-9 text-[13px] ${activeTabId === p.id ? 'font-semibold' : ''}`}
-                      >
-                        {p.name}
-                      </button>
-                      <button
-                        onClick={() => removePlanSlot(p.id)}
-                        title={`${p.name} 삭제`}
-                        className={`pr-2 h-9 text-[12px] leading-none transition-opacity ${
-                          activeTabId === p.id ? 'opacity-50 hover:opacity-100' : 'opacity-30 hover:opacity-70'
+                {visiblePlans.length > 1 && (
+                  <div className="flex border border-gray-200 bg-white rounded-sm w-fit">
+                    {visiblePlans.map(p => (
+                      <div
+                        key={p.id}
+                        className={`flex items-center border-r border-gray-200 last:border-r-0 transition-colors ${
+                          activeTabId === p.id ? 'bg-black text-white' : 'text-gray-400 hover:bg-gray-50'
                         }`}
                       >
-                        ×
-                      </button>
-                    </div>
-                  ))}
-                </div>
+                        <button
+                          onClick={() => setActivePlanTab(p.id)}
+                          className={`pl-4 pr-2 h-9 text-[13px] ${activeTabId === p.id ? 'font-semibold' : ''}`}
+                        >
+                          {p.name}
+                        </button>
+                        <button
+                          onClick={() => removePlanSlot(p.id)}
+                          title={`${p.name} 삭제`}
+                          className={`pr-2 h-9 text-[12px] leading-none transition-opacity ${
+                            activeTabId === p.id ? 'opacity-50 hover:opacity-100' : 'opacity-30 hover:opacity-70'
+                          }`}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 {visiblePlans.length < 3 && (
                   <button
                     onClick={addPlanSlot}
@@ -236,7 +238,7 @@ export default function SubjectSetup() {
                 </button>
               </div>}
             </div>
-            <p className="text-[11px] text-gray-500 px-1">{statusLine}</p>
+            {visiblePlans.length > 1 && <p className="text-[11px] text-gray-500 px-1">{statusLine}</p>}
           </div>
         )}
 
