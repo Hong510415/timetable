@@ -2,6 +2,20 @@ import { useState } from 'react'
 import { useApp } from '../context/AppContext'
 import { subjectsEqualByContent, getDedicatedHoursForGrade, getWeeklyTotalForGrade, getOverflowGrades, getTotalDedicatedHours } from '../lib/planHelpers'
 import SubjectPlanComparison from '../components/SubjectPlanComparison'
+import ManualModal from '../components/ManualModal'
+
+const MANUAL = [
+  {
+    title: '전담 과목 설정',
+    items: [
+      '전담 수업에 사용할 과목을 추가합니다.',
+      '주당 시수: 해당 과목을 일주일에 몇 시간 가르치는지 설정합니다.',
+      '담당 학년을 선택해 해당 학년에만 과목이 배정되도록 합니다.',
+      '여러 안(A안·B안·C안)으로 비교하면서 최종 안을 적용할 수 있습니다.',
+      '⚠ 과목 삭제 시 해당 과목으로 배정된 교사 정보에도 영향을 줍니다.',
+    ],
+  },
+]
 
 const GRADES = [1, 2, 3, 4, 5, 6]
 
@@ -133,9 +147,12 @@ export default function SubjectSetup() {
 
   return (
     <div className="p-4 md:p-10 bg-gray-50 min-h-full">
-      <div className="mb-6">
-        <h1 className="text-[22px] font-bold">전담 과목 설정</h1>
-        <p className="text-[12px] text-gray-400 mt-1">변경 사항은 자동으로 저장됩니다.</p>
+      <div className="flex items-start justify-between mb-6 max-w-[720px]">
+        <div>
+          <h1 className="text-[22px] font-bold">전담 과목 설정</h1>
+          <p className="text-[12px] text-gray-400 mt-1">변경 사항은 자동으로 저장됩니다.</p>
+        </div>
+        <ManualModal title="전담 과목 설정" sections={MANUAL} />
       </div>
 
       <div className="flex flex-col gap-4">

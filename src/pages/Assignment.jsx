@@ -2,6 +2,24 @@ import React, { useState } from 'react'
 import { RefreshCw, AlertTriangle, CheckCircle } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { runAssignmentAlgorithm, assignmentsToTeacherAssignments } from '../lib/assignmentAlgorithm'
+import ManualModal from '../components/ManualModal'
+
+const MANUAL = [
+  {
+    title: '교사 배정',
+    items: [
+      '교사별로 담당 과목·학년·반을 직접 지정할 수 있습니다.',
+      '자동 배정 버튼을 누르면 입력된 조건을 바탕으로 교사별 담당이 자동 분배됩니다.',
+    ],
+  },
+  {
+    title: '시간표에 적용',
+    items: [
+      '"시간표에 적용" 버튼을 눌러야 배정 결과가 시간표 생성에 반영됩니다.',
+      '⚠ 재적용 시 기존에 생성된 시간표가 초기화됩니다.',
+    ],
+  },
+]
 
 export default function Assignment() {
   const { state, setTeachers, setAssignmentSettings, setAssignmentResult } = useApp()
@@ -99,6 +117,7 @@ export default function Assignment() {
       <div className="max-w-[1100px] flex items-center justify-between mb-6">
         <h1 className="text-[22px] font-bold">전담 배정</h1>
         <div className="flex gap-2">
+          <ManualModal title="전담 배정" sections={MANUAL} />
           {result && (
             <button
               onClick={handleApply}

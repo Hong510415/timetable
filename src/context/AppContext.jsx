@@ -30,6 +30,7 @@ export function AppProvider({ children }) {
     applyPlan: (planId) => dispatch({ type: 'APPLY_PLAN', payload: { planId } }),
     addPlanSlot: () => dispatch({ type: 'ADD_PLAN_SLOT' }),
     removePlanSlot: (planId) => dispatch({ type: 'REMOVE_PLAN_SLOT', payload: { planId } }),
+    resetAll: () => dispatch({ type: 'RESET' }),
   }
 
   return <AppContext.Provider value={ctx}>{children}</AppContext.Provider>

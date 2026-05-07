@@ -4,6 +4,51 @@ import { useApp } from '../context/AppContext'
 import { buildSchedule, flattenResult } from '../lib/scheduler'
 import { exportTimetableByClass, exportTimetableByTeacher } from '../lib/excelExport'
 import TimetableGrid from '../components/TimetableGrid'
+import ManualModal from '../components/ManualModal'
+
+const MANUAL = [
+  {
+    title: '시간표 자동 생성',
+    items: [
+      '자동 생성 버튼을 누르면 배정된 교사 정보를 바탕으로 시간표를 생성합니다.',
+      '과목별로 같은 요일 연속 수업 허용 여부와 하루 최대 배정 수를 설정할 수 있습니다.',
+      '같은 학년 수업은 라운드 로빈 방식으로 배정됩니다 (1반 1회차 → 2반 1회차 → 1반 2회차 순).',
+    ],
+  },
+  {
+    title: '보기 전환',
+    items: [
+      '학급별 보기: 학년·반을 선택해 해당 학급의 전담 시간표를 확인합니다.',
+      '교사별 보기: 교사를 선택해 해당 교사의 주간 수업 현황을 확인합니다.',
+      '교사별 보기에서 빈 칸에 마우스를 올리면 그 시간에 수업 중인 학급 목록이 표시됩니다.',
+    ],
+  },
+  {
+    title: '수동 수정',
+    items: [
+      '셀을 클릭하면 해당 시간의 교사·과목을 직접 수정할 수 있습니다.',
+      '수정 시 교사 중복이 발생하면 빨간색으로 표시됩니다.',
+    ],
+  },
+  {
+    title: '미배정 오류',
+    items: [
+      '교사 시간이 부족하거나 제약 조건이 너무 많으면 일부 수업이 미배정될 수 있습니다.',
+      '미배정 발생 시 오류 목록이 표시됩니다. 교사 수업 시수나 연속 수업 설정을 조정해보세요.',
+    ],
+  },
+  {
+    title: '엑셀 내보내기',
+    items: [
+      '학급별 엑셀: 학급 단위로 시간표를 내보냅니다.',
+      '교사별 엑셀: 교사 단위로 시간표를 내보냅니다.',
+    ],
+  },
+  {
+    title: '점심시간 분리 배정',
+    items: ['점심시간 분리 배정 시 특별실 시간표, 전담교사 시간표는 7교시 형식으로 제시됩니다.'],
+  },
+]
 
 const GRADES = [1, 2, 3, 4, 5, 6]
 
@@ -14,6 +59,8 @@ export default function Timetable() {
   const [generating, setGenerating] = useState(false)
   const [errors, setErrors] = useState([])
   const [tab, setTab] = useState('class')
+  const [showGenerateModal, setShowGenerateModal] = useState(false)
+  const [generateOptions, setGenerateOptions] = useState({ subjectSettings: {} })
   const [selectedGrade, setSelectedGrade] = useState(1)
   const [selectedClass, setSelectedClass] = useState(1)
   const [selectedTeacher, setSelectedTeacher] = useState(teachers[0]?.id || null)
@@ -35,7 +82,7 @@ export default function Timetable() {
     return { gradeLunchSlot, totalSlots: maxPeriods + 1 }
   }
 
-  async function handleGenerate() {
+  function handleGenerate() {
     if (!gradeConfigs.length || !subjects.length || !teachers.length) {
       return alert('학급 정보, 전담 과목, 교사 정보를 먼저 설정하세요.')
     }
@@ -43,10 +90,22 @@ export default function Timetable() {
     if (!hasAssignments) {
       return alert('전담 배정 탭에서 배정을 실행하고 "시간표에 적용"을 먼저 해주세요.')
     }
+    const uniqueNames = [...new Set(subjects.map(s => s.name))]
+    const current = generateOptions.subjectSettings || {}
+    const updated = {}
+    for (const name of uniqueNames) {
+      updated[name] = current[name] || { allow: false, maxCount: 2 }
+    }
+    setGenerateOptions({ subjectSettings: updated })
+    setShowGenerateModal(true)
+  }
+
+  async function executeGenerate() {
+    setShowGenerateModal(false)
     setGenerating(true)
     setErrors([])
     try {
-      const result = buildSchedule(gradeConfigs, subjects, teachers, lunchConfig || { split_lunch: false, lunch_groups: [] }, rooms, roomBlockedSlots)
+      const result = buildSchedule(gradeConfigs, subjects, teachers, lunchConfig || { split_lunch: false, lunch_groups: [] }, rooms, roomBlockedSlots, generateOptions)
       const { rows } = flattenResult(result.result, result.gradeLunchSlot, result.totalSlots)
       const flatErrors = (result.errors || []).map(e => {
         const subjName = subjects.find(s => s.id === e.subjectId)?.name || '과목 미상'
@@ -110,8 +169,10 @@ export default function Timetable() {
           : r
       )
     } else {
-      // 빈 칸에 새로 추가 — 기존 행 덮어쓰기 없이 INSERT
-      updated = [...timetableRows]
+      // 빈 칸에 새로 추가 — 같은 슬롯의 잔여 행 제거 후 INSERT
+      updated = timetableRows.filter(r => !(
+        r.grade === g && r.class_num === cn && r.day_of_week === editModal.day && r.slot === editModal.slot
+      ))
       if (teacherId) {
         updated.push({ id: crypto.randomUUID(), grade: g, class_num: cn, day_of_week: editModal.day, slot: editModal.slot, teacher_id: teacherId, subject_id: subjectId, is_unassigned: false })
       }
@@ -135,6 +196,7 @@ export default function Timetable() {
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-[22px] font-bold">전담 시간표</h1>
         <div className="flex gap-2">
+          <ManualModal title="전담 시간표" sections={MANUAL} />
           <button
             onClick={() => exportTimetableByClass(timetableRows, gradeConfigs, teachers, subjects, gradeLunchSlot, totalSlots)}
             className="flex items-center gap-2 h-10 px-4 border border-gray-300 text-[13px] rounded-sm hover:bg-gray-50"
@@ -262,6 +324,16 @@ export default function Timetable() {
           saving={saving}
         />
       )}
+
+      {showGenerateModal && (
+        <GenerateOptionsModal
+          options={generateOptions}
+          onChange={setGenerateOptions}
+          subjects={subjects}
+          onConfirm={executeGenerate}
+          onClose={() => setShowGenerateModal(false)}
+        />
+      )}
     </div>
   )
 }
@@ -363,6 +435,12 @@ function TeacherTimetableGrid({ slots, totalSlots, gradeLunchSlot, subjects, tim
               return `${cs?.name ?? '?'} (${ct?.code ?? '?'})`
             }).join(', ') + '와 겹침'
 
+            const classesAtSlot = !cell
+              ? (timetableRows || []).filter(r =>
+                  r.day_of_week === day && r.slot === slot && r.teacher_id && !r.is_unassigned
+                )
+              : []
+
             return (
               <div
                 key={day}
@@ -387,13 +465,110 @@ function TeacherTimetableGrid({ slots, totalSlots, gradeLunchSlot, subjects, tim
                     )}
                   </>
                 ) : (
-                  <span className="text-[12px] text-gray-200">—</span>
+                  <>
+                    <span className="text-[12px] text-gray-200 group-hover:hidden">—</span>
+                    {classesAtSlot.length > 0 ? (
+                      <div className="hidden group-hover:flex flex-col items-center gap-0.5 w-full px-1">
+                        {classesAtSlot.map(r => {
+                          const subj = subjects?.find(s => s.id === r.subject_id)
+                          return (
+                            <span key={r.id} className="text-[10px] text-gray-500 leading-tight text-center">
+                              {r.grade}학년 {r.class_num}반 {subj?.name ?? '?'}
+                            </span>
+                          )
+                        })}
+                      </div>
+                    ) : (
+                      <span className="hidden group-hover:block text-[12px] text-gray-300">—</span>
+                    )}
+                  </>
                 )}
               </div>
             )
           })}
         </div>
       ))}
+    </div>
+  )
+}
+
+function GenerateOptionsModal({ options, onChange, subjects, onConfirm, onClose }) {
+  const subjectInfo = {}
+  for (const s of subjects) {
+    if (!subjectInfo[s.name]) subjectInfo[s.name] = { name: s.name, maxWeeklyHours: 0 }
+    if (s.weekly_hours > subjectInfo[s.name].maxWeeklyHours) {
+      subjectInfo[s.name].maxWeeklyHours = s.weekly_hours
+    }
+  }
+  const uniqueSubjects = Object.values(subjectInfo)
+
+  function updateSubject(name, field, value) {
+    onChange({
+      ...options,
+      subjectSettings: {
+        ...options.subjectSettings,
+        [name]: { ...(options.subjectSettings[name] || { allow: false, maxCount: 2 }), [field]: value },
+      },
+    })
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white w-full max-w-[520px] rounded-sm border border-gray-200 p-6">
+        <h2 className="text-[16px] font-bold mb-4">시간표 자동 생성 설정</h2>
+
+        <div className="mb-1 flex text-[11px] font-semibold text-gray-400">
+          <div className="w-[100px]">과목</div>
+          <div className="w-[110px] text-center">같은 요일 배정</div>
+          <div className="flex-1 pl-4">
+            하루 최대 수
+            <span className="ml-1 text-gray-300 font-normal">(가능 시 연속 배치)</span>
+          </div>
+        </div>
+
+        <div className="flex flex-col divide-y divide-gray-100 mb-4">
+          {uniqueSubjects.map(subj => {
+            const settings = options.subjectSettings[subj.name] || { allow: false, maxCount: 2 }
+            const maxButtons = Math.min(subj.maxWeeklyHours, 5)
+            const buttons = []
+            for (let i = 2; i <= maxButtons; i++) buttons.push(i)
+
+            return (
+              <div key={subj.name} className="flex items-center py-2.5 gap-3">
+                <div className="w-[100px] text-[13px] font-semibold text-gray-800 truncate">{subj.name}</div>
+                <div className="w-[110px] flex gap-1">
+                  {[{ val: false, label: '불가' }, { val: true, label: '가능' }].map(opt => (
+                    <button
+                      key={String(opt.val)}
+                      onClick={() => updateSubject(subj.name, 'allow', opt.val)}
+                      className={`flex-1 h-7 rounded-sm text-[12px] font-semibold border transition-colors
+                        ${settings.allow === opt.val ? 'bg-black text-white border-black' : 'bg-white text-gray-500 border-gray-300 hover:bg-gray-50'}`}
+                    >{opt.label}</button>
+                  ))}
+                </div>
+                <div className="flex-1 pl-4 flex gap-1">
+                  {buttons.map(n => (
+                    <button
+                      key={n}
+                      onClick={() => settings.allow && updateSubject(subj.name, 'maxCount', n)}
+                      disabled={!settings.allow}
+                      className={`w-8 h-7 rounded-sm text-[12px] font-semibold border transition-colors
+                        ${settings.allow && settings.maxCount === n ? 'bg-black text-white border-black' : 'border-gray-200 text-gray-400 bg-white'}
+                        ${!settings.allow ? 'opacity-30 cursor-not-allowed' : 'hover:bg-gray-50'}`}
+                    >{n}</button>
+                  ))}
+                  {buttons.length === 0 && <span className="text-[12px] text-gray-300 leading-7">—</span>}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+
+        <div className="flex justify-end gap-2">
+          <button onClick={onClose} className="h-9 px-4 border border-gray-300 rounded-sm text-[13px] hover:bg-gray-50">취소</button>
+          <button onClick={onConfirm} className="h-9 px-5 bg-black text-white text-[13px] font-semibold rounded-sm hover:bg-gray-800">생성</button>
+        </div>
+      </div>
     </div>
   )
 }

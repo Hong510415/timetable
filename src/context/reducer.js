@@ -37,6 +37,7 @@ export function reducer(state, action) {
     case 'SET_ASSIGNMENT_SETTINGS': return { ...state, assignmentSettings: action.payload }
     case 'SET_ASSIGNMENT_RESULT': return { ...state, assignmentResult: action.payload }
     case 'IMPORT': return { ...initialState, ...action.payload }
+    case 'RESET': return { ...initialState }
 
     case 'SET_ACTIVE_PLAN_TAB':
       return {

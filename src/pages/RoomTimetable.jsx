@@ -3,6 +3,26 @@ import { Download, RefreshCw } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { buildRoomSchedule } from '../lib/roomScheduler'
 import { exportRoomTimetable } from '../lib/excelExport'
+import ManualModal from '../components/ManualModal'
+
+const MANUAL = [
+  {
+    title: '특별실 시간표',
+    items: [
+      '특별실별 주간 사용 현황을 확인합니다.',
+      '전담 시간표 자동 생성 후 자동으로 반영됩니다.',
+      '시간 충돌이 있는 경우 빨간색으로 표시됩니다.',
+    ],
+  },
+  {
+    title: '엑셀 내보내기',
+    items: ['특별실별 시간표를 엑셀 파일로 내보낼 수 있습니다.'],
+  },
+  {
+    title: '점심시간 분리 배정',
+    items: ['점심시간 분리 배정 시 특별실 시간표, 전담교사 시간표는 7교시 형식으로 제시됩니다.'],
+  },
+]
 
 const DAY_LABELS = ['월', '화', '수', '목', '금']
 
@@ -115,6 +135,7 @@ export default function RoomTimetable() {
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-[22px] font-bold">특별실 시간표</h1>
         <div className="flex gap-2">
+          <ManualModal title="특별실 시간표" sections={MANUAL} />
           <button
             onClick={() => exportRoomTimetable(rooms, state.roomTimetableSlots, gradeConfigs, gradeLunchSlot, totalSlots)}
             className="flex items-center gap-2 h-10 px-4 border border-gray-300 text-[13px] rounded-sm hover:bg-gray-50"
