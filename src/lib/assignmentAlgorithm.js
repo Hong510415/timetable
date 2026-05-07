@@ -494,6 +494,30 @@ export function runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assig
     if (!accept) restoreState(snap)
   }
 
+  // ── Step H: 반 번호 인접화 ─────────────────────────────────────
+  // 같은 (과목, 학년)을 여러 교사가 나눠 가질 때, 각 교사의 반 번호를
+  // 연속 구간(예: 1~4반, 5~7반)으로 재배정. 시수와 인원은 보존되므로
+  // 시수 균형·분산 결과에 영향 없음.
+  const sgPairs = [...new Set(units.map(u => `${u.subjectId}_${u.grade}`))]
+  for (const key of sgPairs) {
+    const [subjectId, gradeStr] = key.split('_')
+    const grade = Number(gradeStr)
+    const holders = ts
+      .map(t => ({ t, a: t.assignments.find(x => x.subjectId === subjectId && x.grade === grade) }))
+      .filter(x => x.a && x.a.classNums.length > 0)
+    if (holders.length <= 1) continue
+
+    // 현재 최소 반 번호 기준 정렬 → 시각적 순서 보존
+    holders.sort((x, y) => Math.min(...x.a.classNums) - Math.min(...y.a.classNums))
+
+    let cursor = 1
+    for (const { a } of holders) {
+      const count = a.classNums.length
+      a.classNums = Array.from({ length: count }, (_, i) => cursor + i)
+      cursor += count
+    }
+  }
+
   // 결과 변환
   const assignments = []
   for (const t of ts) {
