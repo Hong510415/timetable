@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Download, RefreshCw } from 'lucide-react'
+import { useState, useRef, useEffect } from 'react'
+import { Download, RefreshCw, ChevronDown } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { buildSchedule, flattenResult } from '../lib/scheduler'
 import { exportTimetableByClass, exportTimetableByTeacher } from '../lib/excelExport'
@@ -263,43 +263,15 @@ export default function Timetable() {
 
           {tab === 'class' && (
             <>
-              <div className="max-w-[1100px] mb-5 bg-white border border-gray-200 rounded-sm p-3 flex flex-col gap-1.5">
-                <div className="flex items-center gap-2">
-                  <span className="text-[12px] font-semibold text-gray-500">선택된 학급 ({selectedClasses.length})</span>
-                  <button onClick={deselectAllClasses} className="text-[11px] px-2 h-6 border border-gray-300 rounded-sm hover:bg-gray-50">전체 해제</button>
-                </div>
-                {GRADES.map(g => {
-                  const cfg = gradeConfigs.find(c => c.grade === g)
-                  if (!cfg || !cfg.num_classes) return null
-                  const allSelected = Array.from({ length: cfg.num_classes }).every((_, i) =>
-                    selectedClasses.some(c => c.grade === g && c.classNum === i + 1)
-                  )
-                  return (
-                    <div key={g} className="flex items-center gap-1.5 flex-wrap">
-                      <span className="text-[12px] font-semibold text-gray-700 w-[44px]">{g}학년</span>
-                      <button
-                        onClick={() => allSelected ? setSelectedClasses(prev => prev.filter(c => c.grade !== g)) : selectAllInGrade(g)}
-                        className="text-[11px] px-2 h-6 border border-gray-300 rounded-sm text-gray-500 hover:bg-gray-50"
-                      >
-                        {allSelected ? '학년 해제' : '학년 전체'}
-                      </button>
-                      {Array.from({ length: cfg.num_classes }, (_, i) => i + 1).map(cn => {
-                        const sel = selectedClasses.some(c => c.grade === g && c.classNum === cn)
-                        return (
-                          <button
-                            key={cn}
-                            onClick={() => toggleSelectedClass(g, cn)}
-                            className={`text-[11px] px-2 h-6 rounded-sm border transition-colors ${
-                              sel ? 'bg-black text-white border-black' : 'bg-white text-gray-500 border-gray-300 hover:bg-gray-50'
-                            }`}
-                          >
-                            {cn}반
-                          </button>
-                        )
-                      })}
-                    </div>
-                  )
-                })}
+              <div className="mb-5">
+                <ClassPicker
+                  gradeConfigs={gradeConfigs}
+                  selectedClasses={selectedClasses}
+                  onToggle={toggleSelectedClass}
+                  onSelectGrade={selectAllInGrade}
+                  onDeselectGrade={(g) => setSelectedClasses(prev => prev.filter(c => c.grade !== g))}
+                  onDeselectAll={deselectAllClasses}
+                />
               </div>
 
               {selectedClasses.length === 0 ? (
@@ -391,6 +363,80 @@ export default function Timetable() {
           onConfirm={executeGenerate}
           onClose={() => setShowGenerateModal(false)}
         />
+      )}
+    </div>
+  )
+}
+
+function ClassPicker({ gradeConfigs, selectedClasses, onToggle, onSelectGrade, onDeselectGrade, onDeselectAll }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+
+  useEffect(() => {
+    if (!open) return
+    function onDocClick(e) {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [open])
+
+  // 트리거 라벨
+  const summary = selectedClasses.length === 0
+    ? '학급을 선택하세요'
+    : selectedClasses.length <= 4
+    ? selectedClasses.map(c => `${c.grade}-${c.classNum}`).join(', ')
+    : `${selectedClasses.length}개 학급 선택됨`
+
+  return (
+    <div ref={ref} className="relative inline-block">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="flex items-center gap-2 h-9 px-3 min-w-[220px] border border-gray-300 rounded-sm bg-white text-[13px] hover:bg-gray-50"
+      >
+        <span className={selectedClasses.length === 0 ? 'text-gray-400' : 'text-gray-800'}>{summary}</span>
+        <ChevronDown size={14} className="ml-auto text-gray-400" />
+      </button>
+
+      {open && (
+        <div className="absolute top-full left-0 mt-1 z-30 w-[420px] bg-white border border-gray-200 rounded-sm shadow-lg p-3 flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[12px] font-semibold text-gray-500">학급 선택 ({selectedClasses.length})</span>
+            <button onClick={onDeselectAll} className="text-[11px] px-2 h-6 border border-gray-300 rounded-sm hover:bg-gray-50">전체 해제</button>
+          </div>
+          {[1,2,3,4,5,6].map(g => {
+            const cfg = gradeConfigs.find(c => c.grade === g)
+            if (!cfg || !cfg.num_classes) return null
+            const allSelected = Array.from({ length: cfg.num_classes }).every((_, i) =>
+              selectedClasses.some(c => c.grade === g && c.classNum === i + 1)
+            )
+            return (
+              <div key={g} className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[12px] font-semibold text-gray-700 w-[44px] flex-shrink-0">{g}학년</span>
+                <button
+                  onClick={() => allSelected ? onDeselectGrade(g) : onSelectGrade(g)}
+                  className="text-[11px] px-2 h-6 border border-gray-300 rounded-sm text-gray-500 hover:bg-gray-50"
+                >
+                  {allSelected ? '학년 해제' : '학년 전체'}
+                </button>
+                {Array.from({ length: cfg.num_classes }, (_, i) => i + 1).map(cn => {
+                  const sel = selectedClasses.some(c => c.grade === g && c.classNum === cn)
+                  return (
+                    <button
+                      key={cn}
+                      onClick={() => onToggle(g, cn)}
+                      className={`text-[11px] px-2 h-6 rounded-sm border transition-colors ${
+                        sel ? 'bg-black text-white border-black' : 'bg-white text-gray-500 border-gray-300 hover:bg-gray-50'
+                      }`}
+                    >
+                      {cn}반
+                    </button>
+                  )
+                })}
+              </div>
+            )
+          })}
+        </div>
       )}
     </div>
   )
