@@ -141,6 +141,12 @@ export function buildSchedule(
   const teacherTotalBlocks = {}
   for (const b of blocks) teacherTotalBlocks[b.teacherId] = (teacherTotalBlocks[b.teacherId] || 0) + 1
   blocks.sort((a, b) => {
+    // 1-block (단발 수업)은 multi-block 다 끝난 뒤 맨 마지막에 처리.
+    // 1-block이 cap 채워서 3-block block 2가 갈 곳 없어지는 걸 방지.
+    const aIs1 = a.totalBlocks === 1 ? 1 : 0
+    const bIs1 = b.totalBlocks === 1 ? 1 : 0
+    if (aIs1 !== bIs1) return aIs1 - bIs1
+    // multi-block은 blockIdx로 라운드로빈
     if (a.blockIdx !== b.blockIdx) return a.blockIdx - b.blockIdx
     // 같은 블록 인덱스 안에서: 총 블록 많은 학급 먼저 (cal order + cap 충돌 회피)
     if (a.totalBlocks !== b.totalBlocks) return b.totalBlocks - a.totalBlocks
@@ -330,16 +336,17 @@ export function buildSchedule(
     const { teacherId, subjectId, grade, classNum, blockIdx, totalBlocks } = block
     let score = 0
 
-    // (a) 같은 교사 + 같은 과목 같은 날
+    // (a) 같은 교사 + 같은 과목 같은 날 (+3, 약화됨)
+    // 이전 +5에서 +3으로 줄임. (a)가 (d) day target보다 강하게 작동해서
+    // 5-1 block 1이 target Wed 대신 Fri 클러스터링 따라가서 block 2가 갈 곳 없어지는 문제 해결.
     let sameSubjSameDay = 0
     const tsd = teacherSlotSubject[teacherId]?.[day] || {}
     for (const s of Object.keys(tsd)) {
       if (tsd[s] === subjectId) sameSubjSameDay++
     }
-    score += 5 * sameSubjSameDay
+    score += 3 * sameSubjSameDay
 
     // (b) 제거됨 — (a)가 같은 과목 클러스터링을 이미 유도하므로 잉여.
-    // (b) 페널티가 (h) gap 페널티보다 커서 빈 시간이 생기던 문제 해결.
 
     // (c) 같은 학년+과목 같은 날 보너스
     let sameGradeSubjSameDay = 0
@@ -349,18 +356,15 @@ export function buildSchedule(
     }
     score += 2 * sameGradeSubjSameDay
 
-    // (d) 학급 회차별 target 요일
+    // (d) 학급 회차별 target 요일 (−3, 강화됨)
+    // 이전 −2였는데 (a) 클러스터링과 (h) gap 페널티 조합으로 day 선택이 target 어긋나는 문제
+    // (d)를 더 강하게 해서 day 선택 시 target이 우선시되게.
     if (totalBlocks >= 2) {
       const target = Math.round((blockIdx * 4) / (totalBlocks - 1))
-      score -= 2 * Math.abs(day - target) * slots.length
+      score -= 3 * Math.abs(day - target) * slots.length
     }
 
-    // (e) 교사 요일 부하 균형
-    const T = teacherTotalHours[teacherId] || 0
-    const ceilT = Math.ceil(T / 5)
-    const tdcCurrent = teacherDayCount[teacherId]?.[day] || 0
-    const overE = Math.max(0, tdcCurrent + slots.length - ceilT)
-    score -= 2 * overE
+    // (e) 제거됨 — 하드 #13(cap=ceil(T/5))이 이미 강제 거부하므로 소프트로 또 페널티 주는 건 잉여.
 
     // (f) 학급 요일 전담 부하 균형
     const ck = `${grade}_${classNum}`
@@ -370,18 +374,10 @@ export function buildSchedule(
     const overF = Math.max(0, cdcCurrent + slots.length - ceilC)
     score -= 2 * overF
 
-    // (g) 학년 간 회차 진행 정렬
-    let minOtherProgress = Infinity
-    for (const [g, p] of Object.entries(gradeBlockProgress)) {
-      if (Number(g) === grade) continue
-      if (p < minOtherProgress) minOtherProgress = p
-    }
-    if (minOtherProgress !== Infinity) {
-      score -= Math.max(0, blockIdx - minOtherProgress)
-    }
+    // (g) 제거됨 — 가중치(-1)가 너무 낮아서 결정에 영향 없음. 잡음만 추가.
 
-    // (h) 교사 같은 날 gap 최소화 — 강화됨 (-5/gap)
-    // 빈 시간 없이 연속 배치 유도. (b) 제거되면서 더 강한 압박 필요.
+    // (h) 교사 같은 날 gap 최소화 — −2 (이전 −5에서 약화)
+    // gap 페널티가 (d) day target보다 강해서 알고리즘이 다른 날로 도망가던 문제 해결.
     const dayOcc = new Set()
     teacherOccupied[teacherId][day].forEach(s => dayOcc.add(s))
     for (const s of slots) dayOcc.add(s)
@@ -389,14 +385,10 @@ export function buildSchedule(
     if (slotNums.length >= 2) {
       const span = slotNums[slotNums.length - 1] - slotNums[0] + 1
       const gap = span - slotNums.length
-      score -= 5 * gap
+      score -= 2 * gap
     }
 
-    // (i) 1교시부터 땡기기 — 슬롯 인덱스 작을수록 선호
-    // 전담교사가 하루를 일찍 끝낼 수 있게
-    for (const slot of slots) {
-      score -= 1 * slot
-    }
+    // (i) "1교시부터 땡기기"는 점수에 넣지 않음 — 동점일 때 tiebreaker로만 작용.
 
     return score
   }
@@ -433,7 +425,14 @@ export function buildSchedule(
       }
     }
     if (candidates.length === 0) return false
-    candidates.sort((a, b) => b.score - a.score || Math.random() - 0.5)
+    candidates.sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score
+      // 동점이면 (i): 슬롯 합 작은 쪽 우선 (1교시 땡기기)
+      const aSum = a.slots.reduce((x, y) => x + y, 0)
+      const bSum = b.slots.reduce((x, y) => x + y, 0)
+      if (aSum !== bSum) return aSum - bSum
+      return Math.random() - 0.5
+    })
     const { day, slots } = candidates[0]
     applyPlacement(block, day, slots)
     return true

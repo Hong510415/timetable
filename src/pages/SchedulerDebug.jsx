@@ -86,20 +86,26 @@ const SCENARIO = {
     {
       id: 'room-3small',
       name: '3층 소체육실',
-      subjectNames: ['통합', '과학'],
+      subjectNames: ['통합'],
       teacherIds: ['영어전담', '과학전담', '체육전담'],
     },
     {
       id: 'room-4gym',
       name: '4층 체육관',
       subjectNames: ['체육', '통합'],
-      teacherIds: ['영어전담', '체육전담'],
+      teacherIds: ['체육전담'],
     },
     {
       id: 'room-eng',
       name: '영어실',
-      subjectNames: ['영어', '통합'],
+      subjectNames: ['영어'],
       teacherIds: ['영어전담'],
+    },
+    {
+      id: 'room-sci',
+      name: '과학실',
+      subjectNames: ['과학'],
+      teacherIds: ['과학전담'],
     },
   ],
   // 2층 강당: 수요일 1-5교시(slot 0-4)만 사용 가능 → 나머지 다 차단

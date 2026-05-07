@@ -199,19 +199,42 @@
 
 ---
 
-## 5. 점수 계산식
+## 5. 점수 계산식 (튜닝 후)
 
 ```
 score = 0
-  + 5 × (same subject same day count for this teacher)         // (a)
+  + 3 × (same subject same day count for this teacher)         // (a)  [+5 → +3]
   + 2 × (same grade+subject same day count for this teacher)   // (c)
-  − 2 × |actual_day − target_day(N)|                           // (d)
-  − 2 × max(0, teacher_day_count[d] − ceil(T_teacher/5))       // (e)
+  − 3 × |actual_day − target_day(N)| × slots.length            // (d)  [-2 → -3]
   − 2 × max(0, class_day_count[g][c][d] − ceil(T_class/5))     // (f)
-  − 1 × max(0, block_N − min(other_grades_block_progress))     // (g)
-  − 5 × (gap slot count for this teacher this day)             // (h)
-  − 1 × (sum of slot indices in this placement)                // (i)
+  − 2 × (gap slot count for this teacher this day)             // (h)  [-5 → -2]
 ```
+
+**Tiebreaker:** 동점일 때 `slots[].sum()` 작은 쪽 우선 (= "1교시 땡기기" (i))
+
+## 5-1. 제거된 소프트
+
+- **(b) 인접 다른 과목 페널티**: (a)와 중복 + (h)와 비대칭이 gap 만들었음
+- **(e) 교사 요일 부하 균형**: 하드 #13(cap=ceil(T/5))이 강제 거부하므로 잉여
+- **(g) 학년 간 회차 진행 정렬**: 가중치(-1)가 너무 낮아 영향 없음 + 잡음만 추가
+- **(i) 점수 항목**: tiebreaker로만 적용. 점수에 넣으면 (d) day target보다 강해져 균형 깨짐
+
+## 5-2. 가중치 튜닝 이유
+
+사용자 실제 시나리오 검증 (영어/과학/체육 전담 + 통합 + 5개 특별실 + 2층강당 차단) 30회 반복 결과:
+- 튜닝 전: 5/30 편차>2, 평균 2h 미배정
+- 튜닝 후: 0/30 편차>2 (max=1), 0 미배정
+
+핵심 변경:
+1. (a) +5 → +3: 클러스터링이 (d) day target을 압도해서 5-1 block 1이 Fri로 끌려가던 문제. 약화하면 (d)가 우선.
+2. (d) -2 → -3: day 선택 시 target이 더 강하게 작동.
+3. (h) -5 → -2: gap 페널티가 다른 day로 도망가게 만들던 문제 완화.
+
+## 5-3. 블록 정렬 변경
+
+**1-block 학급(주 1시간)은 multi-block 다 처리한 뒤 맨 마지막에 배치.**
+
+이유: 1-block 4개가 (a) 클러스터링으로 같은 날 (Fri 등) 몰리면 그 날 cap=4 차서 3-block의 block 2가 들어갈 자리 없어짐. 1-block은 원래 (d) target이 없어서 leftover 슬롯 채우는 용도로 쓰는 게 자연스러움.
 
 배치 후보 중 `score` 최대값 선택. 동점이면 랜덤.
 
