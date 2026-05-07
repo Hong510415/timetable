@@ -44,6 +44,11 @@ export default function SubjectSetup() {
 
   function handleApply() {
     if (isPlanLive) return
+    // Spec §6.1 step 2: when content is equal regardless of appliedPlanId, no confirm, no clearing
+    if (subjectsEqualByContent(planSubjects, subjects)) {
+      applyPlan(activeTabId)
+      return
+    }
     if (planSubjects.length === 0) {
       const ok = confirm(
         `이 안에는 등록된 과목이 없습니다.\n` +

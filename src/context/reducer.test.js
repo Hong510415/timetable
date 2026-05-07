@@ -69,6 +69,13 @@ describe('APPLY_PLAN', () => {
         { id: 't1', code: '교사1', teacher_assignments: [{ id: 'a', subject_id: 's1', grade: 1, class_num: 1, weekly_hours: 2 }] },
         { id: 't2', code: '교사2', teacher_assignments: [] },
       ],
+      // make plan1 differ from state.subjects so APPLY_PLAN takes the clearing branch
+      subjectPlans: {
+        ...initialState.subjectPlans,
+        plans: initialState.subjectPlans.plans.map(p =>
+          p.id === 'plan1' ? { ...p, subjects: [{ id: 'pp', grade: 1, name: 'X', weekly_hours: 1, is_major: false }] } : p
+        ),
+      },
     }
     const next = reducer(state, { type: 'APPLY_PLAN', payload: { planId: 'plan1' } })
     expect(next.teachers).toHaveLength(2)
@@ -84,6 +91,13 @@ describe('APPLY_PLAN', () => {
       timetableSlots: [{ id: 'tt1', grade: 1, class_num: 1, day_of_week: 0, slot: 0, teacher_id: 't', subject_id: 's' }],
       roomTimetableSlots: [{ id: 'rt1', room_id: 'r', grade: 1, class_num: 1, day_of_week: 0, slot: 0 }],
       assignmentResult: { result: { assignments: [], warnings: [], gradeSummary: [], teacherSummary: [] }, edited: null },
+      // make plan1 differ from state.subjects so APPLY_PLAN takes the clearing branch
+      subjectPlans: {
+        ...initialState.subjectPlans,
+        plans: initialState.subjectPlans.plans.map(p =>
+          p.id === 'plan1' ? { ...p, subjects: [{ id: 'pp', grade: 1, name: 'X', weekly_hours: 1, is_major: false }] } : p
+        ),
+      },
     }
     const next = reducer(state, { type: 'APPLY_PLAN', payload: { planId: 'plan1' } })
     expect(next.timetableSlots).toEqual([])
@@ -96,6 +110,13 @@ describe('APPLY_PLAN', () => {
       ...initialState,
       rooms: [{ id: 'r1', name: '음악실', subjectNames: [] }],
       roomBlockedSlots: [{ id: 'b1', room_id: 'r1', day_of_week: 0, slot: 0 }],
+      // make plan1 differ from state.subjects so APPLY_PLAN takes the clearing branch
+      subjectPlans: {
+        ...initialState.subjectPlans,
+        plans: initialState.subjectPlans.plans.map(p =>
+          p.id === 'plan1' ? { ...p, subjects: [{ id: 'pp', grade: 1, name: 'X', weekly_hours: 1, is_major: false }] } : p
+        ),
+      },
     }
     const next = reducer(state, { type: 'APPLY_PLAN', payload: { planId: 'plan1' } })
     expect(next.rooms).toEqual(state.rooms)
@@ -113,5 +134,30 @@ describe('APPLY_PLAN', () => {
   it('returns state unchanged when planId does not exist', () => {
     const next = reducer(initialState, { type: 'APPLY_PLAN', payload: { planId: 'plan999' } })
     expect(next).toBe(initialState)
+  })
+
+  it('skips downstream clearing when plan content matches live state.subjects', () => {
+    const sharedSubject = { id: 's1', grade: 1, name: '영어', weekly_hours: 3, is_major: true }
+    const state = {
+      ...initialState,
+      subjects: [sharedSubject],
+      teachers: [{ id: 't1', code: '교사1', teacher_assignments: [{ id: 'a', subject_id: 's1', grade: 1, class_num: 1, weekly_hours: 3 }] }],
+      timetableSlots: [{ id: 'tt1', grade: 1, class_num: 1, day_of_week: 0, slot: 0, teacher_id: 't1', subject_id: 's1' }],
+      subjectPlans: {
+        ...initialState.subjectPlans,
+        plans: initialState.subjectPlans.plans.map(p =>
+          p.id === 'plan2' ? { ...p, subjects: [{ ...sharedSubject, id: 'different-id' }] } : p
+        ),
+        appliedPlanId: 'plan1',
+      },
+    }
+    const next = reducer(state, { type: 'APPLY_PLAN', payload: { planId: 'plan2' } })
+    // Metadata updated
+    expect(next.subjectPlans.appliedPlanId).toBe('plan2')
+    expect(next.subjectPlans.activeTabId).toBe('plan2')
+    // Live data NOT cleared
+    expect(next.subjects).toEqual(state.subjects)
+    expect(next.teachers[0].teacher_assignments).toHaveLength(1)
+    expect(next.timetableSlots).toHaveLength(1)
   })
 })

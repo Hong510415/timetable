@@ -1,5 +1,5 @@
 import { initialState } from '../lib/storage'
-import { cloneSubjects } from '../lib/planHelpers'
+import { cloneSubjects, subjectsEqualByContent } from '../lib/planHelpers'
 
 export function reducer(state, action) {
   switch (action.type) {
@@ -39,6 +39,20 @@ export function reducer(state, action) {
       const { planId } = action.payload
       const plan = state.subjectPlans.plans.find(p => p.id === planId)
       if (!plan) return state
+      const contentMatchesLive = subjectsEqualByContent(plan.subjects, state.subjects)
+      // Spec §6.1 step 2: when plan content already matches live state, only update metadata —
+      // do NOT clear teacher_assignments / timetableSlots / etc.
+      if (contentMatchesLive) {
+        return {
+          ...state,
+          subjectPlans: {
+            ...state.subjectPlans,
+            activeTabId: planId,
+            appliedPlanId: planId,
+            appliedAt: new Date().toISOString(),
+          },
+        }
+      }
       return {
         ...state,
         subjects: cloneSubjects(plan.subjects),
