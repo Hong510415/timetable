@@ -1,15 +1,25 @@
 const DAY_LABELS = ['월', '화', '수', '목', '금']
 
-export default function TimetableGrid({ slots, totalSlots, gradeLunchSlot, teachers, subjects, rooms, onCellClick, grade }) {
+export default function TimetableGrid({ slots, totalSlots, gradeLunchSlot, teachers, subjects, rooms, timetableRows, onCellClick, grade, classNum, compact }) {
   // 해당 학년의 점심 슬롯 (없으면 -1)
   const lunchSlot = (gradeLunchSlot && grade) ? (gradeLunchSlot[grade] ?? -1) : -1
 
   function getSlotLabel(slot) {
-    // 점심 슬롯 이후 교시는 점심이 한 자리를 차지하므로 번호 -1 보정
     if (lunchSlot !== -1 && slot > lunchSlot) {
       return `${slot}교시`
     }
     return `${slot + 1}교시`
+  }
+
+  // 같은 교사가 같은 day/slot에서 다른 학급도 가르치고 있으면 충돌
+  function getConflicts(cell, day, slot) {
+    if (!cell || !timetableRows || !cell.teacher_id) return []
+    return timetableRows.filter(r =>
+      r.teacher_id === cell.teacher_id &&
+      r.day_of_week === day &&
+      r.slot === slot &&
+      !(r.grade === grade && r.class_num === classNum)
+    )
   }
 
   return (
@@ -23,8 +33,9 @@ export default function TimetableGrid({ slots, totalSlots, gradeLunchSlot, teach
 
       {Array.from({ length: totalSlots }, (_, slot) => {
         const isLunch = lunchSlot === slot
+        const rowH = isLunch ? 'h-8 bg-gray-50' : (compact ? 'h-[44px]' : 'h-[62px]')
         return (
-          <div key={slot} className={`flex border-t border-gray-100 ${isLunch ? 'h-8 bg-gray-50' : 'h-[62px]'}`}>
+          <div key={slot} className={`flex border-t border-gray-100 ${rowH}`}>
             <div className="w-[72px] flex-shrink-0 border-r border-gray-200 flex items-center justify-center text-[11px] font-semibold text-gray-400 bg-gray-50">
               {isLunch ? '점심' : getSlotLabel(slot)}
             </div>
@@ -41,19 +52,29 @@ export default function TimetableGrid({ slots, totalSlots, gradeLunchSlot, teach
               const subject = cell?.subject_id ? subjects?.find(s => s.id === cell.subject_id) : null
               const room = cell?.room_id ? rooms?.find(r => r.id === cell.room_id) : null
               const unassigned = cell?.is_unassigned
+              const conflicts = getConflicts(cell, day, slot)
+              const hasConflict = conflicts.length > 0
+              const tooltipText = hasConflict
+                ? conflicts.map(c => `${c.grade}학년 ${c.class_num}반`).join(', ') + '에서도 같은 교사가 수업 중'
+                : ''
 
               return (
                 <div
                   key={day}
                   onClick={() => onCellClick?.(day, slot, cell)}
-                  className={`flex-1 border-r border-gray-100 last:border-r-0 flex flex-col items-center justify-center gap-0 transition-colors
+                  className={`relative group flex-1 border-r border-gray-100 last:border-r-0 flex flex-col items-center justify-center gap-0 transition-colors
                     ${unassigned ? 'bg-red-500 cursor-pointer' : onCellClick ? 'hover:bg-gray-50 cursor-pointer' : ''}`}
                 >
                   {teacher && subject ? (
                     <>
-                      <span className={`text-[13px] font-semibold ${unassigned ? 'text-white' : 'text-gray-900'}`}>{subject.name}</span>
-                      <span className={`text-[10px] ${unassigned ? 'text-red-200' : 'text-gray-400'}`}>{teacher.code}</span>
-                      {room && <span className="text-[10px] text-blue-500">{room.name}</span>}
+                      <span className={`${compact ? 'text-[12px]' : 'text-[13px]'} font-semibold ${unassigned ? 'text-white' : hasConflict ? 'text-red-600' : 'text-gray-900'}`}>{subject.name}</span>
+                      <span className={`text-[10px] ${unassigned ? 'text-red-200' : hasConflict ? 'text-red-400' : 'text-gray-400'}`}>{teacher.code}</span>
+                      {room && <span className={`text-[10px] ${hasConflict ? 'text-red-400' : 'text-blue-500'}`}>{room.name}</span>}
+                      {hasConflict && (
+                        <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1 z-30 hidden group-hover:block bg-gray-900 text-white text-[11px] rounded px-2 py-1 whitespace-nowrap">
+                          {tooltipText}
+                        </div>
+                      )}
                     </>
                   ) : unassigned ? (
                     <span className="text-[11px] font-semibold text-white">미배정</span>

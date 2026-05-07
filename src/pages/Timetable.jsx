@@ -61,8 +61,29 @@ export default function Timetable() {
   const [tab, setTab] = useState('teacher')
   const [showGenerateModal, setShowGenerateModal] = useState(false)
   const [generateOptions, setGenerateOptions] = useState({ subjectSettings: {} })
-  const [selectedGrade, setSelectedGrade] = useState(1)
-  const [selectedClass, setSelectedClass] = useState(1)
+  const [selectedClasses, setSelectedClasses] = useState([{ grade: 1, classNum: 1 }])
+
+  function toggleSelectedClass(grade, classNum) {
+    setSelectedClasses(prev => {
+      const i = prev.findIndex(c => c.grade === grade && c.classNum === classNum)
+      if (i >= 0) return prev.filter((_, idx) => idx !== i)
+      return [...prev, { grade, classNum }].sort((a, b) => a.grade - b.grade || a.classNum - b.classNum)
+    })
+  }
+
+  function selectAllInGrade(grade) {
+    const cfg = gradeConfigs.find(g => g.grade === grade)
+    if (!cfg) return
+    setSelectedClasses(prev => {
+      const others = prev.filter(c => c.grade !== grade)
+      const all = Array.from({ length: cfg.num_classes }, (_, i) => ({ grade, classNum: i + 1 }))
+      return [...others, ...all].sort((a, b) => a.grade - b.grade || a.classNum - b.classNum)
+    })
+  }
+
+  function deselectAllClasses() {
+    setSelectedClasses([])
+  }
   const [selectedTeacher, setSelectedTeacher] = useState(teachers[0]?.id || null)
   const [editModal, setEditModal] = useState(null)
   const [saving, setSaving] = useState(false)
@@ -145,15 +166,15 @@ export default function Timetable() {
     return daySlots
   }
 
-  function openEditModal(day, slot, cell, defaultTeacherId = null) {
+  function openEditModal(day, slot, cell, ctx = {}) {
     if (tab === 'class') {
-      setEditModal({ day, slot, grade: selectedGrade, classNum: selectedClass, current: cell, rowId: cell?.id || null })
+      setEditModal({ day, slot, grade: ctx.grade, classNum: ctx.classNum, current: cell, rowId: cell?.id || null })
     } else if (tab === 'teacher') {
-      setEditModal({ day, slot, grade: cell?.grade || null, classNum: cell?.class_num || null, current: cell, classLabel: cell?.label || null, teacherView: true, defaultTeacherId: defaultTeacherId || selectedTeacher, rowId: cell?.id || null })
+      setEditModal({ day, slot, grade: cell?.grade || null, classNum: cell?.class_num || null, current: cell, classLabel: cell?.label || null, teacherView: true, defaultTeacherId: ctx.defaultTeacherId || selectedTeacher, rowId: cell?.id || null })
     }
   }
 
-  function handleEditSave(teacherId, subjectId, grade, classNum) {
+  function handleEditSave(teacherId, subjectId, grade, classNum, roomId) {
     if (!editModal) return
     setSaving(true)
     const g = grade ?? editModal.grade
@@ -162,19 +183,17 @@ export default function Timetable() {
 
     let updated
     if (editModal.rowId) {
-      // 기존 행을 id로 특정해서 수정 — 같은 슬롯의 다른 수업은 건드리지 않음
       updated = timetableRows.map(r =>
         r.id === editModal.rowId
-          ? { ...r, teacher_id: teacherId || null, subject_id: subjectId || null, is_unassigned: !teacherId }
+          ? { ...r, teacher_id: teacherId || null, subject_id: subjectId || null, room_id: roomId || null, is_unassigned: !teacherId }
           : r
       )
     } else {
-      // 빈 칸에 새로 추가 — 같은 슬롯의 잔여 행 제거 후 INSERT
       updated = timetableRows.filter(r => !(
         r.grade === g && r.class_num === cn && r.day_of_week === editModal.day && r.slot === editModal.slot
       ))
       if (teacherId) {
-        updated.push({ id: crypto.randomUUID(), grade: g, class_num: cn, day_of_week: editModal.day, slot: editModal.slot, teacher_id: teacherId, subject_id: subjectId, is_unassigned: false })
+        updated.push({ id: crypto.randomUUID(), grade: g, class_num: cn, day_of_week: editModal.day, slot: editModal.slot, teacher_id: teacherId, subject_id: subjectId, room_id: roomId || null, is_unassigned: false })
       }
     }
 
@@ -183,12 +202,10 @@ export default function Timetable() {
     setSaving(false)
   }
 
-  const numClasses = gradeConfigs.find(g => g.grade === selectedGrade)?.num_classes || 1
   const { gradeLunchSlot } = computeSlotMeta(gradeConfigs, lunchConfig)
   const splitLunch = lunchConfig?.split_lunch || false
   const totalSlots = splitLunch ? 7 : 6
 
-  const classSlots = getSlotsForClass(selectedGrade, selectedClass)
   const teacherSlots = selectedTeacher ? getSlotsForTeacher(selectedTeacher) : {}
 
   return (
@@ -245,36 +262,71 @@ export default function Timetable() {
           </div>
 
           {tab === 'class' && (
-            <div className="max-w-[540px]">
-              <div className="flex gap-3 mb-5">
-                <select
-                  value={selectedGrade}
-                  onChange={e => { setSelectedGrade(Number(e.target.value)); setSelectedClass(1) }}
-                  className="h-9 px-3 border border-gray-300 rounded-sm text-[13px] outline-none bg-white"
-                >
-                  {GRADES.map(g => <option key={g} value={g}>{g}학년</option>)}
-                </select>
-                <select
-                  value={selectedClass}
-                  onChange={e => setSelectedClass(Number(e.target.value))}
-                  className="h-9 px-3 border border-gray-300 rounded-sm text-[13px] outline-none bg-white"
-                >
-                  {Array.from({ length: numClasses }, (_, i) => i + 1).map(c => (
-                    <option key={c} value={c}>{c}반</option>
-                  ))}
-                </select>
+            <>
+              <div className="max-w-[1100px] mb-5 bg-white border border-gray-200 rounded-sm p-3 flex flex-col gap-1.5">
+                <div className="flex items-center gap-2">
+                  <span className="text-[12px] font-semibold text-gray-500">선택된 학급 ({selectedClasses.length})</span>
+                  <button onClick={deselectAllClasses} className="text-[11px] px-2 h-6 border border-gray-300 rounded-sm hover:bg-gray-50">전체 해제</button>
+                </div>
+                {GRADES.map(g => {
+                  const cfg = gradeConfigs.find(c => c.grade === g)
+                  if (!cfg || !cfg.num_classes) return null
+                  const allSelected = Array.from({ length: cfg.num_classes }).every((_, i) =>
+                    selectedClasses.some(c => c.grade === g && c.classNum === i + 1)
+                  )
+                  return (
+                    <div key={g} className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-[12px] font-semibold text-gray-700 w-[44px]">{g}학년</span>
+                      <button
+                        onClick={() => allSelected ? setSelectedClasses(prev => prev.filter(c => c.grade !== g)) : selectAllInGrade(g)}
+                        className="text-[11px] px-2 h-6 border border-gray-300 rounded-sm text-gray-500 hover:bg-gray-50"
+                      >
+                        {allSelected ? '학년 해제' : '학년 전체'}
+                      </button>
+                      {Array.from({ length: cfg.num_classes }, (_, i) => i + 1).map(cn => {
+                        const sel = selectedClasses.some(c => c.grade === g && c.classNum === cn)
+                        return (
+                          <button
+                            key={cn}
+                            onClick={() => toggleSelectedClass(g, cn)}
+                            className={`text-[11px] px-2 h-6 rounded-sm border transition-colors ${
+                              sel ? 'bg-black text-white border-black' : 'bg-white text-gray-500 border-gray-300 hover:bg-gray-50'
+                            }`}
+                          >
+                            {cn}반
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )
+                })}
               </div>
-              <TimetableGrid
-                slots={classSlots}
-                totalSlots={totalSlots}
-                gradeLunchSlot={gradeLunchSlot}
-                teachers={teachers}
-                subjects={subjects}
-                rooms={rooms}
-                onCellClick={(day, slot, cell) => openEditModal(day, slot, cell)}
-                grade={selectedGrade}
-              />
-            </div>
+
+              {selectedClasses.length === 0 ? (
+                <div className="max-w-[1100px] text-center py-12 text-gray-300 text-[13px]">학급을 선택하세요</div>
+              ) : (
+                <div className="max-w-[1100px] grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  {selectedClasses.map(({ grade, classNum }) => (
+                    <div key={`${grade}-${classNum}`} className="flex flex-col gap-1">
+                      <div className="px-1 text-[13px] font-bold text-gray-800">{grade}학년 {classNum}반</div>
+                      <TimetableGrid
+                        slots={getSlotsForClass(grade, classNum)}
+                        totalSlots={totalSlots}
+                        gradeLunchSlot={gradeLunchSlot}
+                        teachers={teachers}
+                        subjects={subjects}
+                        rooms={rooms}
+                        timetableRows={timetableRows}
+                        onCellClick={(day, slot, cell) => openEditModal(day, slot, cell, { grade, classNum })}
+                        grade={grade}
+                        classNum={classNum}
+                        compact
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
           )}
 
           {tab === 'teacher' && (
@@ -300,7 +352,7 @@ export default function Timetable() {
                       teachers={teachers}
                       rooms={rooms}
                       compact
-                      onCellClick={(day, slot, cell) => openEditModal(day, slot, cell, t.id)}
+                      onCellClick={(day, slot, cell) => openEditModal(day, slot, cell, { defaultTeacherId: t.id })}
                     />
                   </div>
                 )
@@ -312,8 +364,7 @@ export default function Timetable() {
             teachers={teachers}
             subjects={subjects}
             timetableRows={timetableRows}
-            filterGrade={tab === 'class' ? selectedGrade : null}
-            filterClass={tab === 'class' ? selectedClass : null}
+            filterClasses={tab === 'class' ? selectedClasses : null}
           />
         </>
       )}
@@ -324,6 +375,7 @@ export default function Timetable() {
           teachers={teachers}
           subjects={subjects}
           gradeConfigs={gradeConfigs}
+          rooms={rooms}
           grade={editModal.grade}
           onSave={handleEditSave}
           onClose={() => setEditModal(null)}
@@ -344,12 +396,13 @@ export default function Timetable() {
   )
 }
 
-function UnassignedStats({ teachers, subjects, timetableRows, filterGrade, filterClass }) {
+function UnassignedStats({ teachers, subjects, timetableRows, filterClasses }) {
   // 교사별 (과목, 학년-반)별 목표 vs 배정 시수
+  const filterSet = filterClasses ? new Set(filterClasses.map(c => `${c.grade}-${c.classNum}`)) : null
   const rows = []
   for (const t of teachers) {
     for (const a of (t.teacher_assignments || [])) {
-      if (filterGrade != null && (a.grade !== filterGrade || a.class_num !== filterClass)) continue
+      if (filterSet && !filterSet.has(`${a.grade}-${a.class_num}`)) continue
       const target = a.weekly_hours || 0
       const scheduled = timetableRows.filter(r =>
         r.teacher_id === t.id &&
@@ -376,20 +429,21 @@ function UnassignedStats({ teachers, subjects, timetableRows, filterGrade, filte
   const deficitRows = rows.filter(r => r.deficit > 0)
   if (deficitRows.length === 0) return null
 
-  const isClassView = filterGrade != null
-  const gridStyle = isClassView
+  const isClassView = filterClasses != null
+  const isSingleClass = isClassView && filterClasses.length === 1
+  const gridStyle = isSingleClass
     ? { gridTemplateColumns: '1fr 1fr 70px 70px 70px' }
     : { gridTemplateColumns: '1fr 1fr 110px 60px 60px 60px' }
 
   return (
     <div className="mt-6 max-w-[540px] bg-white border border-gray-200 rounded-sm overflow-hidden">
       <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-200 text-[12px] font-semibold text-gray-700">
-        미배정 시수 ({deficitRows.length}건){isClassView ? ` — ${filterGrade}학년 ${filterClass}반` : ''}
+        미배정 시수 ({deficitRows.length}건){isSingleClass ? ` — ${filterClasses[0].grade}학년 ${filterClasses[0].classNum}반` : ''}
       </div>
       <div className="grid bg-gray-50 border-b border-gray-200 text-[11px] font-semibold text-gray-500" style={gridStyle}>
         <div className="px-3 py-2 border-r border-gray-200">교사</div>
         <div className="px-3 py-2 border-r border-gray-200">과목</div>
-        {!isClassView && <div className="px-3 py-2 border-r border-gray-200">학년 · 반</div>}
+        {!isSingleClass && <div className="px-3 py-2 border-r border-gray-200">학년 · 반</div>}
         <div className="px-3 py-2 border-r border-gray-200 text-center">목표</div>
         <div className="px-3 py-2 border-r border-gray-200 text-center">배정</div>
         <div className="px-3 py-2 text-center">부족</div>
@@ -398,7 +452,7 @@ function UnassignedStats({ teachers, subjects, timetableRows, filterGrade, filte
         <div key={i} className="grid border-b border-gray-100 last:border-b-0 text-[12px]" style={gridStyle}>
           <div className="px-3 py-2 border-r border-gray-100 font-semibold">{r.teacherCode}</div>
           <div className="px-3 py-2 border-r border-gray-100">{r.subjectName}</div>
-          {!isClassView && <div className="px-3 py-2 border-r border-gray-100">{r.grade}학년 {r.classNum}반</div>}
+          {!isSingleClass && <div className="px-3 py-2 border-r border-gray-100">{r.grade}학년 {r.classNum}반</div>}
           <div className="px-3 py-2 border-r border-gray-100 text-center text-gray-600">{r.target}h</div>
           <div className="px-3 py-2 border-r border-gray-100 text-center text-gray-600">{r.scheduled}h</div>
           <div className="px-3 py-2 text-center font-bold text-red-600">−{r.deficit}h</div>
@@ -585,13 +639,14 @@ function GenerateOptionsModal({ options, onChange, subjects, onConfirm, onClose 
   )
 }
 
-function EditCellModal({ modal, teachers, subjects, gradeConfigs, grade, onSave, onClose, saving }) {
+function EditCellModal({ modal, teachers, subjects, gradeConfigs, rooms, grade, onSave, onClose, saving }) {
   const { day, slot, classLabel, teacherView, defaultTeacherId } = modal
   const DAY_LABELS = ['월', '화', '수', '목', '금']
   const needsGradeClass = teacherView && !modal.grade
 
   const [teacherId, setTeacherId] = useState(modal.current?.teacher_id || defaultTeacherId || '')
   const [subjectId, setSubjectId] = useState(modal.current?.subject_id || '')
+  const [roomId, setRoomId] = useState(modal.current?.room_id || '')
   const [formGrade, setFormGrade] = useState(grade || 1)
   const [formClass, setFormClass] = useState(1)
 
@@ -599,10 +654,27 @@ function EditCellModal({ modal, teachers, subjects, gradeConfigs, grade, onSave,
   const effectiveGrade = needsGradeClass ? formGrade : grade
   const gradeSubjects = subjects.filter(s => s.grade === effectiveGrade)
 
+  // 선택된 과목·교사에 사용 가능한 특별실 목록
+  const selectedSubject = subjects.find(s => s.id === subjectId)
+  const eligibleRooms = (rooms || []).filter(r => {
+    if (!selectedSubject) return false
+    if (!r.subjectNames?.includes(selectedSubject.name)) return false
+    if (Array.isArray(r.teacherIds) && r.teacherIds.length > 0 && teacherId) {
+      if (!r.teacherIds.includes(teacherId)) return false
+    }
+    return true
+  })
+
   function handleGradeChange(g) {
     setFormGrade(g)
     setFormClass(1)
     setSubjectId('')
+    setRoomId('')
+  }
+
+  function handleSubjectChange(sid) {
+    setSubjectId(sid)
+    setRoomId('')
   }
 
   return (
@@ -650,18 +722,34 @@ function EditCellModal({ modal, teachers, subjects, gradeConfigs, grade, onSave,
             <label className="text-[12px] font-semibold text-gray-600 block mb-1">과목</label>
             <select
               value={subjectId}
-              onChange={e => setSubjectId(e.target.value)}
+              onChange={e => handleSubjectChange(e.target.value)}
               className="w-full h-9 px-2 border border-gray-300 rounded-sm text-[13px] outline-none bg-white"
             >
               <option value="">없음</option>
               {gradeSubjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
           </div>
+          {selectedSubject && (
+            <div>
+              <label className="text-[12px] font-semibold text-gray-600 block mb-1">특별실</label>
+              <select
+                value={roomId}
+                onChange={e => setRoomId(e.target.value)}
+                className="w-full h-9 px-2 border border-gray-300 rounded-sm text-[13px] outline-none bg-white"
+              >
+                <option value="">없음 (일반 교실)</option>
+                {eligibleRooms.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+              </select>
+              {eligibleRooms.length === 0 && (
+                <p className="text-[11px] text-gray-400 mt-1">이 과목·교사에 등록된 특별실이 없습니다</p>
+              )}
+            </div>
+          )}
         </div>
         <div className="flex justify-end gap-2">
           <button onClick={onClose} className="h-9 px-4 border border-gray-300 rounded-sm text-[13px] hover:bg-gray-50">취소</button>
           <button
-            onClick={() => onSave(teacherId, subjectId, needsGradeClass ? formGrade : null, needsGradeClass ? formClass : null)}
+            onClick={() => onSave(teacherId, subjectId, needsGradeClass ? formGrade : null, needsGradeClass ? formClass : null, roomId || null)}
             disabled={saving}
             className="h-9 px-4 bg-black text-white text-[13px] font-semibold rounded-sm hover:bg-gray-800 disabled:opacity-50"
           >
