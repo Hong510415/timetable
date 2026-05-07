@@ -131,8 +131,8 @@ export default function RoomTimetable() {
   const selectedRoomObj = rooms.find(r => r.id === selectedRoom)
 
   return (
-    <div className="p-10 bg-gray-50 min-h-full">
-      <div className="flex items-center justify-between mb-6">
+    <div className="p-4 md:p-10 bg-gray-50 min-h-full">
+      <div className="max-w-[1100px] flex items-center justify-between mb-6">
         <h1 className="text-[22px] font-bold">특별실 시간표</h1>
         <div className="flex gap-2">
           <ManualModal title="특별실 시간표" sections={MANUAL} />
@@ -173,7 +173,7 @@ export default function RoomTimetable() {
           </div>
 
           {selectedRoom && (
-            <>
+            <div className="max-w-[540px]">
               <div className="mb-4">
                 <div className="flex items-center gap-2 mb-1">
                   <span className="text-[14px] font-semibold">{selectedRoomObj?.name}</span>
@@ -249,7 +249,7 @@ export default function RoomTimetable() {
                   </div>
                 ))}
               </div>
-            </>
+            </div>
           )}
         </>
       )}

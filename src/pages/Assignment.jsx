@@ -142,7 +142,7 @@ export default function Assignment() {
         <span>교사 수: <strong className="text-gray-800">{teachers.length}명</strong></span>
         <span>전체 전담시수: <strong className="text-gray-800">{totalDedicated}h</strong></span>
         <span>교사 목표 시수: <strong className="text-gray-800">{targetHours}h</strong></span>
-        <span>주요 과목 1인 제한: <strong className="text-gray-800">{assignmentSettings.maxMajorSubjectsPerTeacher === 1 ? '적용' : '미적용'}</strong></span>
+        <span>주요 과목 1개 제한: <strong className="text-gray-800">{assignmentSettings.maxMajorSubjectsPerTeacher === 1 ? '적용' : '미적용'}</strong></span>
       </div>
 
       {/* 경고 */}

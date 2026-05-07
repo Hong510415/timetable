@@ -192,8 +192,8 @@ export default function Timetable() {
   const teacherSlots = selectedTeacher ? getSlotsForTeacher(selectedTeacher) : {}
 
   return (
-    <div className="p-10 bg-gray-50 min-h-full">
-      <div className="flex items-center justify-between mb-6">
+    <div className="p-4 md:p-10 bg-gray-50 min-h-full">
+      <div className="max-w-[1100px] flex items-center justify-between mb-6">
         <h1 className="text-[22px] font-bold">전담 시간표</h1>
         <div className="flex gap-2">
           <ManualModal title="전담 시간표" sections={MANUAL} />
@@ -221,7 +221,7 @@ export default function Timetable() {
       </div>
 
       {errors.length > 0 && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-sm text-[12px] text-red-600">
+        <div className="max-w-[1100px] mb-4 p-3 bg-red-50 border border-red-200 rounded-sm text-[12px] text-red-600">
           {errors.map((e, i) => <div key={i}>{e}</div>)}
         </div>
       )}
@@ -245,7 +245,7 @@ export default function Timetable() {
           </div>
 
           {tab === 'class' && (
-            <>
+            <div className="max-w-[540px]">
               <div className="flex gap-3 mb-5">
                 <select
                   value={selectedGrade}
@@ -274,11 +274,11 @@ export default function Timetable() {
                 onCellClick={(day, slot, cell) => openEditModal(day, slot, cell)}
                 grade={selectedGrade}
               />
-            </>
+            </div>
           )}
 
           {tab === 'teacher' && (
-            <div className="flex flex-col gap-4">
+            <div className="max-w-[1100px] grid grid-cols-1 lg:grid-cols-2 gap-4">
               {teachers.map(t => {
                 const ts = getSlotsForTeacher(t.id)
                 const scheduled = timetableRows.filter(r => r.teacher_id === t.id && !r.is_unassigned).length

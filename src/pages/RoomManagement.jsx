@@ -94,8 +94,8 @@ export default function RoomManagement() {
   }
 
   return (
-    <div className="p-10 bg-gray-50 min-h-full">
-      <div className="flex items-center justify-between mb-6">
+    <div className="p-4 md:p-10 bg-gray-50 min-h-full">
+      <div className="max-w-[1100px] flex items-center justify-between mb-6">
         <h1 className="text-[22px] font-bold">특별실 관리</h1>
         <div className="flex items-center gap-2">
           <ManualModal title="특별실 관리" sections={MANUAL} />
@@ -108,14 +108,14 @@ export default function RoomManagement() {
         </div>
       </div>
 
-      <div className="flex items-center gap-2 p-3 bg-gray-100 rounded-sm mb-5 text-[12px] text-gray-500">
-        💡 사용 불가 시간대를 체크하면 해당 시간에 특별실 배정이 제외됩니다. (예: 방송부 사용, 청소 시간 등)
+      <div className="max-w-[1100px] flex items-center gap-2 p-3 bg-gray-100 rounded-sm mb-5 text-[12px] text-gray-500">
+        💡 사용 불가 시간대를 체크하면 해당 시간에 특별실 배정이 제외됩니다. (예: 방과후 수업 등)
       </div>
 
       {rooms.length === 0 ? (
         <div className="text-center py-20 text-gray-300 text-[14px]">특별실을 추가하세요</div>
       ) : (
-        <div className="flex flex-col gap-5">
+        <div className="max-w-[1100px] grid grid-cols-1 lg:grid-cols-2 gap-4">
           {rooms.map(room => (
             <div key={room.id} className="bg-white border border-gray-200 rounded-sm p-5">
               <div className="flex items-center justify-between mb-4">
