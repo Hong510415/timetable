@@ -29,6 +29,24 @@ export function exportFullWorkbook(state) {
   }
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(subjectRows), '과목설정')
 
+  // 시트3-A/B/C: 안별 과목설정
+  for (const plan of (state.subjectPlans?.plans || [])) {
+    const rows = [['ID', '학년', '과목명', '주당시수', '구분']]
+    for (const s of plan.subjects) {
+      rows.push([s.id, s.grade, s.name, s.weekly_hours, s.is_major ? '주요' : '일반'])
+    }
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), `과목설정_${plan.name}`)
+  }
+
+  // 시트3-meta: 과목안메타
+  const metaRows = [
+    ['키', '값'],
+    ['activeTabId', state.subjectPlans?.activeTabId || 'plan1'],
+    ['appliedPlanId', state.subjectPlans?.appliedPlanId || ''],
+    ['appliedAt', state.subjectPlans?.appliedAt || ''],
+  ]
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(metaRows), '과목안메타')
+
   // 시트4: 교사목록
   const teacherRows = [['ID', '교사코드']]
   for (const t of state.teachers) {
@@ -133,6 +151,47 @@ export async function importFullWorkbook(file) {
     weekly_hours: Number(r[3]) || 2,
     is_major: r[4] === '주요',
   }))
+
+  // subjectPlans: 안별 과목설정 + 메타
+  function readPlanSheet(planName) {
+    const rows = getSheet(`과목설정_${planName}`).slice(1).filter(r => r[0])
+    return rows.map(r => ({
+      id: String(r[0]) || crypto.randomUUID(),
+      grade: Number(r[1]),
+      name: String(r[2]),
+      weekly_hours: Number(r[3]) || 2,
+      is_major: r[4] === '주요',
+    }))
+  }
+  const planNames = [
+    { id: 'plan1', name: 'A안' },
+    { id: 'plan2', name: 'B안' },
+    { id: 'plan3', name: 'C안' },
+  ]
+  const hasPlanSheets = planNames.some(({ name }) => wb.Sheets[`과목설정_${name}`])
+  if (hasPlanSheets) {
+    const metaRows = getSheet('과목안메타').slice(1).filter(r => r[0])
+    const meta = Object.fromEntries(metaRows.map(r => [String(r[0]), String(r[1] ?? '')]))
+    state.subjectPlans = {
+      plans: planNames.map(({ id, name }) => ({ id, name, subjects: readPlanSheet(name) })),
+      activeTabId: meta.activeTabId || 'plan1',
+      appliedPlanId: meta.appliedPlanId || null,
+      appliedAt: meta.appliedAt || null,
+    }
+  } else {
+    // Legacy import — clone subjects to plan1
+    const cloneSubject = s => ({ ...s })
+    state.subjectPlans = {
+      plans: [
+        { id: 'plan1', name: 'A안', subjects: state.subjects.map(cloneSubject) },
+        { id: 'plan2', name: 'B안', subjects: [] },
+        { id: 'plan3', name: 'C안', subjects: [] },
+      ],
+      activeTabId: 'plan1',
+      appliedPlanId: state.subjects.length > 0 ? 'plan1' : null,
+      appliedAt: null,
+    }
+  }
 
   // 교사목록 + 전담배정
   const teacherRows = getSheet('교사목록').slice(1).filter(r => r[0])
