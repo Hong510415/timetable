@@ -142,13 +142,13 @@ export default function SubjectPlanComparison({
 
         <div className="border-t border-gray-200 px-6 py-4 flex items-center justify-between print:hidden">
           <div className="text-[12px] text-gray-500">
-            현재 확정: {plans.find(p => p.id === appliedPlanId)?.name || '없음'}
+            현재 적용: {plans.find(p => p.id === appliedPlanId)?.name || '없음'}
           </div>
           <div className="flex items-center gap-2">
             {plans.map(p => {
               const { disabled, reason, overflows } = isApplyDisabledForPlan(p)
               const title = reason === 'overflow'
-                ? `초과 학년이 있어 확정할 수 없습니다 (${overflows.map(o => `${o.grade}학년 초과 -${o.overBy}시간`).join(', ')})`
+                ? `초과 학년이 있어 적용할 수 없습니다 (${overflows.map(o => `${o.grade}학년 초과 -${o.overBy}시간`).join(', ')})`
                 : reason === 'empty'
                 ? '과목을 먼저 입력해 주세요.'
                 : ''
@@ -164,7 +164,7 @@ export default function SubjectPlanComparison({
                       : 'bg-black text-white border-black hover:bg-gray-800'
                   }`}
                 >
-                  {p.name} 확정
+                  {p.name} 적용
                 </button>
               )
             })}

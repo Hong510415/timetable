@@ -27,7 +27,7 @@ export default function SubjectSetup() {
   const isApplyDisabled = isPlanLive || hasOverflow || isEmpty
 
   const disabledTitle = hasOverflow
-    ? `초과 학년이 있어 확정할 수 없습니다 (${overflowGrades.map(o => `${o.grade}학년 초과 -${o.overBy}시간`).join(', ')})`
+    ? `초과 학년이 있어 적용할 수 없습니다 (${overflowGrades.map(o => `${o.grade}학년 초과 -${o.overBy}시간`).join(', ')})`
     : isEmpty
     ? '과목을 먼저 입력해 주세요.'
     : ''
@@ -39,9 +39,9 @@ export default function SubjectSetup() {
     statusLine = `현재 편집: ${activePlan.name} · 적용 전`
   } else if (isPlanLive) {
     const time = appliedAt ? ` (${new Date(appliedAt).toLocaleString('ko-KR')})` : ''
-    statusLine = `현재 편집: ${activePlan.name} · 확정됨${time}`
+    statusLine = `현재 편집: ${activePlan.name} · 적용됨${time}`
   } else {
-    statusLine = `현재 편집: ${activePlan.name} · 미확정 (확정된 안: ${appliedPlan?.name || '없음'})`
+    statusLine = `현재 편집: ${activePlan.name} · 미적용 (적용된 안: ${appliedPlan?.name || '없음'})`
   }
 
   function addSubject(grade) {
@@ -66,8 +66,8 @@ export default function SubjectSetup() {
       return
     }
     const ok = confirm(
-      `${activePlan.name}을 확정합니다.\n` +
-      `이전 확정 안과 과목 구성이 달라 다음 데이터가 초기화됩니다:\n` +
+      `${activePlan.name}을 적용합니다.\n` +
+      `이전 적용 안과 과목 구성이 달라 다음 데이터가 초기화됩니다:\n` +
       `· 전담 교사 배정\n` +
       `· 전담 시간표\n` +
       `· 특별실 시간표\n` +
@@ -86,12 +86,12 @@ export default function SubjectSetup() {
     }
     if (filledCount === 1) {
       const onlyPlan = plans.find(p => p.subjects.length > 0)
-      const ok = confirm(`비교할 다른 안이 없습니다. ${onlyPlan.name}을 바로 확정할까요?`)
+      const ok = confirm(`비교할 다른 안이 없습니다. ${onlyPlan.name}을 바로 적용할까요?`)
       if (ok) {
         setActivePlanTab(onlyPlan.id)
         const overflows = getOverflowGrades(onlyPlan.subjects, gradeConfigs, gradesToShow)
         if (overflows.length > 0) {
-          alert(`${onlyPlan.name}에 초과 학년이 있어 확정할 수 없습니다 (${overflows.map(o => `${o.grade}학년 초과 -${o.overBy}시간`).join(', ')}).`)
+          alert(`${onlyPlan.name}에 초과 학년이 있어 적용할 수 없습니다 (${overflows.map(o => `${o.grade}학년 초과 -${o.overBy}시간`).join(', ')}).`)
           return
         }
         applyPlan(onlyPlan.id)
@@ -118,8 +118,8 @@ export default function SubjectSetup() {
       return
     }
     if (!confirm(
-      `${plan.name}을 확정합니다.\n` +
-      `이전 확정 안과 과목 구성이 달라 다음 데이터가 초기화됩니다:\n` +
+      `${plan.name}을 적용합니다.\n` +
+      `이전 적용 안과 과목 구성이 달라 다음 데이터가 초기화됩니다:\n` +
       `· 전담 교사 배정\n` +
       `· 전담 시간표\n` +
       `· 특별실 시간표\n` +
@@ -200,7 +200,7 @@ export default function SubjectSetup() {
                     : 'bg-black text-white border-black hover:bg-gray-800'
                 }`}
               >
-                ✓ 이 안 확정
+                ✓ {activePlan.name} 적용
               </button>
             </div>
           </div>

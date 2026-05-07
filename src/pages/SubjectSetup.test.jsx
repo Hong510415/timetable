@@ -42,7 +42,7 @@ describe('SubjectSetup', () => {
 
   it('disables 확정 button when plan is empty', () => {
     renderPage()
-    const applyBtn = screen.getByRole('button', { name: /이 안 확정/ })
+    const applyBtn = screen.getByRole('button', { name: /안 적용/ })
     expect(applyBtn).toBeDisabled()
     expect(applyBtn).toHaveAttribute('title', '과목을 먼저 입력해 주세요.')
   })
@@ -76,7 +76,7 @@ describe('SubjectSetup', () => {
     }
     localStorage.setItem('timetable_app_data', JSON.stringify(stored))
     renderPage()
-    const applyBtn = screen.getByRole('button', { name: /이 안 확정/ })
+    const applyBtn = screen.getByRole('button', { name: /안 적용/ })
     expect(applyBtn).toBeDisabled()
   })
 
@@ -143,7 +143,7 @@ describe('SubjectSetup', () => {
     localStorage.setItem('timetable_app_data', JSON.stringify(stored))
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
     renderPage()
-    await user.click(screen.getByRole('button', { name: /이 안 확정/ }))
+    await user.click(screen.getByRole('button', { name: /안 적용/ }))
     confirmSpy.mockRestore()
     const persisted = JSON.parse(localStorage.getItem('timetable_app_data'))
     expect(persisted.subjects[0].name).toBe('영어')
@@ -216,8 +216,8 @@ describe('overflow handling', () => {
     }
     localStorage.setItem('timetable_app_data', JSON.stringify(stored))
     renderPage()
-    const applyBtn = screen.getByRole('button', { name: /이 안 확정/ })
+    const applyBtn = screen.getByRole('button', { name: /안 적용/ })
     expect(applyBtn).toBeDisabled()
-    expect(applyBtn).toHaveAttribute('title', expect.stringMatching(/초과 학년이 있어 확정할 수 없습니다/))
+    expect(applyBtn).toHaveAttribute('title', expect.stringMatching(/초과 학년이 있어 적용할 수 없습니다/))
   })
 })

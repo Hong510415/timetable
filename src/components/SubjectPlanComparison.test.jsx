@@ -60,13 +60,13 @@ describe('SubjectPlanComparison', () => {
     expect(screen.getByText('1인당 평균 주당시수')).toBeInTheDocument()
   })
 
-  it('disables [A안 확정] when A안 is currently applied and unchanged', () => {
+  it('disables [A안 적용] when A안 is currently applied and unchanged', () => {
     renderModal()
-    expect(screen.getByRole('button', { name: 'A안 확정' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'B안 확정' })).not.toBeDisabled()
+    expect(screen.getByRole('button', { name: 'A안 적용' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'B안 적용' })).not.toBeDisabled()
   })
 
-  it('disables 확정 button for a plan with overflow', () => {
+  it('disables 적용 button for a plan with overflow', () => {
     const plans = [
       { id: 'plan1', name: 'A안', subjects: [{ id: 'a1', grade: 1, name: '영어', weekly_hours: 3, is_major: true }] },
       { id: 'plan2', name: 'B안', subjects: [{ id: 'b1', grade: 1, name: '영어', weekly_hours: 30, is_major: true }] },
@@ -85,10 +85,10 @@ describe('SubjectPlanComparison', () => {
         teacherCount={0}
       />
     )
-    expect(screen.getByRole('button', { name: 'B안 확정' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'B안 적용' })).toBeDisabled()
   })
 
-  it('disables 확정 button for an empty plan', () => {
+  it('disables 적용 button for an empty plan', () => {
     const plans = [
       { id: 'plan1', name: 'A안', subjects: [{ id: 'a1', grade: 1, name: '영어', weekly_hours: 3, is_major: true }] },
       { id: 'plan2', name: 'B안', subjects: [] },
@@ -107,16 +107,16 @@ describe('SubjectPlanComparison', () => {
         teacherCount={0}
       />
     )
-    const btn = screen.getByRole('button', { name: 'B안 확정' })
+    const btn = screen.getByRole('button', { name: 'B안 적용' })
     expect(btn).toBeDisabled()
     expect(btn).toHaveAttribute('title', '과목을 먼저 입력해 주세요.')
   })
 
-  it('calls onApply with planId when 확정 button clicked', async () => {
+  it('calls onApply with planId when 적용 button clicked', async () => {
     const user = userEvent.setup()
     const onApply = vi.fn()
     renderModal({ onApply })
-    await user.click(screen.getByRole('button', { name: 'B안 확정' }))
+    await user.click(screen.getByRole('button', { name: 'B안 적용' }))
     expect(onApply).toHaveBeenCalledWith('plan2')
   })
 
