@@ -1,5 +1,5 @@
 import { useApp } from '../context/AppContext'
-import { subjectsEqualByContent } from '../lib/planHelpers'
+import { subjectsEqualByContent, getDedicatedHoursForGrade, getWeeklyTotalForGrade } from '../lib/planHelpers'
 
 const GRADES = [1, 2, 3, 4, 5, 6]
 
@@ -142,13 +142,34 @@ export default function SubjectSetup() {
         {gradesToShow.map(grade => (
           <div key={grade} className="bg-white border border-gray-200 rounded-sm p-5">
             <div className="flex items-center justify-between mb-3">
-              <span className="text-[14px] font-semibold">{grade}학년</span>
-              <button
-                onClick={() => addSubject(grade)}
-                className="text-[12px] px-3 h-7 border border-gray-300 rounded-sm hover:bg-gray-50"
-              >
-                + 과목 추가
-              </button>
+              <div className="flex items-center gap-3">
+                <span className="text-[14px] font-semibold">{grade}학년</span>
+                <button
+                  onClick={() => addSubject(grade)}
+                  className="text-[12px] px-3 h-7 border border-gray-300 rounded-sm hover:bg-gray-50"
+                >
+                  + 과목 추가
+                </button>
+              </div>
+              {(() => {
+                const dedicated = getDedicatedHoursForGrade(planSubjects, grade)
+                const weeklyTotal = getWeeklyTotalForGrade(gradeConfigs, grade)
+                if (weeklyTotal === 0) {
+                  return <span className="text-[12px] text-gray-400">학교 설정 필요</span>
+                }
+                const homeroom = weeklyTotal - dedicated
+                const isOver = dedicated > weeklyTotal
+                return (
+                  <div className="text-right">
+                    <div className={`text-[15px] font-bold ${isOver ? 'text-red-600' : 'text-gray-900'}`}>
+                      담임시수: {homeroom} / {weeklyTotal}
+                    </div>
+                    <div className={`text-[11px] ${isOver ? 'text-red-500' : 'text-gray-400'}`}>
+                      {isOver ? `(초과 ${homeroom})` : `(전담 ${dedicated}시간)`}
+                    </div>
+                  </div>
+                )
+              })()}
             </div>
             {planSubjects.filter(s => s.grade === grade).length === 0 ? (
               <p className="text-[12px] text-gray-300">과목을 추가하세요</p>

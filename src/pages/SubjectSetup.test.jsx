@@ -156,3 +156,38 @@ describe('SubjectSetup', () => {
     expect(persisted.subjectPlans.appliedAt).not.toBeNull()
   })
 })
+
+describe('담임시수 widget', () => {
+  it('shows 담임시수 = weekly total - dedicated', () => {
+    const stored = {
+      gradeConfigs: [
+        { grade: 1, num_classes: 4, periods_mon: 5, periods_tue: 5, periods_wed: 5, periods_thu: 5, periods_fri: 5 },
+        { grade: 2, num_classes: 0, periods_mon: 5, periods_tue: 5, periods_wed: 5, periods_thu: 5, periods_fri: 5 },
+        { grade: 3, num_classes: 0, periods_mon: 5, periods_tue: 5, periods_wed: 5, periods_thu: 5, periods_fri: 5 },
+        { grade: 4, num_classes: 0, periods_mon: 5, periods_tue: 5, periods_wed: 5, periods_thu: 5, periods_fri: 5 },
+        { grade: 5, num_classes: 0, periods_mon: 5, periods_tue: 5, periods_wed: 5, periods_thu: 5, periods_fri: 5 },
+        { grade: 6, num_classes: 0, periods_mon: 5, periods_tue: 5, periods_wed: 5, periods_thu: 5, periods_fri: 5 },
+      ],
+      subjects: [],
+      teachers: [], rooms: [], roomBlockedSlots: [], timetableSlots: [], roomTimetableSlots: [],
+      assignmentSettings: { maxMajorSubjectsPerTeacher: 1 }, assignmentResult: null,
+      lunchConfig: { split_lunch: false, lunch_groups: [] }, schoolName: '',
+      subjectPlans: {
+        plans: [
+          { id: 'plan1', name: 'A안', subjects: [
+            { id: 's1', grade: 1, name: '영어', weekly_hours: 3, is_major: true },
+            { id: 's2', grade: 1, name: '음악', weekly_hours: 2, is_major: false },
+          ]},
+          { id: 'plan2', name: 'B안', subjects: [] },
+          { id: 'plan3', name: 'C안', subjects: [] },
+        ],
+        activeTabId: 'plan1', appliedPlanId: null, appliedAt: null,
+      },
+    }
+    localStorage.setItem('timetable_app_data', JSON.stringify(stored))
+    renderPage()
+    // weeklyTotal=25, dedicated=5 → homeroom=20
+    expect(screen.getByText(/담임시수: 20 \/ 25/)).toBeInTheDocument()
+    expect(screen.getByText(/전담 5시간/)).toBeInTheDocument()
+  })
+})
