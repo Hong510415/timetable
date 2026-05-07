@@ -28,8 +28,60 @@ const DAY_LABELS = ['월', '화', '수', '목', '금']
 
 export default function RoomManagement() {
   const { state, setRooms, setRoomBlockedSlots } = useApp()
-  const { rooms, lunchConfig, roomBlockedSlots, subjects } = state
-  const uniqueSubjectNames = [...new Set(subjects.map(s => s.name))]
+  const { rooms, lunchConfig, roomBlockedSlots, subjects, teachers } = state
+
+  // 교사가 가르치는 과목명 목록
+  function teacherSubjectNames(teacherId) {
+    const t = teachers.find(x => x.id === teacherId)
+    if (!t) return []
+    const names = new Set()
+    for (const a of (t.teacher_assignments || [])) {
+      const subj = subjects.find(s => s.id === a.subject_id)
+      if (subj) names.add(subj.name)
+    }
+    return [...names]
+  }
+
+  // 방의 effective teacherIds — 명시 저장된 게 있으면 그걸, 없으면 subjectNames에서 역산 (구 데이터 호환)
+  function getRoomTeacherIds(room) {
+    if (Array.isArray(room.teacherIds)) return room.teacherIds
+    const sNames = new Set(room.subjectNames || [])
+    if (sNames.size === 0) return []
+    const ids = new Set()
+    for (const t of teachers) {
+      for (const name of teacherSubjectNames(t.id)) {
+        if (sNames.has(name)) { ids.add(t.id); break }
+      }
+    }
+    return [...ids]
+  }
+
+  // 선택된 교사들이 가르치는 과목명들
+  function getAvailableSubjectsForRoom(room) {
+    const tids = getRoomTeacherIds(room)
+    const names = new Set()
+    for (const tid of tids) {
+      for (const name of teacherSubjectNames(tid)) names.add(name)
+    }
+    return [...names]
+  }
+
+  function toggleRoomTeacher(roomId, teacherId) {
+    setRooms(rooms.map(r => {
+      if (r.id !== roomId) return r
+      const current = getRoomTeacherIds(r)
+      const newIds = current.includes(teacherId)
+        ? current.filter(id => id !== teacherId)
+        : [...current, teacherId]
+      // 더 이상 어느 선택 교사도 가르치지 않는 과목은 자동 해제
+      const stillAvailable = new Set()
+      for (const tid of newIds) {
+        for (const name of teacherSubjectNames(tid)) stillAvailable.add(name)
+      }
+      const newSubjectNames = (r.subjectNames || []).filter(n => stillAvailable.has(n))
+      return { ...r, teacherIds: newIds, subjectNames: newSubjectNames }
+    }))
+  }
 
   function toggleRoomSubject(roomId, subjectName) {
     setRooms(rooms.map(r => {
@@ -141,25 +193,54 @@ export default function RoomManagement() {
                 </div>
               </div>
 
-              {uniqueSubjectNames.length > 0 && (
-                <div className="flex items-center gap-2 flex-wrap mb-4">
-                  <span className="text-[12px] text-gray-500 font-semibold w-[56px] flex-shrink-0">사용 과목</span>
-                  {uniqueSubjectNames.map(name => {
-                    const active = (room.subjectNames || []).includes(name)
+              {teachers.length > 0 && (
+                <div className="flex items-center gap-2 flex-wrap mb-3">
+                  <span className="text-[12px] text-gray-500 font-semibold w-[56px] flex-shrink-0">사용 교사</span>
+                  {teachers.map(t => {
+                    const active = getRoomTeacherIds(room).includes(t.id)
                     return (
                       <button
-                        key={name}
-                        onClick={() => toggleRoomSubject(room.id, name)}
+                        key={t.id}
+                        onClick={() => toggleRoomTeacher(room.id, t.id)}
                         className={`h-7 px-3 rounded-sm text-[12px] font-semibold border transition-colors
                           ${active ? 'bg-black text-white border-black' : 'bg-white text-gray-500 border-gray-300 hover:bg-gray-50'}`}
                       >
-                        {name}
+                        {t.code}
                       </button>
                     )
                   })}
-                  <span className="text-[11px] text-gray-400">선택한 과목의 수업이 사용 불가 시간에 배정되지 않습니다</span>
                 </div>
               )}
+
+              {(() => {
+                const available = getAvailableSubjectsForRoom(room)
+                if (available.length === 0) {
+                  return (
+                    <div className="text-[11px] text-gray-400 mb-4 pl-[64px]">
+                      먼저 사용 교사를 선택하세요. 선택한 교사가 가르치는 과목만 표시됩니다.
+                    </div>
+                  )
+                }
+                return (
+                  <div className="flex items-center gap-2 flex-wrap mb-4">
+                    <span className="text-[12px] text-gray-500 font-semibold w-[56px] flex-shrink-0">사용 과목</span>
+                    {available.map(name => {
+                      const active = (room.subjectNames || []).includes(name)
+                      return (
+                        <button
+                          key={name}
+                          onClick={() => toggleRoomSubject(room.id, name)}
+                          className={`h-7 px-3 rounded-sm text-[12px] font-semibold border transition-colors
+                            ${active ? 'bg-black text-white border-black' : 'bg-white text-gray-500 border-gray-300 hover:bg-gray-50'}`}
+                        >
+                          {name}
+                        </button>
+                      )
+                    })}
+                    <span className="text-[11px] text-gray-400">선택한 과목의 수업이 사용 불가 시간에 배정되지 않습니다</span>
+                  </div>
+                )
+              })()}
 
               <div className="border border-gray-200 rounded-sm overflow-hidden">
                 <div className="flex bg-gray-50 border-b border-gray-200">
