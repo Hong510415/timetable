@@ -1,31 +1,40 @@
 /**
- * 전담 시간표 자동 생성 알고리즘
+ * 전담 시간표 자동 생성 알고리즘 (rewrite, 2026-05-08)
+ *
+ * 설계 스펙: docs/superpowers/specs/2026-05-08-scheduler-rewrite-design.md
  *
  * slot은 0-based (0=1교시, 1=2교시, ...)
- * gradeLunchSlot: { grade: slotIndex } (DB값 3,4,5 그대로)
+ * gradeLunchSlot: { grade: slotIndex } (DB값 그대로)
  *
- * 하드 제약:
- * 1. 같은 교사의 하루 스케줄에서 학년 블록이 끊기지 않도록 (끼어들기 금지)
- *    예: 3학년-4학년-3학년 순서 절대 불가
- * 2. 같은 반의 session N은 session N-1보다 반드시 늦은 요일에 배정
- *    (달력 순서 기준 라운드로빈 보장)
+ * 흐름:
+ *   1. 전처리 (학급 가용 슬롯, 특별실, 점심)
+ *   2. 패턴 결정 + 블록 분해 (#11, #12)
+ *   3. 라운드로빈 순서로 블록 배치
+ *   4. 각 배치 시 하드 #1~#12 검증 + 소프트 (a)~(h) 점수
+ *   5. 결과 반환
  */
 
-export function buildSchedule(gradeConfigs, subjects, teachers, lunchConfig, rooms = [], roomBlockedSlots = [], options = {}) {
+export function buildSchedule(
+  gradeConfigs,
+  subjects,
+  teachers,
+  lunchConfig,
+  rooms = [],
+  roomBlockedSlots = [],
+  options = {},
+) {
   const subjectSettings = options.subjectSettings || {}
 
-  function getSubjectMaxSameDay(subjectId) {
-    const subj = subjects.find(s => s.id === subjectId)
-    const settings = subjectSettings[subj?.name]
-    if (!settings || !settings.allow) return 1
-    return settings.maxCount || 2
-  }
+  // ---------- 1. 전처리 ----------
+
   const splitLunch = lunchConfig?.split_lunch || false
   const lunchGroups = lunchConfig?.lunch_groups || []
 
-  const maxPeriods = Math.max(...gradeConfigs.map(gc =>
-    Math.max(gc.periods_mon, gc.periods_tue, gc.periods_wed, gc.periods_thu, gc.periods_fri)
-  ))
+  const maxPeriods = Math.max(
+    ...gradeConfigs.map(gc =>
+      Math.max(gc.periods_mon, gc.periods_tue, gc.periods_wed, gc.periods_thu, gc.periods_fri),
+    ),
+  )
   const totalSlots = splitLunch ? maxPeriods + 1 : maxPeriods
 
   const gradeLunchSlot = {}
@@ -36,96 +45,113 @@ export function buildSchedule(gradeConfigs, subjects, teachers, lunchConfig, roo
       }
     }
   }
+  const allLunchSlotIndexes = splitLunch ? [...new Set(Object.values(gradeLunchSlot))] : []
 
-  const allLunchSlotIndexes = splitLunch
-    ? [...new Set(Object.values(gradeLunchSlot))]
-    : []
+  // 과목명 → maxSameDay (1: 연속불가 / 2+: 연속허용 시 하루 최대시수)
+  function getMaxSameDay(subjectId) {
+    const subj = subjects.find(s => s.id === subjectId)
+    const settings = subjectSettings[subj?.name]
+    if (!settings || !settings.allow) return 1
+    return settings.maxCount || 2
+  }
 
-  // 과목ID → 사용 가능 특별실 리스트 (이름 매칭)
+  // 과목 → 사용 가능 특별실 리스트 + 차단 set
   const subjectRooms = {}
   for (const subj of subjects) {
     const eligible = rooms.filter(r => r.subjectNames?.includes(subj.name))
     if (eligible.length > 0) subjectRooms[subj.id] = eligible
   }
-
-  // 방별 차단 day-slot Set
   const roomBlockedMap = {}
   for (const room of rooms) {
     roomBlockedMap[room.id] = new Set(
-      roomBlockedSlots.filter(b => b.room_id === room.id).map(b => `${b.day_of_week}-${b.slot}`)
+      roomBlockedSlots.filter(b => b.room_id === room.id).map(b => `${b.day_of_week}-${b.slot}`),
     )
   }
 
-  // (day, slot)에서 사용 가능한 방 찾기 — 차단되지 않고, 다른 수업이 점유 안 한 방
-  // 한 과목이 여러 방에서 가능할 때 모든 방이 동시에 차단된 경우만 슬롯 불가
-  function findAvailableRoom(subjectId, day, slot) {
-    const eligible = subjectRooms[subjectId]
-    if (!eligible || eligible.length === 0) return undefined  // 일반 교실 — 방 필요 없음
-    for (const room of eligible) {
-      if (roomBlockedMap[room.id]?.has(`${day}-${slot}`)) continue
-      if (roomOccupied[room.id][day].has(slot)) continue
-      return room.id
-    }
-    return null  // 사용 가능 방 없음 → 슬롯 불가
-  }
-
-  // 학년·반의 요일별 가용 슬롯
+  // 학급 가용 슬롯
   const gradeClassSlots = {}
   for (const gc of gradeConfigs) {
-    const { grade, num_classes } = gc
     const dayPeriods = [gc.periods_mon, gc.periods_tue, gc.periods_wed, gc.periods_thu, gc.periods_fri]
-    const lunchSlot = gradeLunchSlot[grade]
-    gradeClassSlots[grade] = {}
-    for (let cls = 1; cls <= num_classes; cls++) {
-      gradeClassSlots[grade][cls] = dayPeriods.map(periods => {
+    const lunchSlot = gradeLunchSlot[gc.grade]
+    gradeClassSlots[gc.grade] = {}
+    for (let cls = 1; cls <= gc.num_classes; cls++) {
+      gradeClassSlots[gc.grade][cls] = dayPeriods.map(periods => {
         const slots = new Set()
         let count = 0
         for (let s = 0; s < totalSlots; s++) {
           if (splitLunch && lunchSlot === s) continue
-          if (count < periods) { slots.add(s); count++ }
+          if (count < periods) {
+            slots.add(s)
+            count++
+          }
         }
         return slots
       })
     }
   }
 
-  // 1시간 단위 배정 목록 (session은 라운드로빈 순서용)
-  const units = []
+  // ---------- 2. 패턴 결정 + 블록 분해 ----------
+  // (#11) 같은 (grade, subject) → 모든 반 동일 패턴
+  // (#12) maxSameDay 기준 pair vs split 결정
+  //
+  // 블록 = pair(2시간 한 묶음) 또는 single(1시간)
+  // 같은 (class, subject)의 모든 블록은 서로 다른 요일에 배치
+
+  const blocks = [] // { teacherId, subjectId, grade, classNum, type: 'pair'|'single', blockIdx, totalBlocks }
+
   for (const teacher of teachers) {
-    for (const a of (teacher.teacher_assignments || [])) {
-      if (a.weekly_hours > 0) {
-        for (let session = 0; session < a.weekly_hours; session++) {
-          units.push({
-            teacherId: teacher.id,
-            subjectId: a.subject_id,
-            grade: a.grade,
-            classNum: a.class_num,
-            session,
-            maxSession: a.weekly_hours,
-          })
-        }
+    for (const a of teacher.teacher_assignments || []) {
+      const wh = a.weekly_hours || 0
+      if (wh <= 0) continue
+      const maxSD = getMaxSameDay(a.subject_id)
+      const usePair = maxSD >= 2 && wh >= 2
+      const pairCount = usePair ? Math.floor(wh / 2) : 0
+      const singleCount = wh - pairCount * 2
+      const totalBlocks = pairCount + singleCount
+
+      let idx = 0
+      for (let p = 0; p < pairCount; p++) {
+        blocks.push({
+          teacherId: teacher.id,
+          subjectId: a.subject_id,
+          grade: a.grade,
+          classNum: a.class_num,
+          type: 'pair',
+          size: 2,
+          blockIdx: idx++,
+          totalBlocks,
+        })
+      }
+      for (let s = 0; s < singleCount; s++) {
+        blocks.push({
+          teacherId: teacher.id,
+          subjectId: a.subject_id,
+          grade: a.grade,
+          classNum: a.class_num,
+          type: 'single',
+          size: 1,
+          blockIdx: idx++,
+          totalBlocks,
+        })
       }
     }
   }
 
-  // 교사별 총 시수
-  const teacherTotalHours = {}
-  for (const u of units) {
-    teacherTotalHours[u.teacherId] = (teacherTotalHours[u.teacherId] || 0) + 1
-  }
-
-  // 정렬: session → 총시수 많은 교사 → 교사ID → 학년 → 반
-  units.sort((a, b) => {
-    if (a.session !== b.session) return a.session - b.session
-    const aH = teacherTotalHours[a.teacherId] || 0
-    const bH = teacherTotalHours[b.teacherId] || 0
-    if (aH !== bH) return bH - aH
+  // 라운드로빈 정렬: blockIdx 작은 것부터, 동률이면 총 블록 많은 학년/반 먼저
+  const teacherTotalBlocks = {}
+  for (const b of blocks) teacherTotalBlocks[b.teacherId] = (teacherTotalBlocks[b.teacherId] || 0) + 1
+  blocks.sort((a, b) => {
+    if (a.blockIdx !== b.blockIdx) return a.blockIdx - b.blockIdx
+    const aT = teacherTotalBlocks[a.teacherId] || 0
+    const bT = teacherTotalBlocks[b.teacherId] || 0
+    if (aT !== bT) return bT - aT
     if (a.teacherId !== b.teacherId) return a.teacherId < b.teacherId ? -1 : 1
     if (a.grade !== b.grade) return a.grade - b.grade
     return a.classNum - b.classNum
   })
 
-  // 결과 구조
+  // ---------- 3. 상태 ----------
+
   const result = {}
   for (const gc of gradeConfigs) {
     result[gc.grade] = {}
@@ -134,237 +160,347 @@ export function buildSchedule(gradeConfigs, subjects, teachers, lunchConfig, roo
     }
   }
 
-  // 교사별 점유 슬롯
   const teacherOccupied = {}
-  for (const teacher of teachers) {
-    teacherOccupied[teacher.id] = Array.from({ length: 5 }, () => new Set())
-  }
+  for (const t of teachers) teacherOccupied[t.id] = Array.from({ length: 5 }, () => new Set())
 
-  // 방별 점유 슬롯 (특별실 1방=동시간 1수업)
   const roomOccupied = {}
-  for (const room of rooms) {
-    roomOccupied[room.id] = Array.from({ length: 5 }, () => new Set())
+  for (const r of rooms) roomOccupied[r.id] = Array.from({ length: 5 }, () => new Set())
+
+  // 학급별 학년 트래킹 (#9 grade sandwich용)
+  const teacherSlotGrade = {} // teacherId → [day][slot] = grade
+  // 학급별 과목 트래킹 (#8 subject sandwich용)
+  const teacherSlotSubject = {} // teacherId → [day][slot] = subjectId
+  // 학급-과목 사용 요일 set (#10 calendar order, #12 same-day rule)
+  const classSubjectDays = {} // `${grade}_${cls}_${subjectId}` → Set<day>
+  // 같은 학급-과목 같은 날 사용 슬롯 set (pair 처리용)
+  const classSubjectDaySlots = {} // `${grade}_${cls}_${subjectId}_${day}` → Set<slot>
+  // 학급별 마지막 배정 요일 (#10 calendar order; 배정의 max day for each (class, subject))
+  const classSubjectLastDay = {} // `${grade}_${cls}_${subjectId}` → number
+  // 교사 요일별 시수 (소프트 (e))
+  const teacherDayCount = {} // teacherId → [day] = count
+  // 학급 요일별 시수 (소프트 (f))
+  const classDayCount = {} // `${grade}_${cls}` → [day] = count
+  // 학년별 진행도 (소프트 (g))
+  const gradeBlockProgress = {} // grade → maxBlockIdx so far
+
+  // 교사별 총 시수 (소프트 (e) ceil 계산용)
+  const teacherTotalHours = {}
+  for (const b of blocks) teacherTotalHours[b.teacherId] = (teacherTotalHours[b.teacherId] || 0) + b.size
+  // 학급별 총 전담 시수
+  const classTotalHours = {}
+  for (const b of blocks) {
+    const k = `${b.grade}_${b.classNum}`
+    classTotalHours[k] = (classTotalHours[k] || 0) + b.size
   }
 
-  const teacherGradeDay = {}
-  const classDayCount = {}
-  const teacherSubjectDaySlots = {}
-  const teacherSlotGrade = {}
+  // ---------- 4. 검증 함수 ----------
 
-  // 하드 제약 1: 학년 끼어들기 금지
-  // slot s를 grade G로 배정하면 그 날 다른 학년의 범위 안에 G가 들어가는지,
-  // 혹은 G의 기존 범위 안에 다른 학년이 끼는지 검사
-  function wouldCauseGradeSandwich(teacherId, day, newSlot, newGrade) {
-    const existing = teacherSlotGrade[teacherId]?.[day]
-    if (!existing) return false
-    // 기존 슬롯 + 새 슬롯의 학년 맵 구성
-    const hypothetical = { ...existing, [newSlot]: newGrade }
-    const occupiedSlots = Object.keys(hypothetical).map(Number)
-    // 학년별 [min, max] 범위 계산
-    const gradeRanges = {}
-    for (const s of occupiedSlots) {
-      const g = hypothetical[s]
-      if (!gradeRanges[g]) gradeRanges[g] = [s, s]
-      else { gradeRanges[g][0] = Math.min(gradeRanges[g][0], s); gradeRanges[g][1] = Math.max(gradeRanges[g][1], s) }
+  function findAvailableRoom(subjectId, day, slot, teacherId) {
+    const eligible = subjectRooms[subjectId]
+    if (!eligible) return undefined // 일반 교실
+    for (const room of eligible) {
+      if (roomBlockedMap[room.id]?.has(`${day}-${slot}`)) continue
+      if (roomOccupied[room.id][day].has(slot)) continue
+      if (room.teacherIds && room.teacherIds.length > 0 && !room.teacherIds.includes(teacherId)) continue
+      return room.id
     }
-    // 어떤 슬롯이 다른 학년의 범위 안에 끼어 있으면 끼어들기
-    for (const s of occupiedSlots) {
-      const g = hypothetical[s]
-      for (const [h, [minH, maxH]] of Object.entries(gradeRanges)) {
-        if (Number(h) === g) continue
-        if (s > minH && s < maxH) return true
+    return null // 가용 방 없음
+  }
+
+  // 점심 보호 (#5): split_lunch일 때 교사가 모든 점심 슬롯에서 다른 학년 가르치면 본인 점심 못 먹음.
+  // 후보 슬롯이 점심 슬롯이고 다른 점심 슬롯들이 이미 다 점유되어 있으면 거부.
+  function violatesLunch(teacherId, day, slot) {
+    if (!splitLunch) return false
+    if (!allLunchSlotIndexes.includes(slot)) return false
+    const occLunch = allLunchSlotIndexes.filter(ls => teacherOccupied[teacherId][day].has(ls))
+    return occLunch.length >= allLunchSlotIndexes.length - 1
+  }
+
+  // 학년 sandwich (#9): teacher slot grade 시뮬레이션 후 grade range 검사
+  function wouldGradeSandwich(teacherId, day, addSlots, addGrade) {
+    const existing = teacherSlotGrade[teacherId]?.[day]
+    const map = { ...(existing || {}) }
+    for (const s of addSlots) map[s] = addGrade
+    const slots = Object.keys(map).map(Number)
+    const gradeRange = {}
+    for (const s of slots) {
+      const g = map[s]
+      if (!gradeRange[g]) gradeRange[g] = [s, s]
+      else {
+        gradeRange[g][0] = Math.min(gradeRange[g][0], s)
+        gradeRange[g][1] = Math.max(gradeRange[g][1], s)
+      }
+    }
+    for (const s of slots) {
+      const g = map[s]
+      for (const [otherG, [minS, maxS]] of Object.entries(gradeRange)) {
+        if (Number(otherG) === g) continue
+        if (s > minS && s < maxS) return true
       }
     }
     return false
   }
 
-  function isSlotValid(teacherId, subjectId, day, slot, classAvailable) {
-    if (!classAvailable.has(slot)) return false
-    if (teacherOccupied[teacherId][day].has(slot)) return false
-    if (subjectRooms[subjectId] && findAvailableRoom(subjectId, day, slot) === null) return false
-    if (splitLunch && allLunchSlotIndexes.includes(slot)) {
-      const occ = allLunchSlotIndexes.filter(ls => teacherOccupied[teacherId][day].has(ls))
-      if (occ.length >= allLunchSlotIndexes.length - 1) return false
+  // 과목 sandwich (#8): 같은 교사 같은 요일에 A-B-A 과목 패턴 금지
+  function wouldSubjectSandwich(teacherId, day, addSlots, addSubject) {
+    const existing = teacherSlotSubject[teacherId]?.[day]
+    const map = { ...(existing || {}) }
+    for (const s of addSlots) map[s] = addSubject
+    const slots = Object.keys(map).map(Number)
+    const subjRange = {}
+    for (const s of slots) {
+      const sj = map[s]
+      if (!subjRange[sj]) subjRange[sj] = [s, s]
+      else {
+        subjRange[sj][0] = Math.min(subjRange[sj][0], s)
+        subjRange[sj][1] = Math.max(subjRange[sj][1], s)
+      }
     }
+    for (const s of slots) {
+      const sj = map[s]
+      for (const [otherSj, [minS, maxS]] of Object.entries(subjRange)) {
+        if (otherSj === sj) continue
+        if (s > minS && s < maxS) return true
+      }
+    }
+    return false
+  }
+
+  // 슬롯 N개 (block size)가 day에 valid한지 검사 — 모든 하드 제약 적용
+  function isPlacementValid(block, day, slots) {
+    const { teacherId, subjectId, grade, classNum } = block
+    const ca = gradeClassSlots[grade]?.[classNum]?.[day]
+    if (!ca) return false
+
+    for (const slot of slots) {
+      // #4 학급 가용
+      if (!ca.has(slot)) return false
+      // #1 교사 충돌
+      if (teacherOccupied[teacherId][day].has(slot)) return false
+      // #5 점심
+      if (violatesLunch(teacherId, day, slot)) return false
+      // #6 + #7 특별실 + 화이트리스트
+      if (subjectRooms[subjectId]) {
+        if (findAvailableRoom(subjectId, day, slot, teacherId) === null) return false
+      }
+    }
+
+    // 같은 placement 내 슬롯들끼리 점심 누적 확인 (pair=2 슬롯이 둘 다 점심슬롯이면 위반)
+    if (splitLunch && slots.length > 1) {
+      const occBefore = allLunchSlotIndexes.filter(ls => teacherOccupied[teacherId][day].has(ls)).length
+      const addLunch = slots.filter(s => allLunchSlotIndexes.includes(s)).length
+      if (occBefore + addLunch >= allLunchSlotIndexes.length) return false
+    }
+
+    // #10 calendar order: 같은 (class, subject)의 이전 블록 day보다 day >= 이어야
+    const csKey = `${grade}_${classNum}_${subjectId}`
+    const lastDay = classSubjectLastDay[csKey]
+    if (lastDay !== undefined && day < lastDay) return false
+
+    // #12 same-day rule: 같은 (class, subject) 같은 날 중복 금지 (pair는 atomic이라 OK)
+    const csDays = classSubjectDays[csKey]
+    if (csDays && csDays.has(day)) return false
+
+    // #8 subject sandwich
+    if (wouldSubjectSandwich(teacherId, day, slots, subjectId)) return false
+    // #9 grade sandwich
+    if (wouldGradeSandwich(teacherId, day, slots, grade)) return false
+
     return true
   }
 
-  // 하드 제약 2: 달력 기준 라운드로빈
-  // classLastDay[grade_classNum]: 해당 반의 마지막 배정 요일 (session N-1)
-  const classLastDay = {}
-  // tgMaxSessionDay[teacherId_grade]: 동일 교사·학년의 직전 session batch 최대 요일
-  const tgMaxSessionDay = {}
+  // ---------- 5. 소프트 점수 ----------
 
-  // doAssign: minDay 이상의 요일에만 배정 시도 (하드 제약 2 적용)
-  function doAssign(teacherId, subjectId, grade, classNum, session, maxSession, minDay) {
-    const candidates = []
+  function computeScore(block, day, slots) {
+    const { teacherId, subjectId, grade, classNum, blockIdx, totalBlocks } = block
+    let score = 0
 
-    for (let day = 0; day < 5; day++) {
-      if (day < minDay) continue  // 하드 제약 2
+    // (a) 같은 교사 + 같은 과목 같은 날
+    let sameSubjSameDay = 0
+    const tsd = teacherSlotSubject[teacherId]?.[day] || {}
+    for (const s of Object.keys(tsd)) {
+      if (tsd[s] === subjectId) sameSubjSameDay++
+    }
+    score += 5 * sameSubjSameDay
 
-      const ca = gradeClassSlots[grade]?.[classNum]?.[day]
-      if (!ca) continue
-
-      const classSubjectDayKey = `${grade}_${classNum}_${subjectId}_${day}`
-      const existingSlotsOnDay = teacherSubjectDaySlots[classSubjectDayKey]
-      const existingCount = existingSlotsOnDay?.size || 0
-      if (existingCount >= getSubjectMaxSameDay(subjectId)) continue
-
-      // 이 날의 유효한 슬롯 전부 탐색 (하드 제약 1: 끼어들기 금지 적용)
-      const validSlots = []
-      const trySlot = (slot) => {
-        if (!isSlotValid(teacherId, subjectId, day, slot, ca)) return
-        if (wouldCauseGradeSandwich(teacherId, day, slot, grade)) return  // 하드 제약 1
-        validSlots.push(slot)
+    // (b) 인접 슬롯 다른 과목 페널티
+    let adjDiffSubj = 0
+    for (const slot of slots) {
+      for (const adj of [slot - 1, slot + 1]) {
+        if (adj < 0 || adj >= totalSlots) continue
+        if (slots.includes(adj)) continue
+        const adjSubj = teacherSlotSubject[teacherId]?.[day]?.[adj]
+        if (adjSubj && adjSubj !== subjectId) adjDiffSubj++
       }
+    }
+    score -= 3 * adjDiffSubj
 
-      if (existingSlotsOnDay && existingSlotsOnDay.size > 0) {
-        // 연속 배치: 기존 슬롯에 인접한 슬롯만
-        for (let slot = 0; slot < totalSlots; slot++) {
-          if (existingSlotsOnDay.has(slot - 1) || existingSlotsOnDay.has(slot + 1)) trySlot(slot)
-        }
-      } else {
-        for (let slot = 0; slot < totalSlots; slot++) trySlot(slot)
-      }
-      if (validSlots.length === 0) continue
+    // (c) 같은 학년+과목 같은 날 보너스
+    let sameGradeSubjSameDay = 0
+    const tsg = teacherSlotGrade[teacherId]?.[day] || {}
+    for (const s of Object.keys(tsg)) {
+      if (tsg[s] === grade && tsd[s] === subjectId) sameGradeSubjSameDay++
+    }
+    score += 2 * sameGradeSubjSameDay
 
-      // 같은 날 여러 슬롯 중 최적 슬롯 선택 (인접 다른 학년 최소화)
-      let bestSlot = validSlots[0], bestAdjPenalty = Infinity, bestSameAdj = -1
-      for (const slot of validSlots) {
-        let ap = 0, sa = 0
-        for (const adj of [slot - 1, slot + 1]) {
-          if (adj < 0 || adj >= totalSlots) continue
-          const ag = teacherSlotGrade[teacherId]?.[day]?.[adj]
-          if (ag !== undefined) { ag !== grade ? ap++ : sa++ }
-        }
-        if (ap < bestAdjPenalty || (ap === bestAdjPenalty && sa > bestSameAdj)) {
-          bestAdjPenalty = ap; bestSameAdj = sa; bestSlot = slot
-        }
-      }
-      const slot = bestSlot
-
-      const teacherLoad = teacherOccupied[teacherId][day].size
-      const sameGradeLoad = teacherGradeDay[teacherId]?.[grade]?.[day] || 0
-      const hasSameGrade = sameGradeLoad > 0 ? 1 : 0
-      const diffGradeLoad = teacherLoad - sameGradeLoad
-      const classLoad = classDayCount[grade]?.[classNum]?.[day] || 0
-
-      let pairBonus = 0
-      if (getSubjectMaxSameDay(subjectId) >= 2 && existingCount === 0) {
-        for (const adj of [slot - 1, slot + 1]) {
-          if (adj < 0 || adj >= totalSlots) continue
-          if (!ca.has(adj)) continue
-          if (teacherOccupied[teacherId][day].has(adj)) continue
-          if (subjectRooms[subjectId] && findAvailableRoom(subjectId, day, adj) === null) continue
-          if (splitLunch && allLunchSlotIndexes.includes(adj)) continue
-          pairBonus = 5
-          break
-        }
-      }
-
-      // session 기반 요일 분산 (소프트 강선호)
-      // session 0 → 월, session 1 → 수, session 2 → 금 (weekly_hours=3 기준)
-      const targetDay = maxSession <= 1 ? 2 : Math.round(session * 4 / (maxSession - 1))
-      const sessionDayScore = -Math.abs(day - targetDay) * 3
-
-      const score = pairBonus + hasSameGrade * 3 - diffGradeLoad * 2 - bestAdjPenalty * 6 - teacherLoad - classLoad * 3 + sessionDayScore
-
-      candidates.push({ day, slot, score })
+    // (d) 학급 회차별 target 요일
+    if (totalBlocks >= 2) {
+      const target = Math.round((blockIdx * 4) / (totalBlocks - 1))
+      score -= 2 * Math.abs(day - target) * slots.length
     }
 
-    if (candidates.length === 0) return -1
+    // (e) 교사 요일 부하 균형
+    const T = teacherTotalHours[teacherId] || 0
+    const ceilT = Math.ceil(T / 5)
+    const tdcCurrent = teacherDayCount[teacherId]?.[day] || 0
+    const overE = Math.max(0, tdcCurrent + slots.length - ceilT)
+    score -= 2 * overE
 
-    candidates.sort((a, b) => b.score - a.score || Math.random() - 0.5)
-    const { day, slot } = candidates[0]
+    // (f) 학급 요일 전담 부하 균형
+    const ck = `${grade}_${classNum}`
+    const C = classTotalHours[ck] || 0
+    const ceilC = Math.ceil(C / 5)
+    const cdcCurrent = classDayCount[ck]?.[day] || 0
+    const overF = Math.max(0, cdcCurrent + slots.length - ceilC)
+    score -= 2 * overF
 
-    // 특별실 결정 (필요한 경우)
-    const roomId = findAvailableRoom(subjectId, day, slot)
-    result[grade][classNum][day][slot] = { teacherId, subjectId, roomId: roomId || undefined }
-    teacherOccupied[teacherId][day].add(slot)
-    gradeClassSlots[grade][classNum][day].delete(slot)
-    if (roomId) roomOccupied[roomId][day].add(slot)
-    if (!teacherSlotGrade[teacherId]) teacherSlotGrade[teacherId] = Array.from({ length: 5 }, () => ({}))
-    teacherSlotGrade[teacherId][day][slot] = grade
+    // (g) 학년 간 회차 진행 정렬
+    let minOtherProgress = Infinity
+    for (const [g, p] of Object.entries(gradeBlockProgress)) {
+      if (Number(g) === grade) continue
+      if (p < minOtherProgress) minOtherProgress = p
+    }
+    if (minOtherProgress !== Infinity) {
+      score -= Math.max(0, blockIdx - minOtherProgress)
+    }
 
-    if (!teacherGradeDay[teacherId]) teacherGradeDay[teacherId] = {}
-    if (!teacherGradeDay[teacherId][grade]) teacherGradeDay[teacherId][grade] = [0, 0, 0, 0, 0]
-    teacherGradeDay[teacherId][grade][day]++
+    // (h) 교사 같은 날 gap 최소화
+    const dayOcc = new Set(Object.keys(teacherOccupied[teacherId][day]))
+    teacherOccupied[teacherId][day].forEach(s => dayOcc.add(String(s)))
+    for (const s of slots) dayOcc.add(String(s))
+    const slotNums = [...dayOcc].map(Number).sort((a, b) => a - b)
+    if (slotNums.length >= 2) {
+      const span = slotNums[slotNums.length - 1] - slotNums[0] + 1
+      const gap = span - slotNums.length
+      score -= 1 * gap
+    }
 
-    if (!classDayCount[grade]) classDayCount[grade] = {}
-    if (!classDayCount[grade][classNum]) classDayCount[grade][classNum] = [0, 0, 0, 0, 0]
-    classDayCount[grade][classNum][day]++
-
-    const classSubjectDayKey = `${grade}_${classNum}_${subjectId}_${day}`
-    if (!teacherSubjectDaySlots[classSubjectDayKey]) teacherSubjectDaySlots[classSubjectDayKey] = new Set()
-    teacherSubjectDaySlots[classSubjectDayKey].add(slot)
-
-    return day
+    return score
   }
+
+  // ---------- 6. 후보 슬롯 생성 ----------
+
+  function getCandidateSlotSets(block, day) {
+    const { grade, classNum, size } = block
+    const ca = gradeClassSlots[grade]?.[classNum]?.[day]
+    if (!ca) return []
+    const sets = []
+    if (size === 1) {
+      for (const slot of ca) sets.push([slot])
+    } else if (size === 2) {
+      // pair: 2 연속 슬롯
+      const sortedSlots = [...ca].sort((a, b) => a - b)
+      for (const s of sortedSlots) {
+        if (ca.has(s) && ca.has(s + 1)) sets.push([s, s + 1])
+      }
+    }
+    return sets
+  }
+
+  // ---------- 7. 배치 ----------
+
+  function placeBlock(block) {
+    const candidates = []
+    for (let day = 0; day < 5; day++) {
+      const sets = getCandidateSlotSets(block, day)
+      for (const slots of sets) {
+        if (!isPlacementValid(block, day, slots)) continue
+        const score = computeScore(block, day, slots)
+        candidates.push({ day, slots, score })
+      }
+    }
+    if (candidates.length === 0) return false
+    candidates.sort((a, b) => b.score - a.score || Math.random() - 0.5)
+    const { day, slots } = candidates[0]
+    applyPlacement(block, day, slots)
+    return true
+  }
+
+  function applyPlacement(block, day, slots) {
+    const { teacherId, subjectId, grade, classNum, blockIdx } = block
+
+    // 방 결정
+    const roomId = subjectRooms[subjectId] ? findAvailableRoom(subjectId, day, slots[0], teacherId) : undefined
+
+    for (const slot of slots) {
+      result[grade][classNum][day][slot] = { teacherId, subjectId, roomId: roomId || undefined }
+      teacherOccupied[teacherId][day].add(slot)
+      gradeClassSlots[grade][classNum][day].delete(slot)
+      if (roomId) roomOccupied[roomId][day].add(slot)
+      if (!teacherSlotGrade[teacherId]) teacherSlotGrade[teacherId] = Array.from({ length: 5 }, () => ({}))
+      teacherSlotGrade[teacherId][day][slot] = grade
+      if (!teacherSlotSubject[teacherId]) teacherSlotSubject[teacherId] = Array.from({ length: 5 }, () => ({}))
+      teacherSlotSubject[teacherId][day][slot] = subjectId
+    }
+
+    const csKey = `${grade}_${classNum}_${subjectId}`
+    if (!classSubjectDays[csKey]) classSubjectDays[csKey] = new Set()
+    classSubjectDays[csKey].add(day)
+    classSubjectLastDay[csKey] = Math.max(classSubjectLastDay[csKey] ?? -1, day)
+
+    const csdKey = `${csKey}_${day}`
+    if (!classSubjectDaySlots[csdKey]) classSubjectDaySlots[csdKey] = new Set()
+    for (const s of slots) classSubjectDaySlots[csdKey].add(s)
+
+    if (!teacherDayCount[teacherId]) teacherDayCount[teacherId] = [0, 0, 0, 0, 0]
+    teacherDayCount[teacherId][day] += slots.length
+
+    const ck = `${grade}_${classNum}`
+    if (!classDayCount[ck]) classDayCount[ck] = [0, 0, 0, 0, 0]
+    classDayCount[ck][day] += slots.length
+
+    gradeBlockProgress[grade] = Math.max(gradeBlockProgress[grade] ?? -1, blockIdx)
+  }
+
+  // ---------- 8. 메인 루프 ----------
 
   const errorMap = {}
-
-  for (const unit of units) {
-    const { teacherId, subjectId, grade, classNum, session, maxSession } = unit
-    const classKey = `${grade}_${classNum}`
-    const tgKey = `${teacherId}_${grade}`
-
-    // 하드 제약 2-A: 같은 반의 이전 session보다 반드시 늦은 요일
-    const perClassMinDay = session > 0 ? (classLastDay[classKey] ?? -1) + 1 : 0
-
-    // 하드 제약 2-B: 동일 교사·학년의 이전 session batch 최대 요일 이상
-    let tgMinDay = 0
-    const tgInfo = tgMaxSessionDay[tgKey]
-    if (session > 0 && tgInfo && tgInfo.session === session - 1) {
-      tgMinDay = tgInfo.maxDay  // >=: 같은 날도 허용 (>= 아니면 너무 엄격)
-    }
-
-    const hardMinDay = Math.max(perClassMinDay, tgMinDay)
-
-    // 배정 시도: 두 제약 모두 적용 → perClassMinDay만 → 제약 없음 순으로 폴백
-    let placedDay = doAssign(teacherId, subjectId, grade, classNum, session, maxSession, hardMinDay)
-    if (placedDay === -1 && hardMinDay > perClassMinDay) {
-      placedDay = doAssign(teacherId, subjectId, grade, classNum, session, maxSession, perClassMinDay)
-    }
-    if (placedDay === -1 && perClassMinDay > 0) {
-      placedDay = doAssign(teacherId, subjectId, grade, classNum, session, maxSession, 0)
-    }
-
-    if (placedDay === -1) {
-      const key = `${grade}|${classNum}|${teacherId}|${subjectId}`
-      if (!errorMap[key]) errorMap[key] = { grade, classNum, teacherId, subjectId, unassigned: 0 }
-      errorMap[key].unassigned++
-    } else {
-      // 추적 갱신
-      classLastDay[classKey] = Math.max(classLastDay[classKey] ?? -1, placedDay)
-      if (!tgMaxSessionDay[tgKey] || tgMaxSessionDay[tgKey].session < session) {
-        tgMaxSessionDay[tgKey] = { session, maxDay: placedDay }
-      } else if (tgMaxSessionDay[tgKey].session === session) {
-        tgMaxSessionDay[tgKey].maxDay = Math.max(tgMaxSessionDay[tgKey].maxDay, placedDay)
+  for (const block of blocks) {
+    if (!placeBlock(block)) {
+      const key = `${block.grade}|${block.classNum}|${block.teacherId}|${block.subjectId}`
+      if (!errorMap[key]) {
+        errorMap[key] = {
+          grade: block.grade,
+          classNum: block.classNum,
+          teacherId: block.teacherId,
+          subjectId: block.subjectId,
+          unassigned: 0,
+        }
       }
+      errorMap[key].unassigned += block.size
     }
   }
 
-  const errors = Object.values(errorMap)
-  return { result, errors, gradeLunchSlot, totalSlots }
+  return {
+    result,
+    errors: Object.values(errorMap),
+    gradeLunchSlot,
+    totalSlots,
+  }
 }
 
 export function flattenResult(result, gradeLunchSlot, totalSlots) {
   const rows = []
-
   for (const [gradeStr, classes] of Object.entries(result)) {
     const grade = Number(gradeStr)
     const lunchSlot = gradeLunchSlot?.[grade]
-
     for (const [classStr, days] of Object.entries(classes)) {
       const classNum = Number(classStr)
-
       for (let day = 0; day < 5; day++) {
         for (let slot = 0; slot < totalSlots; slot++) {
           if (lunchSlot !== undefined && lunchSlot === slot) continue
-
           const cell = days[day][slot]
           if (!cell) continue
-
           rows.push({
             grade,
             class_num: classNum,
@@ -379,6 +515,5 @@ export function flattenResult(result, gradeLunchSlot, totalSlots) {
       }
     }
   }
-
   return { rows, errors: [] }
 }
