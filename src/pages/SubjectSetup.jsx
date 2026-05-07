@@ -79,7 +79,7 @@ export default function SubjectSetup() {
       </div>
 
       <div className="flex flex-col gap-4">
-        <div className="bg-white border border-gray-200 rounded-sm p-5 flex flex-col gap-3">
+        <div className="max-w-[720px] bg-white border border-gray-200 rounded-sm p-5 flex flex-col gap-3">
           <div>
             <p className="text-[13px] font-semibold text-gray-700 mb-1">주요 과목 vs 일반 과목</p>
             <p className="text-[12px] text-gray-500 leading-5">
@@ -109,7 +109,7 @@ export default function SubjectSetup() {
           </div>
         </div>
 
-        <div className="bg-white border border-gray-200 rounded-sm p-3 flex flex-col gap-2">
+        <div className="max-w-[720px] bg-white border border-gray-200 rounded-sm p-3 flex flex-col gap-2">
           <div className="flex items-center justify-between">
             <div className="flex border border-gray-200 bg-white rounded-sm w-fit">
               {plans.map(p => (
@@ -140,7 +140,7 @@ export default function SubjectSetup() {
         </div>
 
         {gradesToShow.map(grade => (
-          <div key={grade} className="bg-white border border-gray-200 rounded-sm p-5">
+          <div key={grade} className="bg-white border border-gray-200 rounded-sm p-5 max-w-[720px]">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-3">
                 <span className="text-[14px] font-semibold">{grade}학년</span>
@@ -181,7 +181,7 @@ export default function SubjectSetup() {
                       placeholder="과목명 (예: 영어)"
                       value={s.name}
                       onChange={e => updateSubject(s.id, 'name', e.target.value)}
-                      className="flex-1 h-9 px-3 border border-gray-200 rounded-sm text-[13px] outline-none focus:border-black"
+                      className="w-[240px] h-9 px-3 border border-gray-200 rounded-sm text-[13px] outline-none focus:border-black"
                     />
                     <span className="text-[12px] text-gray-400">주당</span>
                     <input
