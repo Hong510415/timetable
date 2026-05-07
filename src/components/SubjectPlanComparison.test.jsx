@@ -57,7 +57,7 @@ describe('SubjectPlanComparison', () => {
 
   it('shows — for average when teacherCount is 0', () => {
     renderModal({ teacherCount: 0 })
-    expect(screen.getByText('1인당 평균 주당시수')).toBeInTheDocument()
+    expect(screen.getByText('전담교사 평균 주당시수')).toBeInTheDocument()
   })
 
   it('disables [A안 적용] when A안 is currently applied and unchanged', () => {

@@ -88,7 +88,7 @@ export default function SubjectPlanComparison({
                 )
               })}
               <div className="grid grid-cols-[80px_100px_repeat(3,1fr)] bg-gray-50 text-[12px] font-semibold border-t border-gray-200">
-                <div className="px-3 py-2 border-r border-gray-200 col-span-2 text-gray-600">1인당 평균 주당시수</div>
+                <div className="px-3 py-2 border-r border-gray-200 col-span-2 text-gray-600">전담교사 평균 주당시수</div>
                 {plans.map(p => {
                   const total = totalDedicated(p.subjects)
                   const avg = p.subjects.length > 0 && teacherCount > 0

@@ -300,7 +300,7 @@ export default function SubjectSetup() {
               </div>
               <div className="text-gray-300 text-[20px] font-light">=</div>
               <div className="text-center">
-                <div className="text-[11px] text-gray-500 mb-0.5">1인당 평균 주당시수</div>
+                <div className="text-[11px] text-gray-500 mb-0.5">전담교사 평균 주당시수</div>
                 <div className={`text-[22px] font-bold ${teachers.length > 0 ? 'text-blue-600' : 'text-gray-300'}`}>
                   {teachers.length > 0
                     ? <>{(totalDedicated / teachers.length).toFixed(1)}<span className="text-[13px] font-normal text-gray-500 ml-1">시간</span></>
