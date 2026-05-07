@@ -22,13 +22,29 @@ const MANUAL = [
     title: '점심시간 분리 배정',
     items: ['점심시간 분리 배정 시 특별실 시간표, 전담교사 시간표는 7교시 형식으로 제시됩니다.'],
   },
+  {
+    title: '시간표에 적용',
+    items: [
+      '"시간표에 적용" 버튼을 눌러 변경된 특별실 설정을 시간표에 반영합니다.',
+      '⚠ 적용 시 기존에 생성된 시간표가 초기화됩니다.',
+    ],
+  },
 ]
 
 const DAY_LABELS = ['월', '화', '수', '목', '금']
 
 export default function RoomManagement() {
-  const { state, setRooms, setRoomBlockedSlots } = useApp()
-  const { rooms, lunchConfig, roomBlockedSlots, subjects, teachers } = state
+  const { state, setRooms, setRoomBlockedSlots, setTimetableSlots } = useApp()
+  const { rooms, lunchConfig, roomBlockedSlots, subjects, teachers, timetableSlots } = state
+
+  function handleApply() {
+    if (!rooms.length) return alert('먼저 특별실을 추가하세요.')
+    if (timetableSlots.length > 0) {
+      if (!confirm('기존 시간표가 초기화됩니다. 적용하시겠습니까?')) return
+      setTimetableSlots([])
+    }
+    alert('적용되었습니다. 시간표 자동 생성을 다시 실행하세요.')
+  }
 
   // 교사가 가르치는 과목명 목록
   function teacherSubjectNames(teacherId) {
@@ -151,6 +167,14 @@ export default function RoomManagement() {
         <h1 className="text-[22px] font-bold">특별실 관리</h1>
         <div className="flex items-center gap-2">
           <ManualModal title="특별실 관리" sections={MANUAL} />
+          {rooms.length > 0 && (
+            <button
+              onClick={handleApply}
+              className="h-10 px-4 border border-gray-300 text-[13px] rounded-sm hover:bg-gray-50"
+            >
+              시간표에 적용
+            </button>
+          )}
           <button
             onClick={openAdd}
             className="flex items-center gap-2 h-10 px-4 bg-black text-white text-[13px] font-semibold rounded-sm hover:bg-gray-800 transition-colors"
