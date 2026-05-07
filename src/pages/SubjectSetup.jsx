@@ -1,5 +1,5 @@
 import { useApp } from '../context/AppContext'
-import { subjectsEqualByContent, getDedicatedHoursForGrade, getWeeklyTotalForGrade } from '../lib/planHelpers'
+import { subjectsEqualByContent, getDedicatedHoursForGrade, getWeeklyTotalForGrade, getOverflowGrades } from '../lib/planHelpers'
 
 const GRADES = [1, 2, 3, 4, 5, 6]
 
@@ -16,6 +16,14 @@ export default function SubjectSetup() {
 
   const isPlanLive = appliedPlanId === activeTabId && subjectsEqualByContent(planSubjects, subjects)
   const appliedPlan = plans.find(p => p.id === appliedPlanId)
+
+  const overflowGrades = getOverflowGrades(planSubjects, gradeConfigs, gradesToShow)
+  const hasOverflow = overflowGrades.length > 0
+  const overflowMsg = hasOverflow
+    ? `초과 학년이 있어 적용할 수 없습니다 (${overflowGrades.map(o => `${o.grade}학년 초과 -${o.overBy}시간`).join(', ')})`
+    : ''
+
+  const isApplyDisabled = isPlanLive || hasOverflow
 
   let statusLine
   if (!appliedPlanId) {
@@ -43,7 +51,7 @@ export default function SubjectSetup() {
   }
 
   function handleApply() {
-    if (isPlanLive) return
+    if (isApplyDisabled) return
     // Spec §6.1 step 2: when content is equal regardless of appliedPlanId, no confirm, no clearing
     if (subjectsEqualByContent(planSubjects, subjects)) {
       applyPlan(activeTabId)
@@ -126,9 +134,10 @@ export default function SubjectSetup() {
             </div>
             <button
               onClick={handleApply}
-              disabled={isPlanLive}
+              disabled={isApplyDisabled}
+              title={hasOverflow ? overflowMsg : ''}
               className={`px-4 h-9 text-[13px] font-semibold rounded-sm border transition-colors ${
-                isPlanLive
+                isApplyDisabled
                   ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
                   : 'bg-black text-white border-black hover:bg-gray-800'
               }`}

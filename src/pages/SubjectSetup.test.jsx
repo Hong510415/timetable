@@ -191,3 +191,37 @@ describe('담임시수 widget', () => {
     expect(screen.getByText(/전담 5시간/)).toBeInTheDocument()
   })
 })
+
+describe('overflow handling', () => {
+  it('disables apply button when a grade exceeds weekly total', () => {
+    const stored = {
+      gradeConfigs: [
+        { grade: 1, num_classes: 4, periods_mon: 5, periods_tue: 5, periods_wed: 5, periods_thu: 5, periods_fri: 5 },
+        { grade: 2, num_classes: 0, periods_mon: 5, periods_tue: 5, periods_wed: 5, periods_thu: 5, periods_fri: 5 },
+        { grade: 3, num_classes: 0, periods_mon: 5, periods_tue: 5, periods_wed: 5, periods_thu: 5, periods_fri: 5 },
+        { grade: 4, num_classes: 0, periods_mon: 5, periods_tue: 5, periods_wed: 5, periods_thu: 5, periods_fri: 5 },
+        { grade: 5, num_classes: 0, periods_mon: 5, periods_tue: 5, periods_wed: 5, periods_thu: 5, periods_fri: 5 },
+        { grade: 6, num_classes: 0, periods_mon: 5, periods_tue: 5, periods_wed: 5, periods_thu: 5, periods_fri: 5 },
+      ],
+      subjects: [],
+      teachers: [], rooms: [], roomBlockedSlots: [], timetableSlots: [], roomTimetableSlots: [],
+      assignmentSettings: { maxMajorSubjectsPerTeacher: 1 }, assignmentResult: null,
+      lunchConfig: { split_lunch: false, lunch_groups: [] }, schoolName: '',
+      subjectPlans: {
+        plans: [
+          { id: 'plan1', name: 'A안', subjects: [
+            { id: 's1', grade: 1, name: '영어', weekly_hours: 30, is_major: true },
+          ]},
+          { id: 'plan2', name: 'B안', subjects: [] },
+          { id: 'plan3', name: 'C안', subjects: [] },
+        ],
+        activeTabId: 'plan1', appliedPlanId: null, appliedAt: null,
+      },
+    }
+    localStorage.setItem('timetable_app_data', JSON.stringify(stored))
+    renderPage()
+    const applyBtn = screen.getByRole('button', { name: /이 안 적용/ })
+    expect(applyBtn).toBeDisabled()
+    expect(applyBtn).toHaveAttribute('title', expect.stringMatching(/초과 학년이 있어 적용할 수 없습니다/))
+  })
+})
