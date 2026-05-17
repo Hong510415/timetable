@@ -319,7 +319,11 @@ story.append(bullet([
 ]))
 
 # 빌드
-doc = SimpleDocTemplate("docs/사용자_매뉴얼.pdf", pagesize=A4,
+import shutil
+
+# public/user-manual.pdf → 웹에서 다운로드 가능
+out_path = "public/user-manual.pdf"
+doc = SimpleDocTemplate(out_path, pagesize=A4,
                         leftMargin=2*cm, rightMargin=2*cm,
                         topMargin=2*cm, bottomMargin=2*cm,
                         title="시간표 자동 작성 사용자 매뉴얼")
@@ -332,4 +336,9 @@ def add_page_number(canvas_obj, doc):
     canvas_obj.restoreState()
 
 doc.build(story, onFirstPage=add_page_number, onLaterPages=add_page_number)
-print("Generated: docs/사용자_매뉴얼.pdf")
+
+# docs/에도 사본 보관 (참조용)
+import os
+os.makedirs("docs", exist_ok=True)
+shutil.copy(out_path, "docs/사용자_매뉴얼.pdf")
+print(f"Generated: {out_path} and docs/사용자_매뉴얼.pdf")

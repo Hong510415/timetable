@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { Settings, Calendar, DoorOpen, CalendarCheck, Download, Upload, ClipboardList, BookOpen, Menu, X, RotateCcw } from 'lucide-react'
+import { Settings, Calendar, DoorOpen, CalendarCheck, Download, Upload, ClipboardList, BookOpen, Menu, X, RotateCcw, FileText } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { exportFullWorkbook, importFullWorkbook } from '../lib/excelIO'
 
@@ -80,6 +80,13 @@ export default function Layout({ children }) {
           >
             <Upload size={12} />불러오기 (엑셀 가져오기)
           </button>
+          <a
+            href="/user-manual.pdf"
+            download="시간표_자동_작성_사용자_매뉴얼.pdf"
+            className="flex items-center gap-2 h-9 px-3 border border-gray-300 rounded-sm text-[12px] text-gray-500 hover:bg-gray-50 w-full"
+          >
+            <FileText size={12} />사용자 매뉴얼 (PDF)
+          </a>
           <div className="h-px bg-gray-100 my-1" />
           <button
             onClick={() => {
