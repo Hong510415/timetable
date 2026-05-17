@@ -240,14 +240,24 @@ export function buildSchedule(
     return occLunch.length >= allLunchSlotIndexes.length - 1
   }
 
-  // 교사 요일 부하 균형 (#13): 한 요일의 교사 시수가 ceil(T/5) 초과 금지
-  // 결과적으로 max-min ≤ 1 (T가 5의 배수에 가까울 때) ~ 2 정도로 균형 유지
-  function violatesDayBalance(teacherId, day, slotsCount) {
+  // 교사 요일 부하 균형 (#13): cap = ceil(T/5)
+  // 2-pass: 1차에는 strict cap, 2차에는 +1 relax (편차 ±2 유지하면서 미배정 구제)
+  function violatesDayBalance(teacherId, day, slotsCount, relaxCap = 0) {
     const T = teacherTotalHours[teacherId] || 0
     if (T === 0) return false
-    const cap = Math.ceil(T / 5)
+    const cap = Math.ceil(T / 5) + relaxCap
     const newCount = (teacherDayCount[teacherId]?.[day] || 0) + slotsCount
-    return newCount > cap
+    if (newCount > cap) return true
+    // relax 적용 시 max-min ≤ 2 보장
+    if (relaxCap > 0) {
+      const counts = [0, 0, 0, 0, 0]
+      for (let d = 0; d < 5; d++) counts[d] = teacherDayCount[teacherId]?.[d] || 0
+      counts[day] = newCount
+      // 한 명이라도 시수 있는 교사만 의미. T=0 위에서 빠진다.
+      // min: 0인 요일은 향후 채워질 가능성. 단순 max - 현재min > 2면 reject.
+      if (Math.max(...counts) - Math.min(...counts) > 2) return true
+    }
+    return false
   }
 
   // 학년 sandwich (#9): teacher slot grade 시뮬레이션 후 grade range 검사
@@ -301,8 +311,9 @@ export function buildSchedule(
   }
 
   // 슬롯 N개 (block size)가 day에 valid한지 검사 — 모든 하드 제약 적용
-  function isPlacementValid(block, day, slots) {
+  function isPlacementValid(block, day, slots, opts = {}) {
     const { teacherId, subjectId, grade, classNum } = block
+    const relaxCap = opts.relaxCap || 0
     const ca = gradeClassSlots[grade]?.[classNum]?.[day]
     if (!ca) return false
 
@@ -319,8 +330,8 @@ export function buildSchedule(
       }
     }
 
-    // #13 교사 요일 부하 cap = ceil(T/5)
-    if (violatesDayBalance(teacherId, day, slots.length)) return false
+    // #13 교사 요일 부하 cap (relaxCap 적용 가능 — 2차 패스)
+    if (violatesDayBalance(teacherId, day, slots.length, relaxCap)) return false
 
     // 같은 placement 내 슬롯들끼리 점심 누적 확인 (pair=2 슬롯이 둘 다 점심슬롯이면 위반)
     if (splitLunch && slots.length > 1) {
@@ -437,12 +448,12 @@ export function buildSchedule(
 
   // ---------- 7. 배치 ----------
 
-  function placeBlock(block) {
+  function placeBlock(block, opts = {}) {
     const candidates = []
     for (let day = 0; day < 5; day++) {
       const sets = getCandidateSlotSets(block, day)
       for (const slots of sets) {
-        if (!isPlacementValid(block, day, slots)) continue
+        if (!isPlacementValid(block, day, slots, opts)) continue
         const score = computeScore(block, day, slots)
         candidates.push({ day, slots, score })
       }
@@ -497,23 +508,35 @@ export function buildSchedule(
     gradeBlockProgress[grade] = Math.max(gradeBlockProgress[grade] ?? -1, blockIdx)
   }
 
-  // ---------- 8. 메인 루프 ----------
+  // ---------- 8. 메인 루프 (1차 패스: 엄격한 cap) ----------
 
-  const errorMap = {}
+  const failedBlocks = []
   for (const block of blocks) {
-    if (!placeBlock(block)) {
-      const key = `${block.grade}|${block.classNum}|${block.teacherId}|${block.subjectId}`
-      if (!errorMap[key]) {
-        errorMap[key] = {
-          grade: block.grade,
-          classNum: block.classNum,
-          teacherId: block.teacherId,
-          subjectId: block.subjectId,
-          unassigned: 0,
-        }
+    if (!placeBlock(block)) failedBlocks.push(block)
+  }
+
+  // ---------- 8-2. 2차 패스: 미배정 블록을 cap +1 완화로 재시도 ----------
+  // 인간 시간표처럼 1차에 단순 배치 → 2차에서 못 들어간 블록만 강제로 끼워넣기
+  // (편차 ±2는 violatesDayBalance에서 max-min ≤ 2 체크로 유지)
+  const stillFailed = []
+  for (const block of failedBlocks) {
+    if (!placeBlock(block, { relaxCap: 1 })) stillFailed.push(block)
+  }
+
+  // 최종 미배정 → errorMap
+  const errorMap = {}
+  for (const block of stillFailed) {
+    const key = `${block.grade}|${block.classNum}|${block.teacherId}|${block.subjectId}`
+    if (!errorMap[key]) {
+      errorMap[key] = {
+        grade: block.grade,
+        classNum: block.classNum,
+        teacherId: block.teacherId,
+        subjectId: block.subjectId,
+        unassigned: 0,
       }
-      errorMap[key].unassigned += block.size
     }
+    errorMap[key].unassigned += block.size
   }
 
   return {
