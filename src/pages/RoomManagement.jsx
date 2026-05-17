@@ -163,21 +163,21 @@ export default function RoomManagement() {
 
   return (
     <div className="p-4 md:p-10 bg-gray-50 min-h-full">
-      <div className="max-w-[1100px] flex items-center justify-between mb-6">
+      <div className="max-w-[1100px] flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-6">
         <h1 className="text-[22px] font-bold">특별실 관리</h1>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <ManualModal title="특별실 관리" sections={MANUAL} />
           {rooms.length > 0 && (
             <button
               onClick={handleApply}
-              className="h-10 px-4 border border-gray-300 text-[13px] rounded-sm hover:bg-gray-50"
+              className="h-10 px-3 md:px-4 border border-gray-300 text-[13px] rounded-sm hover:bg-gray-50 whitespace-nowrap"
             >
               시간표에 적용
             </button>
           )}
           <button
             onClick={openAdd}
-            className="flex items-center gap-2 h-10 px-4 bg-black text-white text-[13px] font-semibold rounded-sm hover:bg-gray-800 transition-colors"
+            className="flex items-center gap-2 h-10 px-3 md:px-4 bg-black text-white text-[13px] font-semibold rounded-sm hover:bg-gray-800 transition-colors whitespace-nowrap"
           >
             <Plus size={14} />특별실 추가
           </button>

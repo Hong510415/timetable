@@ -100,13 +100,13 @@ export default function RoomTimetable() {
 
   return (
     <div className="p-4 md:p-10 bg-gray-50 min-h-full">
-      <div className="max-w-[1100px] flex items-center justify-between mb-6">
+      <div className="max-w-[1100px] flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-6">
         <h1 className="text-[22px] font-bold">특별실 시간표</h1>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <ManualModal title="특별실 시간표" sections={MANUAL} />
           <button
             onClick={() => exportRoomTimetable(rooms, exportData, gradeConfigs, gradeLunchSlot, totalSlots)}
-            className="flex items-center gap-2 h-10 px-4 border border-gray-300 text-[13px] rounded-sm hover:bg-gray-50"
+            className="flex items-center gap-2 h-10 px-3 md:px-4 border border-gray-300 text-[13px] rounded-sm hover:bg-gray-50 whitespace-nowrap"
           >
             <Download size={14} />엑셀 다운로드
           </button>

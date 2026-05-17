@@ -123,14 +123,14 @@ export default function Assignment() {
 
   return (
     <div className="p-4 md:p-10 bg-gray-50 min-h-full">
-      <div className="max-w-[720px] flex items-center justify-between mb-6">
+      <div className="max-w-[720px] flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-6">
         <h1 className="text-[22px] font-bold">전담 배정</h1>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <ManualModal title="전담 배정" sections={MANUAL} />
           {result && (
             <button
               onClick={handleApply}
-              className="h-10 px-4 border border-gray-300 text-[13px] rounded-sm hover:bg-gray-50"
+              className="h-10 px-3 md:px-4 border border-gray-300 text-[13px] rounded-sm hover:bg-gray-50 whitespace-nowrap"
             >
               시간표에 적용
             </button>
@@ -138,7 +138,7 @@ export default function Assignment() {
           <button
             onClick={handleRun}
             disabled={running}
-            className="flex items-center gap-2 h-10 px-4 bg-black text-white text-[13px] font-semibold rounded-sm hover:bg-gray-800 disabled:opacity-50"
+            className="flex items-center gap-2 h-10 px-3 md:px-4 bg-black text-white text-[13px] font-semibold rounded-sm hover:bg-gray-800 disabled:opacity-50 whitespace-nowrap"
           >
             <RefreshCw size={14} className={running ? 'animate-spin' : ''} />
             {running ? '배정 중...' : '자동 배정 실행'}

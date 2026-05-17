@@ -212,26 +212,26 @@ export default function Timetable() {
 
   return (
     <div className="p-4 md:p-10 bg-gray-50 min-h-full">
-      <div className="max-w-[1100px] flex items-center justify-between mb-6">
+      <div className="max-w-[1100px] flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-6">
         <h1 className="text-[22px] font-bold">전담 시간표</h1>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <ManualModal title="전담 시간표" sections={MANUAL} />
           <button
             onClick={() => exportTimetableByTeacher(timetableRows, teachers, subjects, gradeConfigs, gradeLunchSlot, totalSlots)}
-            className="flex items-center gap-2 h-10 px-4 border border-gray-300 text-[13px] rounded-sm hover:bg-gray-50"
+            className="flex items-center gap-2 h-10 px-3 md:px-4 border border-gray-300 text-[13px] rounded-sm hover:bg-gray-50 whitespace-nowrap"
           >
             <Download size={14} />교사별 엑셀
           </button>
           <button
             onClick={() => exportTimetableByClass(timetableRows, gradeConfigs, teachers, subjects, gradeLunchSlot, totalSlots)}
-            className="flex items-center gap-2 h-10 px-4 border border-gray-300 text-[13px] rounded-sm hover:bg-gray-50"
+            className="flex items-center gap-2 h-10 px-3 md:px-4 border border-gray-300 text-[13px] rounded-sm hover:bg-gray-50 whitespace-nowrap"
           >
             <Download size={14} />학급별 엑셀
           </button>
           <button
             onClick={handleGenerate}
             disabled={generating}
-            className="flex items-center gap-2 h-10 px-4 bg-black text-white text-[13px] font-semibold rounded-sm hover:bg-gray-800 disabled:opacity-50"
+            className="flex items-center gap-2 h-10 px-3 md:px-4 bg-black text-white text-[13px] font-semibold rounded-sm hover:bg-gray-800 disabled:opacity-50 whitespace-nowrap"
           >
             <RefreshCw size={14} className={generating ? 'animate-spin' : ''} />
             {generating ? '생성 중...' : '시간표 자동 생성'}
