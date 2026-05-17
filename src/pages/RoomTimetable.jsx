@@ -28,6 +28,9 @@ const DAY_LABELS = ['월', '화', '수', '목', '금']
 export default function RoomTimetable() {
   const { state, setTimetableSlots } = useApp()
   const { rooms, gradeConfigs, lunchConfig, timetableSlots, roomBlockedSlots, teachers, subjects } = state
+  const allClassesList = gradeConfigs.flatMap(gc =>
+    Array.from({ length: gc.num_classes }, (_, i) => ({ grade: gc.grade, classNum: i + 1 })),
+  )
 
   const [selectedRoom, setSelectedRoom] = useState(rooms[0]?.id || null)
   const [editModal, setEditModal] = useState(null)
@@ -82,8 +85,8 @@ export default function RoomTimetable() {
         class_num: classNum,
         day_of_week: day,
         slot,
-        teacher_id: teacherId,
-        subject_id: subjectId,
+        teacher_id: teacherId ?? null,
+        subject_id: subjectId ?? null,
         room_id: selectedRoom,
         is_unassigned: false,
       },
@@ -188,7 +191,11 @@ export default function RoomTimetable() {
                           ) : cell ? (
                             <>
                               <span className="text-[13px] font-semibold text-gray-900">{cell.grade}학년 {cell.class_num}반</span>
-                              {subject && <span className="text-[10px] text-gray-500">{subject.name} {teacher?.code ? `· ${teacher.code}` : ''}</span>}
+                              {subject || teacher ? (
+                                <span className="text-[10px] text-gray-500">{subject?.name || ''} {teacher?.code ? `· ${teacher.code}` : ''}</span>
+                              ) : (
+                                <span className="text-[10px] text-gray-400">담임</span>
+                              )}
                             </>
                           ) : (
                             <span className="text-[12px] text-gray-200">—</span>
@@ -211,6 +218,7 @@ export default function RoomTimetable() {
           timetableSlots={timetableSlots}
           subjects={subjects}
           teachers={teachers}
+          allClasses={allClassesList}
           onAdd={handleAdd}
           onRemove={handleRemove}
           onClose={() => setEditModal(null)}
@@ -220,61 +228,85 @@ export default function RoomTimetable() {
   )
 }
 
-function EditRoomCellModal({ modal, room, timetableSlots, subjects, teachers, onAdd, onRemove, onClose }) {
+function EditRoomCellModal({ modal, room, timetableSlots, subjects, teachers, allClasses, onAdd, onRemove, onClose }) {
   const { day, slot, currentCell } = modal
 
-  // 후보: (학급, 과목, 교사) 조합 중에서
+  // 전담 후보: (학급, 과목, 교사) 조합 중에서
   //  - 이 방의 subjectNames에 포함되는 과목
   //  - 이 방의 teacherIds에 포함되는 교사
   //  - 그 교사가 그 학급에 그 과목을 가르치도록 배정됨 (teacher_assignments)
   //  - 그 학급이 이 (day, slot)에 다른 수업 없음 (학급 충돌 없음)
   //  - 그 교사가 이 (day, slot)에 다른 수업 없음 (교사 충돌 없음)
-  const candidates = []
+  const dedicatedCandidates = []
+  // 담임 후보: 학급이 이 (day, slot)에 전담 수업도 다른 담임 사용도 없는 경우
+  //  - 방 제약 무관 (담임은 아무 방이나 사용 가능)
+  const homeroomCandidates = []
   const seenKey = new Set()
-  if (!currentCell && room) {
-    const allowedSubjects = new Set(room.subjectNames || [])
-    const allowedTeachers = new Set(room.teacherIds || [])
-    for (const teacher of teachers) {
-      if (allowedTeachers.size > 0 && !allowedTeachers.has(teacher.id)) continue
-      // 교사 충돌
-      const teacherBusy = timetableSlots.some(s =>
-        s.teacher_id === teacher.id &&
-        s.day_of_week === day && s.slot === slot &&
-        !s.is_unassigned,
-      )
-      if (teacherBusy) continue
-      for (const a of teacher.teacher_assignments || []) {
-        const subj = subjects.find(s => s.id === a.subject_id)
-        if (!subj) continue
-        if (allowedSubjects.size > 0 && !allowedSubjects.has(subj.name)) continue
-        // 학급 충돌
-        const classBusy = timetableSlots.some(s =>
-          s.grade === a.grade && s.class_num === a.class_num &&
+
+  if (!currentCell) {
+    if (room) {
+      const allowedSubjects = new Set(room.subjectNames || [])
+      const allowedTeachers = new Set(room.teacherIds || [])
+      for (const teacher of teachers) {
+        if (allowedTeachers.size > 0 && !allowedTeachers.has(teacher.id)) continue
+        const teacherBusy = timetableSlots.some(s =>
+          s.teacher_id === teacher.id &&
           s.day_of_week === day && s.slot === slot &&
           !s.is_unassigned,
         )
-        if (classBusy) continue
-        const key = `${a.grade}-${a.class_num}-${teacher.id}-${subj.id}`
-        if (seenKey.has(key)) continue
-        seenKey.add(key)
-        candidates.push({
-          grade: a.grade,
-          classNum: a.class_num,
-          teacherId: teacher.id,
-          teacherCode: teacher.code,
-          subjectId: subj.id,
-          subjectName: subj.name,
-        })
+        if (teacherBusy) continue
+        for (const a of teacher.teacher_assignments || []) {
+          const subj = subjects.find(s => s.id === a.subject_id)
+          if (!subj) continue
+          if (allowedSubjects.size > 0 && !allowedSubjects.has(subj.name)) continue
+          const classBusy = timetableSlots.some(s =>
+            s.grade === a.grade && s.class_num === a.class_num &&
+            s.day_of_week === day && s.slot === slot &&
+            !s.is_unassigned,
+          )
+          if (classBusy) continue
+          const key = `${a.grade}-${a.class_num}-${teacher.id}-${subj.id}`
+          if (seenKey.has(key)) continue
+          seenKey.add(key)
+          dedicatedCandidates.push({
+            mode: 'dedicated',
+            grade: a.grade,
+            classNum: a.class_num,
+            teacherId: teacher.id,
+            teacherCode: teacher.code,
+            subjectId: subj.id,
+            subjectName: subj.name,
+          })
+        }
       }
+      dedicatedCandidates.sort((a, b) =>
+        a.grade - b.grade ||
+        a.classNum - b.classNum ||
+        a.subjectName.localeCompare(b.subjectName) ||
+        a.teacherCode.localeCompare(b.teacherCode),
+      )
     }
-    candidates.sort((a, b) =>
-      a.grade - b.grade ||
-      a.classNum - b.classNum ||
-      a.subjectName.localeCompare(b.subjectName) ||
-      a.teacherCode.localeCompare(b.teacherCode),
+
+    // 담임 후보
+    for (const { grade, classNum } of (allClasses || [])) {
+      const busy = timetableSlots.some(s =>
+        s.grade === grade && s.class_num === classNum &&
+        s.day_of_week === day && s.slot === slot &&
+        !s.is_unassigned,
+      )
+      if (busy) continue
+      homeroomCandidates.push({
+        mode: 'homeroom',
+        grade,
+        classNum,
+      })
+    }
+    homeroomCandidates.sort((a, b) =>
+      a.grade - b.grade || a.classNum - b.classNum,
     )
   }
 
+  const allCandidates = [...dedicatedCandidates, ...homeroomCandidates]
   const [selectedIdx, setSelectedIdx] = useState(0)
 
   return (
@@ -294,9 +326,15 @@ function EditRoomCellModal({ modal, room, timetableSlots, subjects, teachers, on
                 {currentCell.grade}학년 {currentCell.class_num}반
               </div>
               <div className="text-[11px] text-gray-500 mt-0.5">
-                {subjects.find(s => s.id === currentCell.subject_id)?.name}
-                {' · '}
-                {teachers.find(t => t.id === currentCell.teacher_id)?.code}
+                {currentCell.subject_id || currentCell.teacher_id ? (
+                  <>
+                    {subjects.find(s => s.id === currentCell.subject_id)?.name || ''}
+                    {currentCell.subject_id && currentCell.teacher_id ? ' · ' : ''}
+                    {teachers.find(t => t.id === currentCell.teacher_id)?.code || ''}
+                  </>
+                ) : (
+                  <>담임</>
+                )}
               </div>
             </div>
             <div className="flex justify-end gap-2">
@@ -313,16 +351,11 @@ function EditRoomCellModal({ modal, room, timetableSlots, subjects, teachers, on
           <>
             <label className="text-[12px] font-semibold text-gray-600 block mb-1.5">
               추가할 수업
-              <span className="text-gray-400 font-normal ml-1">(이 방·시간에 가능한 학급만 표시)</span>
+              <span className="text-gray-400 font-normal ml-1">(전담 또는 담임 사용)</span>
             </label>
-            {candidates.length === 0 ? (
+            {allCandidates.length === 0 ? (
               <div className="p-3 bg-gray-50 border border-gray-200 rounded-sm text-[12px] text-gray-500">
                 추가 가능한 수업이 없습니다.
-                <div className="text-[11px] text-gray-400 mt-1">
-                  • 이 방에 등록된 교사·과목이 없거나<br />
-                  • 이 시간에 모든 가능 학급이 다른 수업 중이거나<br />
-                  • 가능 교사가 이 시간에 다른 수업 중일 수 있습니다.
-                </div>
               </div>
             ) : (
               <>
@@ -331,16 +364,29 @@ function EditRoomCellModal({ modal, room, timetableSlots, subjects, teachers, on
                   onChange={e => setSelectedIdx(Number(e.target.value))}
                   className="w-full h-9 px-2 border border-gray-300 rounded-sm text-[13px] outline-none bg-white mb-4"
                 >
-                  {candidates.map((c, i) => (
-                    <option key={i} value={i}>
-                      {c.grade}학년 {c.classNum}반 — {c.subjectName} · {c.teacherCode}
-                    </option>
-                  ))}
+                  {dedicatedCandidates.length > 0 && (
+                    <optgroup label="전담">
+                      {dedicatedCandidates.map((c, i) => (
+                        <option key={`d-${i}`} value={i}>
+                          {c.grade}학년 {c.classNum}반 — {c.subjectName} · {c.teacherCode}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                  {homeroomCandidates.length > 0 && (
+                    <optgroup label="담임 사용 (학급 자유 시간)">
+                      {homeroomCandidates.map((c, i) => (
+                        <option key={`h-${i}`} value={dedicatedCandidates.length + i}>
+                          {c.grade}학년 {c.classNum}반 — 담임
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
                 </select>
                 <div className="flex justify-end gap-2">
                   <button onClick={onClose} className="h-9 px-4 border border-gray-300 rounded-sm text-[13px] hover:bg-gray-50">취소</button>
                   <button
-                    onClick={() => onAdd(candidates[selectedIdx])}
+                    onClick={() => onAdd(allCandidates[selectedIdx])}
                     className="h-9 px-4 bg-black text-white text-[13px] font-semibold rounded-sm hover:bg-gray-800"
                   >
                     추가
