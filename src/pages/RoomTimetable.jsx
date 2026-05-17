@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Download } from 'lucide-react'
+import { Download, X } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { exportRoomTimetable } from '../lib/excelExport'
 import ManualModal from '../components/ManualModal'
@@ -10,6 +10,7 @@ const MANUAL = [
     items: [
       '전담 시간표를 자동 생성하면 각 수업이 사용한 특별실이 자동 반영됩니다.',
       '여기서 보이는 결과는 전담 시간표 교사별 보기와 동일하게 동기화됩니다.',
+      '빈 셀을 클릭하면 그 시간에 가능한 수업을 수동으로 배정할 수 있습니다.',
     ],
   },
   {
@@ -25,10 +26,11 @@ const MANUAL = [
 const DAY_LABELS = ['월', '화', '수', '목', '금']
 
 export default function RoomTimetable() {
-  const { state } = useApp()
+  const { state, setTimetableSlots } = useApp()
   const { rooms, gradeConfigs, lunchConfig, timetableSlots, roomBlockedSlots, teachers, subjects } = state
 
   const [selectedRoom, setSelectedRoom] = useState(rooms[0]?.id || null)
+  const [editModal, setEditModal] = useState(null)
 
   const hasSplit = lunchConfig?.split_lunch && lunchConfig?.lunch_groups?.length > 0
   const totalSlots = hasSplit ? 7 : 6
@@ -40,7 +42,6 @@ export default function RoomTimetable() {
   }
 
   // 전담 시간표(timetableSlots)에서 직접 room_id로 필터링
-  // — 교사별 보기에 표시된 방 배정을 그대로 동기화
   const roomSlots = timetableSlots.filter(
     s => s.room_id === selectedRoom && !s.is_unassigned
   )
@@ -52,6 +53,7 @@ export default function RoomTimetable() {
       const relevant = roomSlots.filter(r => r.day_of_week === d)
       for (const r of relevant) {
         grid[d][r.slot] = {
+          rowId: r.id,
           grade: r.grade,
           class_num: r.class_num,
           teacher_id: r.teacher_id,
@@ -62,10 +64,41 @@ export default function RoomTimetable() {
     return grid
   }
 
+  function handleCellClick(day, slot, currentCell) {
+    if (!selectedRoom) return
+    const isBlocked = roomBlockedSlots.some(b => b.room_id === selectedRoom && b.day_of_week === day && b.slot === slot)
+    if (isBlocked) return
+    setEditModal({ day, slot, currentCell })
+  }
+
+  function handleAdd({ grade, classNum, teacherId, subjectId }) {
+    if (!editModal) return
+    const { day, slot } = editModal
+    setTimetableSlots([
+      ...timetableSlots,
+      {
+        id: crypto.randomUUID(),
+        grade,
+        class_num: classNum,
+        day_of_week: day,
+        slot,
+        teacher_id: teacherId,
+        subject_id: subjectId,
+        room_id: selectedRoom,
+        is_unassigned: false,
+      },
+    ])
+    setEditModal(null)
+  }
+
+  function handleRemove(rowId) {
+    setTimetableSlots(timetableSlots.filter(s => s.id !== rowId))
+    setEditModal(null)
+  }
+
   const grid = getSlotsGrid()
   const selectedRoomObj = rooms.find(r => r.id === selectedRoom)
 
-  // 화면 표시용: 호환 위해 roomTimetableSlots 형식으로 변환해 엑셀 내보냄
   const exportData = timetableSlots
     .filter(s => s.room_id && !s.is_unassigned)
     .map(s => ({
@@ -115,7 +148,7 @@ export default function RoomTimetable() {
               <div className="mb-3 flex items-baseline gap-2">
                 <span className="text-[14px] font-semibold">{selectedRoomObj?.name}</span>
                 <span className="text-[12px] text-gray-400">
-                  전담 시간표에서 이 방으로 배정된 수업만 표시됩니다
+                  빈 셀을 클릭해 수업을 추가하거나, 채워진 셀을 클릭해 삭제할 수 있습니다
                 </span>
               </div>
 
@@ -146,8 +179,9 @@ export default function RoomTimetable() {
                       return (
                         <div
                           key={day}
-                          className={`flex-1 border-r border-gray-100 last:border-r-0 flex flex-col items-center justify-center gap-0.5
-                            ${isDayBlocked ? 'bg-gray-100' : ''}`}
+                          onClick={() => !isDayBlocked && handleCellClick(day, slot, cell)}
+                          className={`flex-1 border-r border-gray-100 last:border-r-0 flex flex-col items-center justify-center gap-0.5 transition-colors
+                            ${isDayBlocked ? 'bg-gray-100 cursor-not-allowed' : 'hover:bg-gray-50 cursor-pointer'}`}
                         >
                           {isDayBlocked ? (
                             <span className="text-[11px] text-gray-300">사용불가</span>
@@ -169,6 +203,154 @@ export default function RoomTimetable() {
           )}
         </>
       )}
+
+      {editModal && (
+        <EditRoomCellModal
+          modal={editModal}
+          room={selectedRoomObj}
+          timetableSlots={timetableSlots}
+          subjects={subjects}
+          teachers={teachers}
+          onAdd={handleAdd}
+          onRemove={handleRemove}
+          onClose={() => setEditModal(null)}
+        />
+      )}
+    </div>
+  )
+}
+
+function EditRoomCellModal({ modal, room, timetableSlots, subjects, teachers, onAdd, onRemove, onClose }) {
+  const { day, slot, currentCell } = modal
+
+  // 후보: (학급, 과목, 교사) 조합 중에서
+  //  - 이 방의 subjectNames에 포함되는 과목
+  //  - 이 방의 teacherIds에 포함되는 교사
+  //  - 그 교사가 그 학급에 그 과목을 가르치도록 배정됨 (teacher_assignments)
+  //  - 그 학급이 이 (day, slot)에 다른 수업 없음 (학급 충돌 없음)
+  //  - 그 교사가 이 (day, slot)에 다른 수업 없음 (교사 충돌 없음)
+  const candidates = []
+  const seenKey = new Set()
+  if (!currentCell && room) {
+    const allowedSubjects = new Set(room.subjectNames || [])
+    const allowedTeachers = new Set(room.teacherIds || [])
+    for (const teacher of teachers) {
+      if (allowedTeachers.size > 0 && !allowedTeachers.has(teacher.id)) continue
+      // 교사 충돌
+      const teacherBusy = timetableSlots.some(s =>
+        s.teacher_id === teacher.id &&
+        s.day_of_week === day && s.slot === slot &&
+        !s.is_unassigned,
+      )
+      if (teacherBusy) continue
+      for (const a of teacher.teacher_assignments || []) {
+        const subj = subjects.find(s => s.id === a.subject_id)
+        if (!subj) continue
+        if (allowedSubjects.size > 0 && !allowedSubjects.has(subj.name)) continue
+        // 학급 충돌
+        const classBusy = timetableSlots.some(s =>
+          s.grade === a.grade && s.class_num === a.class_num &&
+          s.day_of_week === day && s.slot === slot &&
+          !s.is_unassigned,
+        )
+        if (classBusy) continue
+        const key = `${a.grade}-${a.class_num}-${teacher.id}-${subj.id}`
+        if (seenKey.has(key)) continue
+        seenKey.add(key)
+        candidates.push({
+          grade: a.grade,
+          classNum: a.class_num,
+          teacherId: teacher.id,
+          teacherCode: teacher.code,
+          subjectId: subj.id,
+          subjectName: subj.name,
+        })
+      }
+    }
+    candidates.sort((a, b) =>
+      a.grade - b.grade ||
+      a.classNum - b.classNum ||
+      a.subjectName.localeCompare(b.subjectName) ||
+      a.teacherCode.localeCompare(b.teacherCode),
+    )
+  }
+
+  const [selectedIdx, setSelectedIdx] = useState(0)
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white w-full max-w-[420px] rounded-sm border border-gray-200 p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-[16px] font-bold">
+            {DAY_LABELS[day]}요일 {slot + 1}교시 — {room?.name}
+          </h2>
+          <button onClick={onClose}><X size={18} className="text-gray-400" /></button>
+        </div>
+
+        {currentCell ? (
+          <>
+            <div className="mb-5 p-3 border border-gray-200 rounded-sm">
+              <div className="text-[13px] font-semibold text-gray-900">
+                {currentCell.grade}학년 {currentCell.class_num}반
+              </div>
+              <div className="text-[11px] text-gray-500 mt-0.5">
+                {subjects.find(s => s.id === currentCell.subject_id)?.name}
+                {' · '}
+                {teachers.find(t => t.id === currentCell.teacher_id)?.code}
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button onClick={onClose} className="h-9 px-4 border border-gray-300 rounded-sm text-[13px] hover:bg-gray-50">취소</button>
+              <button
+                onClick={() => onRemove(currentCell.rowId)}
+                className="h-9 px-4 border border-red-200 text-red-600 text-[13px] rounded-sm hover:bg-red-50"
+              >
+                이 셀에서 삭제
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <label className="text-[12px] font-semibold text-gray-600 block mb-1.5">
+              추가할 수업
+              <span className="text-gray-400 font-normal ml-1">(이 방·시간에 가능한 학급만 표시)</span>
+            </label>
+            {candidates.length === 0 ? (
+              <div className="p-3 bg-gray-50 border border-gray-200 rounded-sm text-[12px] text-gray-500">
+                추가 가능한 수업이 없습니다.
+                <div className="text-[11px] text-gray-400 mt-1">
+                  • 이 방에 등록된 교사·과목이 없거나<br />
+                  • 이 시간에 모든 가능 학급이 다른 수업 중이거나<br />
+                  • 가능 교사가 이 시간에 다른 수업 중일 수 있습니다.
+                </div>
+              </div>
+            ) : (
+              <>
+                <select
+                  value={selectedIdx}
+                  onChange={e => setSelectedIdx(Number(e.target.value))}
+                  className="w-full h-9 px-2 border border-gray-300 rounded-sm text-[13px] outline-none bg-white mb-4"
+                >
+                  {candidates.map((c, i) => (
+                    <option key={i} value={i}>
+                      {c.grade}학년 {c.classNum}반 — {c.subjectName} · {c.teacherCode}
+                    </option>
+                  ))}
+                </select>
+                <div className="flex justify-end gap-2">
+                  <button onClick={onClose} className="h-9 px-4 border border-gray-300 rounded-sm text-[13px] hover:bg-gray-50">취소</button>
+                  <button
+                    onClick={() => onAdd(candidates[selectedIdx])}
+                    className="h-9 px-4 bg-black text-white text-[13px] font-semibold rounded-sm hover:bg-gray-800"
+                  >
+                    추가
+                  </button>
+                </div>
+              </>
+            )}
+          </>
+        )}
+      </div>
     </div>
   )
 }
