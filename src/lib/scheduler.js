@@ -141,10 +141,16 @@ export function buildSchedule(
   const teacherTotalBlocks = {}
   for (const b of blocks) teacherTotalBlocks[b.teacherId] = (teacherTotalBlocks[b.teacherId] || 0) + 1
 
+  // 학급별 총 전담 시수 — 시수 많은 학급 우선 처리용 (제약 강한 학급 먼저)
+  const classTotalHoursForSort = {}
+  for (const b of blocks) {
+    const k = `${b.grade}_${b.classNum}`
+    classTotalHoursForSort[k] = (classTotalHoursForSort[k] || 0) + b.size
+  }
+
   // (teacher, grade, subject) 그룹의 학급 수. 인간이 짠 시간표는 같은 그룹을
   // 한 날에 모으는 경향이 강함 (예: 3-1, 3-2 영어 모두 화요일).
   // 그룹이 큰(학급 많은) 그룹을 먼저 처리하면 한 날을 통째로 차지 가능.
-  // 혼자(1 class)인 그룹은 나중에 leftover에 끼워 넣음.
   const groupSize = {}
   for (const t of teachers) {
     for (const a of t.teacher_assignments || []) {
@@ -160,6 +166,10 @@ export function buildSchedule(
     if (a.blockIdx !== b.blockIdx) return a.blockIdx - b.blockIdx
     // 같은 round 안에서: 큰 덩어리(pair, size=2) 먼저
     if (a.size !== b.size) return b.size - a.size
+    // 전담 수업 많은 학급 먼저 (제약 강한 학급 우선 — 사용자 제안)
+    const aClassTotal = classTotalHoursForSort[`${a.grade}_${a.classNum}`] || 0
+    const bClassTotal = classTotalHoursForSort[`${b.grade}_${b.classNum}`] || 0
+    if (aClassTotal !== bClassTotal) return bClassTotal - aClassTotal
     // 그 다음 multi-block(totalBlocks 많은) 우선 — calendar order 여유 확보
     if (a.totalBlocks !== b.totalBlocks) return b.totalBlocks - a.totalBlocks
     // 같은 multi-block 안에서 그룹 큰 것 먼저 (PDF 스타일 학년 클러스터링)
