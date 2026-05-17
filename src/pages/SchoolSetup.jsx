@@ -80,7 +80,7 @@ export default function SchoolSetup() {
 
   return (
     <div className="p-4 md:p-10 bg-gray-50 min-h-full">
-      <div className="flex items-center justify-between mb-6">
+      <div className="max-w-[720px] flex items-center justify-between mb-6">
         <h1 className="text-[22px] font-bold">학교 설정</h1>
         <ManualModal title="학교 설정" sections={MANUAL} />
       </div>

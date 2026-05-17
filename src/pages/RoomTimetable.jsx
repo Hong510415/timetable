@@ -44,7 +44,6 @@ export default function RoomTimetable() {
     Array.from({ length: gc.num_classes }, (_, i) => ({ grade: gc.grade, classNum: i + 1 })),
   )
 
-  const [selectedRoom, setSelectedRoom] = useState(rooms[0]?.id || null)
   const [editModal, setEditModal] = useState(null)
 
   const hasSplit = lunchConfig?.split_lunch && lunchConfig?.lunch_groups?.length > 0
@@ -56,39 +55,15 @@ export default function RoomTimetable() {
     }
   }
 
-  // 전담 시간표(timetableSlots)에서 직접 room_id로 필터링
-  const roomSlots = timetableSlots.filter(
-    s => s.room_id === selectedRoom && !s.is_unassigned
-  )
-
-  function getSlotsGrid() {
-    const grid = {}
-    for (let d = 0; d < 5; d++) {
-      grid[d] = {}
-      const relevant = roomSlots.filter(r => r.day_of_week === d)
-      for (const r of relevant) {
-        grid[d][r.slot] = {
-          rowId: r.id,
-          grade: r.grade,
-          class_num: r.class_num,
-          teacher_id: r.teacher_id,
-          subject_id: r.subject_id,
-        }
-      }
-    }
-    return grid
-  }
-
-  function handleCellClick(day, slot, currentCell) {
-    if (!selectedRoom) return
-    const isBlocked = roomBlockedSlots.some(b => b.room_id === selectedRoom && b.day_of_week === day && b.slot === slot)
+  function handleCellClick(roomId, day, slot, currentCell) {
+    const isBlocked = roomBlockedSlots.some(b => b.room_id === roomId && b.day_of_week === day && b.slot === slot)
     if (isBlocked) return
-    setEditModal({ day, slot, currentCell })
+    setEditModal({ roomId, day, slot, currentCell })
   }
 
   function handleAdd({ grade, classNum, teacherId, subjectId }) {
     if (!editModal) return
-    const { day, slot } = editModal
+    const { roomId, day, slot } = editModal
     setTimetableSlots([
       ...timetableSlots,
       {
@@ -99,7 +74,7 @@ export default function RoomTimetable() {
         slot,
         teacher_id: teacherId ?? null,
         subject_id: subjectId ?? null,
-        room_id: selectedRoom,
+        room_id: roomId,
         is_unassigned: false,
       },
     ])
@@ -111,9 +86,6 @@ export default function RoomTimetable() {
     setEditModal(null)
   }
 
-  const grid = getSlotsGrid()
-  const selectedRoomObj = rooms.find(r => r.id === selectedRoom)
-
   const exportData = timetableSlots
     .filter(s => s.room_id && !s.is_unassigned)
     .map(s => ({
@@ -123,6 +95,8 @@ export default function RoomTimetable() {
       grade: s.grade,
       class_num: s.class_num,
     }))
+
+  const editRoom = editModal ? rooms.find(r => r.id === editModal.roomId) : null
 
   return (
     <div className="p-4 md:p-10 bg-gray-50 min-h-full">
@@ -145,88 +119,32 @@ export default function RoomTimetable() {
         </div>
       ) : (
         <>
-          <div className="flex gap-2 mb-5 flex-wrap">
-            {rooms.map(room => (
-              <button
-                key={room.id}
-                onClick={() => setSelectedRoom(room.id)}
-                className={`h-9 px-4 rounded-sm text-[13px] font-semibold border transition-colors
-                  ${selectedRoom === room.id ? 'bg-black text-white border-black' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}
-              >
-                {room.name}
-              </button>
-            ))}
-          </div>
-
-          {selectedRoom && (
-            <div className="max-w-[540px]">
-              <div className="mb-3 flex items-baseline gap-2">
-                <span className="text-[14px] font-semibold">{selectedRoomObj?.name}</span>
-                <span className="text-[12px] text-gray-400">
-                  빈 셀을 클릭해 수업을 추가하거나, 채워진 셀을 클릭해 삭제할 수 있습니다
-                </span>
-              </div>
-
-              {!timetableSlots.length && (
-                <div className="mb-3 p-3 bg-gray-50 border border-gray-200 rounded-sm text-[12px] text-gray-500">
-                  전담 시간표를 먼저 자동 생성하세요.
-                </div>
-              )}
-
-              <div className="border border-gray-200 rounded-sm overflow-hidden bg-white">
-                <div className="flex bg-gray-50">
-                  <div className="w-[72px] flex-shrink-0 border-r border-gray-200 h-9 flex items-center justify-center text-[11px] font-semibold text-gray-500">교시</div>
-                  {DAY_LABELS.map(d => (
-                    <div key={d} className="flex-1 h-9 flex items-center justify-center border-r border-gray-200 last:border-r-0 text-[11px] font-semibold text-gray-500">{d}</div>
-                  ))}
-                </div>
-
-                {Array.from({ length: totalSlots }, (_, slot) => (
-                  <div key={slot} className="flex border-t border-gray-100 h-[62px]">
-                    <div className="w-[72px] flex-shrink-0 border-r border-gray-200 flex items-center justify-center text-[11px] font-semibold text-gray-400 bg-gray-50">
-                      {slot + 1}교시
-                    </div>
-                    {Array.from({ length: 5 }, (_, day) => {
-                      const isDayBlocked = roomBlockedSlots.some(b => b.room_id === selectedRoom && b.day_of_week === day && b.slot === slot)
-                      const cell = grid[day]?.[slot]
-                      const teacher = cell ? teachers.find(t => t.id === cell.teacher_id) : null
-                      const subject = cell ? subjects.find(s => s.id === cell.subject_id) : null
-                      return (
-                        <div
-                          key={day}
-                          onClick={() => !isDayBlocked && handleCellClick(day, slot, cell)}
-                          className={`flex-1 border-r border-gray-100 last:border-r-0 flex flex-col items-center justify-center gap-0.5 transition-colors
-                            ${isDayBlocked ? 'bg-gray-100 cursor-not-allowed' : 'hover:bg-gray-50 cursor-pointer'}`}
-                        >
-                          {isDayBlocked ? (
-                            <span className="text-[11px] text-gray-300">사용불가</span>
-                          ) : cell ? (
-                            <>
-                              <span className="text-[13px] font-semibold text-gray-900">{cell.grade}학년 {cell.class_num}반</span>
-                              {subject || teacher ? (
-                                <span className="text-[10px] text-gray-500">{subject?.name || ''} {teacher?.code ? `· ${teacher.code}` : ''}</span>
-                              ) : (
-                                <span className="text-[10px] text-gray-400">담임</span>
-                              )}
-                            </>
-                          ) : (
-                            <span className="text-[12px] text-gray-200">—</span>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
-                ))}
-              </div>
+          {!timetableSlots.length && (
+            <div className="max-w-[1100px] mb-4 p-3 bg-gray-50 border border-gray-200 rounded-sm text-[12px] text-gray-500">
+              전담 시간표를 먼저 자동 생성하세요.
             </div>
           )}
+          <div className="max-w-[1100px] grid grid-cols-1 lg:grid-cols-2 gap-5">
+            {rooms.map(room => (
+              <RoomGrid
+                key={room.id}
+                room={room}
+                totalSlots={totalSlots}
+                timetableSlots={timetableSlots}
+                roomBlockedSlots={roomBlockedSlots}
+                teachers={teachers}
+                subjects={subjects}
+                onCellClick={handleCellClick}
+              />
+            ))}
+          </div>
         </>
       )}
 
-      {editModal && (
+      {editModal && editRoom && (
         <EditRoomCellModal
           modal={editModal}
-          room={selectedRoomObj}
+          room={editRoom}
           timetableSlots={timetableSlots}
           subjects={subjects}
           teachers={teachers}
@@ -240,18 +158,78 @@ export default function RoomTimetable() {
   )
 }
 
+function RoomGrid({ room, totalSlots, timetableSlots, roomBlockedSlots, teachers, subjects, onCellClick }) {
+  const roomSlots = timetableSlots.filter(s => s.room_id === room.id && !s.is_unassigned)
+  const grid = {}
+  for (let d = 0; d < 5; d++) {
+    grid[d] = {}
+    const relevant = roomSlots.filter(r => r.day_of_week === d)
+    for (const r of relevant) {
+      grid[d][r.slot] = {
+        rowId: r.id,
+        grade: r.grade,
+        class_num: r.class_num,
+        teacher_id: r.teacher_id,
+        subject_id: r.subject_id,
+      }
+    }
+  }
+
+  return (
+    <div>
+      <div className="mb-2 text-[14px] font-semibold text-gray-900">{room.name}</div>
+      <div className="border border-gray-200 rounded-sm overflow-hidden bg-white">
+        <div className="flex bg-gray-50">
+          <div className="w-[60px] flex-shrink-0 border-r border-gray-200 h-9 flex items-center justify-center text-[11px] font-semibold text-gray-500">교시</div>
+          {DAY_LABELS.map(d => (
+            <div key={d} className="flex-1 h-9 flex items-center justify-center border-r border-gray-200 last:border-r-0 text-[11px] font-semibold text-gray-500">{d}</div>
+          ))}
+        </div>
+        {Array.from({ length: totalSlots }, (_, slot) => (
+          <div key={slot} className="flex border-t border-gray-100 h-[52px]">
+            <div className="w-[60px] flex-shrink-0 border-r border-gray-200 flex items-center justify-center text-[11px] font-semibold text-gray-400 bg-gray-50">
+              {slot + 1}교시
+            </div>
+            {Array.from({ length: 5 }, (_, day) => {
+              const isDayBlocked = roomBlockedSlots.some(b => b.room_id === room.id && b.day_of_week === day && b.slot === slot)
+              const cell = grid[day]?.[slot]
+              const teacher = cell ? teachers.find(t => t.id === cell.teacher_id) : null
+              const subject = cell ? subjects.find(s => s.id === cell.subject_id) : null
+              return (
+                <div
+                  key={day}
+                  onClick={() => !isDayBlocked && onCellClick(room.id, day, slot, cell)}
+                  className={`flex-1 border-r border-gray-100 last:border-r-0 flex flex-col items-center justify-center gap-0 transition-colors
+                    ${isDayBlocked ? 'bg-gray-100 cursor-not-allowed' : 'hover:bg-gray-50 cursor-pointer'}`}
+                >
+                  {isDayBlocked ? (
+                    <span className="text-[10px] text-gray-300">사용불가</span>
+                  ) : cell ? (
+                    <>
+                      <span className="text-[12px] font-semibold text-gray-900">{cell.grade}-{cell.class_num}</span>
+                      {subject || teacher ? (
+                        <span className="text-[9px] text-gray-500">{subject?.name || ''}{teacher?.code ? ` · ${teacher.code}` : ''}</span>
+                      ) : (
+                        <span className="text-[9px] text-gray-400">담임</span>
+                      )}
+                    </>
+                  ) : (
+                    <span className="text-[11px] text-gray-200">—</span>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function EditRoomCellModal({ modal, room, timetableSlots, subjects, teachers, allClasses, onAdd, onRemove, onClose }) {
   const { day, slot, currentCell } = modal
 
-  // 전담 후보: (학급, 과목, 교사) 조합 중에서
-  //  - 이 방의 subjectNames에 포함되는 과목
-  //  - 이 방의 teacherIds에 포함되는 교사
-  //  - 그 교사가 그 학급에 그 과목을 가르치도록 배정됨 (teacher_assignments)
-  //  - 그 학급이 이 (day, slot)에 다른 수업 없음 (학급 충돌 없음)
-  //  - 그 교사가 이 (day, slot)에 다른 수업 없음 (교사 충돌 없음)
   const dedicatedCandidates = []
-  // 담임 후보: 학급이 이 (day, slot)에 전담 수업도 다른 담임 사용도 없는 경우
-  //  - 방 제약 무관 (담임은 아무 방이나 사용 가능)
   const homeroomCandidates = []
   const seenKey = new Set()
 
@@ -299,7 +277,6 @@ function EditRoomCellModal({ modal, room, timetableSlots, subjects, teachers, al
       )
     }
 
-    // 담임 후보
     for (const { grade, classNum } of (allClasses || [])) {
       const busy = timetableSlots.some(s =>
         s.grade === grade && s.class_num === classNum &&
@@ -307,15 +284,9 @@ function EditRoomCellModal({ modal, room, timetableSlots, subjects, teachers, al
         !s.is_unassigned,
       )
       if (busy) continue
-      homeroomCandidates.push({
-        mode: 'homeroom',
-        grade,
-        classNum,
-      })
+      homeroomCandidates.push({ mode: 'homeroom', grade, classNum })
     }
-    homeroomCandidates.sort((a, b) =>
-      a.grade - b.grade || a.classNum - b.classNum,
-    )
+    homeroomCandidates.sort((a, b) => a.grade - b.grade || a.classNum - b.classNum)
   }
 
   const allCandidates = [...dedicatedCandidates, ...homeroomCandidates]
