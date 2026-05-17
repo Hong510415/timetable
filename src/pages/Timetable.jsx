@@ -57,7 +57,7 @@ export default function Timetable() {
   const { gradeConfigs, subjects, teachers, lunchConfig, timetableSlots: timetableRows, rooms, roomBlockedSlots } = state
 
   const [generating, setGenerating] = useState(false)
-  const [errors, setErrors] = useState([])
+  // (이전 errors state 제거 — 미배정 표시는 UnassignedStats가 timetableRows에서 직접 계산해서 실시간 동기화됨)
   const [tab, setTab] = useState('teacher')
   const [showGenerateModal, setShowGenerateModal] = useState(false)
   const [generateOptions, setGenerateOptions] = useState({ subjectSettings: {} })
@@ -124,15 +124,9 @@ export default function Timetable() {
   async function executeGenerate() {
     setShowGenerateModal(false)
     setGenerating(true)
-    setErrors([])
     try {
       const result = buildSchedule(gradeConfigs, subjects, teachers, lunchConfig || { split_lunch: false, lunch_groups: [] }, rooms, roomBlockedSlots, generateOptions)
       const { rows } = flattenResult(result.result, result.gradeLunchSlot, result.totalSlots)
-      const flatErrors = (result.errors || []).map(e => {
-        const subjName = subjects.find(s => s.id === e.subjectId)?.name || '과목 미상'
-        return `${e.grade}학년 ${e.classNum}반 ${subjName} ${e.unassigned}시수 미배정`
-      })
-      setErrors(flatErrors)
       const rowsWithId = rows.map(r => ({ ...r, id: crypto.randomUUID() }))
       setTimetableSlots(rowsWithId)
     } catch (e) {
@@ -241,10 +235,15 @@ export default function Timetable() {
         </div>
       </div>
 
-      {errors.length > 0 && (
-        <div className="max-w-[1100px] mb-4 p-3 bg-red-50 border border-red-200 rounded-sm text-[12px] text-red-600">
-          {errors.map((e, i) => <div key={i}>{e}</div>)}
-        </div>
+      {/* 미배정 시수 표 — 수동 편집과 실시간 동기화 위해 상단으로 이동 (이전 빨간 경고 블록은 초기 생성 결과만 보여줘서 제거) */}
+      {timetableRows.length > 0 && (
+        <UnassignedStats
+          teachers={teachers}
+          subjects={subjects}
+          timetableRows={timetableRows}
+          filterClasses={tab === 'class' ? selectedClasses : null}
+          placement="top"
+        />
       )}
 
       {timetableRows.length === 0 ? (
@@ -336,12 +335,6 @@ export default function Timetable() {
             </div>
           )}
 
-          <UnassignedStats
-            teachers={teachers}
-            subjects={subjects}
-            timetableRows={timetableRows}
-            filterClasses={tab === 'class' ? selectedClasses : null}
-          />
         </>
       )}
 
@@ -446,7 +439,7 @@ function ClassPicker({ gradeConfigs, selectedClasses, onToggle, onSelectGrade, o
   )
 }
 
-function UnassignedStats({ teachers, subjects, timetableRows, filterClasses }) {
+function UnassignedStats({ teachers, subjects, timetableRows, filterClasses, placement }) {
   // 교사별 (과목, 학년-반)별 목표 vs 배정 시수
   const filterSet = filterClasses ? new Set(filterClasses.map(c => `${c.grade}-${c.classNum}`)) : null
   const rows = []
@@ -486,8 +479,8 @@ function UnassignedStats({ teachers, subjects, timetableRows, filterClasses }) {
     : { gridTemplateColumns: '1fr 1fr 110px 60px 60px 60px' }
 
   return (
-    <div className="mt-6 max-w-[540px] bg-white border border-gray-200 rounded-sm overflow-hidden">
-      <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-200 text-[12px] font-semibold text-gray-700">
+    <div className={`${placement === 'top' ? 'mb-4' : 'mt-6'} max-w-[540px] bg-white border border-red-200 rounded-sm overflow-hidden`}>
+      <div className="px-4 py-2.5 bg-red-50 border-b border-red-200 text-[12px] font-semibold text-red-700">
         미배정 시수 ({deficitRows.length}건){isSingleClass ? ` — ${filterClasses[0].grade}학년 ${filterClasses[0].classNum}반` : ''}
       </div>
       <div className="grid bg-gray-50 border-b border-gray-200 text-[11px] font-semibold text-gray-500" style={gridStyle}>

@@ -253,11 +253,23 @@ export function buildSchedule(
       const counts = [0, 0, 0, 0, 0]
       for (let d = 0; d < 5; d++) counts[d] = teacherDayCount[teacherId]?.[d] || 0
       counts[day] = newCount
-      // 한 명이라도 시수 있는 교사만 의미. T=0 위에서 빠진다.
-      // min: 0인 요일은 향후 채워질 가능성. 단순 max - 현재min > 2면 reject.
       if (Math.max(...counts) - Math.min(...counts) > 2) return true
     }
     return false
+  }
+
+  // 학급 요일 부하 균형 (#14): cap = max(2, ceil(C/5))
+  // 한 학급이 같은 날에 너무 많은 전담 수업 받는 걸 방지 (cross-teacher 충돌도 자연 회피)
+  // 예: 5학년 1반(C=8)이 같은 날 과학 2시간 + 체육 1시간(=3h) 못 받게 (cap=ceil(8/5)=2)
+  // 최소 cap=2: pair(2시간 연속 같은 날) 1개는 반드시 들어갈 수 있게 보장 (C 작은 학급 보호)
+  // 2차 패스에서 +1 relax
+  function violatesClassDayBalance(grade, classNum, day, slotsCount, relaxCap = 0) {
+    const ck = `${grade}_${classNum}`
+    const C = classTotalHours[ck] || 0
+    if (C === 0) return false
+    const cap = Math.max(2, Math.ceil(C / 5)) + relaxCap
+    const newCount = (classDayCount[ck]?.[day] || 0) + slotsCount
+    return newCount > cap
   }
 
   // 학년 sandwich (#9): teacher slot grade 시뮬레이션 후 grade range 검사
@@ -333,6 +345,9 @@ export function buildSchedule(
     // #13 교사 요일 부하 cap (relaxCap 적용 가능 — 2차 패스)
     if (violatesDayBalance(teacherId, day, slots.length, relaxCap)) return false
 
+    // #14 학급 요일 부하 cap — 한 학급의 일일 전담 수업이 ceil(C/5)을 넘지 않게
+    if (violatesClassDayBalance(grade, classNum, day, slots.length, relaxCap)) return false
+
     // 같은 placement 내 슬롯들끼리 점심 누적 확인 (pair=2 슬롯이 둘 다 점심슬롯이면 위반)
     if (splitLunch && slots.length > 1) {
       const occBefore = allLunchSlotIndexes.filter(ls => teacherOccupied[teacherId][day].has(ls)).length
@@ -400,13 +415,7 @@ export function buildSchedule(
 
     // (e) 제거됨 — 하드 #13(cap=ceil(T/5))이 이미 강제 거부하므로 소프트로 또 페널티 주는 건 잉여.
 
-    // (f) 학급 요일 전담 부하 균형
-    const ck = `${grade}_${classNum}`
-    const C = classTotalHours[ck] || 0
-    const ceilC = Math.ceil(C / 5)
-    const cdcCurrent = classDayCount[ck]?.[day] || 0
-    const overF = Math.max(0, cdcCurrent + slots.length - ceilC)
-    score -= 2 * overF
+    // (f) 제거됨 — 하드 #14(학급 cap=ceil(C/5))가 이미 강제하므로 소프트 잉여.
 
     // (g) 제거됨 — 가중치(-1)가 너무 낮아서 결정에 영향 없음. 잡음만 추가.
 
