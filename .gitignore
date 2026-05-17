@@ -1,0 +1,6 @@
+.vercel
+.claude
+node_modules
+dist
+dist-offline
+submission
