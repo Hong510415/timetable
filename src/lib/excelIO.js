@@ -65,9 +65,14 @@ export function exportFullWorkbook(state) {
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(assignRows), '전담배정')
 
   // 시트6: 특별실
-  const roomRows = [['ID', '특별실명', '사용과목']]
+  const roomRows = [['ID', '특별실명', '사용과목', '사용교사ID']]
   for (const r of state.rooms) {
-    roomRows.push([r.id, r.name, (r.subjectNames || []).join(',')])
+    roomRows.push([
+      r.id,
+      r.name,
+      (r.subjectNames || []).join(','),
+      (r.teacherIds || []).join(','),
+    ])
   }
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(roomRows), '특별실')
 
@@ -80,11 +85,18 @@ export function exportFullWorkbook(state) {
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(blockedRows), '특별실차단')
 
   // 시트8: 시간표
-  const ttRows = [['학년', '반', '요일(0=월)', '교시', '교사ID', '교사코드', '과목ID', '과목명', '미배정']]
+  const ttRows = [['학년', '반', '요일(0=월)', '교시', '교사ID', '교사코드', '과목ID', '과목명', '미배정', '특별실ID', '특별실명']]
   for (const slot of state.timetableSlots) {
     const teacher = state.teachers.find(t => t.id === slot.teacher_id)
     const subj = state.subjects.find(s => s.id === slot.subject_id)
-    ttRows.push([slot.grade, slot.class_num, slot.day_of_week, slot.slot, slot.teacher_id, teacher?.code || '', slot.subject_id, subj?.name || '', slot.is_unassigned ? 'Y' : 'N'])
+    const room = slot.room_id ? state.rooms.find(r => r.id === slot.room_id) : null
+    ttRows.push([
+      slot.grade, slot.class_num, slot.day_of_week, slot.slot,
+      slot.teacher_id, teacher?.code || '',
+      slot.subject_id, subj?.name || '',
+      slot.is_unassigned ? 'Y' : 'N',
+      slot.room_id || '', room?.name || '',
+    ])
   }
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ttRows), '시간표')
 
@@ -216,6 +228,8 @@ export async function importFullWorkbook(file) {
     id: String(r[0]),
     name: String(r[1]),
     subjectNames: r[2] ? String(r[2]).split(',').filter(Boolean) : [],
+    // 신규 컬럼 (구 엑셀 호환: 없으면 빈 배열로 처리 → 기본 동작)
+    teacherIds: r[3] ? String(r[3]).split(',').filter(Boolean) : [],
   }))
 
   // 특별실차단
@@ -238,6 +252,7 @@ export async function importFullWorkbook(file) {
     teacher_id: String(r[4]),
     subject_id: String(r[6]),
     is_unassigned: r[8] === 'Y',
+    room_id: r[9] ? String(r[9]) : null,
   }))
 
   // 특별실시간표
