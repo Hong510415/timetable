@@ -230,6 +230,25 @@ export function buildSchedule(
     return a.classNum - b.classNum
   })
 
+  // randomize: 같은 (generalPriority, blockIdx, size) 그룹 내에서 Fisher-Yates 셔플
+  // → 동일 조건에서 다른 배치 결과 생성 (다중 실행 후 최적 선택용)
+  if (options.randomize) {
+    let i = 0
+    while (i < blocks.length) {
+      let j = i + 1
+      while (j < blocks.length &&
+        blocks[j].generalPriority === blocks[i].generalPriority &&
+        blocks[j].blockIdx === blocks[i].blockIdx &&
+        blocks[j].size === blocks[i].size) j++
+      // [i, j) 구간 셔플
+      for (let k = j - 1; k > i; k--) {
+        const r = i + Math.floor(Math.random() * (k - i + 1))
+        ;[blocks[k], blocks[r]] = [blocks[r], blocks[k]]
+      }
+      i = j
+    }
+  }
+
   // ---------- 3. 상태 ----------
 
   const result = {}
