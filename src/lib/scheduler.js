@@ -97,6 +97,31 @@ export function buildSchedule(
   // 블록 = pair(2시간 한 묶음) 또는 single(1시간)
   // 같은 (class, subject)의 모든 블록은 서로 다른 요일에 배치
 
+  // 교사별 학년별 총 시수 (소수 학년 "빈 날 우선" 보너스용)
+  // 예: 56영어 교사 → { 5: 21, 6: 3 }. 시수 가장 적은 학년 = 소수 학년.
+  const teacherGradeHours = {}
+  for (const teacher of teachers) {
+    for (const a of teacher.teacher_assignments || []) {
+      const wh = a.weekly_hours || 0
+      if (wh <= 0) continue
+      if (!teacherGradeHours[teacher.id]) teacherGradeHours[teacher.id] = {}
+      teacherGradeHours[teacher.id][a.grade] = (teacherGradeHours[teacher.id][a.grade] || 0) + wh
+    }
+  }
+  // 교사별 소수 학년(시수 최소) 기록. 학년이 1개뿐이면 null(해당 없음).
+  const teacherMinorityGrade = {}
+  for (const [tid, gradeMap] of Object.entries(teacherGradeHours)) {
+    const grades = Object.keys(gradeMap)
+    if (grades.length < 2) { teacherMinorityGrade[tid] = null; continue }
+    let minGrade = null, minH = Infinity
+    for (const g of grades) {
+      if (gradeMap[g] < minH) { minH = gradeMap[g]; minGrade = Number(g) }
+    }
+    // 다른 학년과 시수 차이가 크지 않으면 무시 (비슷하면 "소수" 아님)
+    const maxH = Math.max(...grades.map(g => gradeMap[g]))
+    teacherMinorityGrade[tid] = maxH >= minH * 2 ? minGrade : null
+  }
+
   // 교사별 일반과목 총 시수 (우선순위 판단: 2h+ → 먼저, 1h → 나중)
   const teacherGeneralHours = {}
   for (const teacher of teachers) {
@@ -503,10 +528,11 @@ export function buildSchedule(
     const { teacherId, subjectId, grade, classNum, blockIdx, totalBlocks } = block
     let score = 0
 
-    // (a) 같은 교사 + 같은 과목 같은 날 (+3)
+    // (a) 같은 교사 + 같은 과목 같은 날 (+3, 약화됨)
+    // 이전 +5에서 +3으로 줄임. (a)가 (d) day target보다 강하게 작동해서
+    // 5-1 block 1이 target Wed 대신 Fri 클러스터링 따라가서 block 2가 갈 곳 없어지는 문제 해결.
     let sameSubjSameDay = 0
     const tsd = teacherSlotSubject[teacherId]?.[day] || {}
-    const tsg = teacherSlotGrade[teacherId]?.[day] || {}
     for (const s of Object.keys(tsd)) {
       if (tsd[s] === subjectId) sameSubjSameDay++
     }
@@ -518,6 +544,7 @@ export function buildSchedule(
     // 인간 시간표는 같은 학년 같은 과목을 같은 날에 통째로 묶는 경향이 강함
     // (예: 3학년 영어 둘 다 화요일, 4학년 과학 둘 다 목요일)
     let sameGradeSubjSameDay = 0
+    const tsg = teacherSlotGrade[teacherId]?.[day] || {}
     for (const s of Object.keys(tsg)) {
       if (tsg[s] === grade && tsd[s] === subjectId) sameGradeSubjSameDay++
     }
@@ -559,6 +586,15 @@ export function buildSchedule(
     }
 
     // (i) "1교시부터 땡기기"는 점수에 넣지 않음 — 동점일 때 tiebreaker로만 작용.
+
+    // (j) 소수 학년 "빈 날 우선" 보너스 (+4)
+    // 교사가 두 학년을 가르치고 한 학년 시수가 현저히 적을 때(소수 학년),
+    // 그 블록은 해당 날 맨앞(slot 0) 위치를 확보하도록 빈 날을 선호.
+    // → grade sandwich 없이 [소수학년, 다수학년×N] 패턴이 자연스럽게 형성됨.
+    if (teacherMinorityGrade[teacherId] === grade) {
+      const dayUsed = teacherDayCount[teacherId]?.[day] || 0
+      if (dayUsed === 0) score += 4
+    }
 
     return score
   }
