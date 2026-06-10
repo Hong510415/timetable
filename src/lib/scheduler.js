@@ -217,6 +217,11 @@ export function buildSchedule(
     const aMinority = teacherMinorityGrade[a.teacherId]?.has(a.grade) ? 0 : 1
     const bMinority = teacherMinorityGrade[b.teacherId]?.has(b.grade) ? 0 : 1
     if (aMinority !== bMinority) return aMinority - bMinority
+    // 같은 minority/majority 안에서: (teacherId, grade, subjectId) 그룹끼리 묶기
+    // 이 없으면 4학년 1반 → 5학년 1반 → 4학년 2반 순으로 처리되어 클러스터링 깨짐
+    const aGroup = `${a.teacherId}__${a.grade}__${a.subjectId}`
+    const bGroup = `${b.teacherId}__${b.grade}__${b.subjectId}`
+    if (aGroup !== bGroup) return aGroup < bGroup ? -1 : 1
     // 같은 round 안에서: 큰 덩어리(pair, size=2) 먼저
     if (a.size !== b.size) return b.size - a.size
     // 전담 수업 많은 학급 먼저 (제약 강한 학급 우선 — 사용자 제안)
