@@ -166,8 +166,21 @@ export default function Timetable() {
           }
         }
 
-        // 미배정 0 우선, 그 다음 클러스터링 점수
-        const score = -unassigned * 10000 + clusterScore
+        // 교사별 요일 시수 격차 합산 (작을수록 좋음)
+        const teacherDayCounts = {}
+        for (const row of rows) {
+          if (row.is_unassigned) continue
+          if (!teacherDayCounts[row.teacher_id]) teacherDayCounts[row.teacher_id] = [0,0,0,0,0]
+          teacherDayCounts[row.teacher_id][row.day_of_week]++
+        }
+        let balancePenalty = 0
+        for (const counts of Object.values(teacherDayCounts)) {
+          const filled = counts.filter(c => c > 0)
+          if (filled.length >= 2) balancePenalty += Math.max(...filled) - Math.min(...filled)
+        }
+
+        // 1순위: 미배정 최소 / 2순위: 클러스터링 최대 / 3순위: 요일 격차 최소
+        const score = -unassigned * 10000 + clusterScore - balancePenalty * 3
         if (score > bestScore) {
           bestScore = score
           best = { rows, result }
