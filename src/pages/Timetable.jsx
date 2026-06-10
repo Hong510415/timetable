@@ -61,13 +61,11 @@ export default function Timetable() {
   const { gradeConfigs, subjects, teachers, lunchConfig, timetableSlots: timetableRows, rooms, roomBlockedSlots } = state
 
   const [generating, setGenerating] = useState(false)
-  const [generateProgress, setGenerateProgress] = useState(0) // 0~100
   // (이전 errors state 제거 — 미배정 표시는 UnassignedStats가 timetableRows에서 직접 계산해서 실시간 동기화됨)
   const [tab, setTab] = useState('teacher')
   const [showGenerateModal, setShowGenerateModal] = useState(false)
   const [generateOptions, setGenerateOptions] = useState({ subjectSettings: {} })
   const [selectedClasses, setSelectedClasses] = useState([{ grade: 1, classNum: 1 }])
-  const [generateCandidates, setGenerateCandidates] = useState(null) // [{rows, unassigned}] top3
 
   function toggleSelectedClass(grade, classNum) {
     setSelectedClasses(prev => {
@@ -130,60 +128,16 @@ export default function Timetable() {
   async function executeGenerate() {
     setShowGenerateModal(false)
     setGenerating(true)
-    setGenerateProgress(0)
-    const RUNS = 50
-    const TOP_N = 3
-    const lunch = lunchConfig || { split_lunch: false, lunch_groups: [] }
-    const candidates = [] // {rows, unassigned}
-
     try {
-      // 1회차는 randomize 없이 (결정론적 최우선)
-      const r0 = buildSchedule(gradeConfigs, subjects, teachers, lunch, rooms, roomBlockedSlots, generateOptions)
-      const { rows: rows0 } = flattenResult(r0.result, r0.gradeLunchSlot, r0.totalSlots)
-      const u0 = rows0.filter(r => r.is_unassigned).length
-      candidates.push({ rows: rows0, unassigned: u0 })
-      setGenerateProgress(2)
-
-      // 나머지 RUNS-1회 랜덤 셔플 실행 — 매 청크마다 UI 갱신
-      const CHUNK = 5
-      for (let i = 1; i < RUNS; i++) {
-        const r = buildSchedule(gradeConfigs, subjects, teachers, lunch, rooms, roomBlockedSlots, { ...generateOptions, randomize: true })
-        const { rows } = flattenResult(r.result, r.gradeLunchSlot, r.totalSlots)
-        const unassigned = rows.filter(x => x.is_unassigned).length
-        candidates.push({ rows, unassigned })
-
-        if (i % CHUNK === 0) {
-          setGenerateProgress(Math.round((i / RUNS) * 100))
-          // 브라우저 렌더링 양보
-          await new Promise(res => setTimeout(res, 0))
-        }
-      }
-
-      // 미배정 적은 순 정렬 → 중복 제거(미배정 수 동일하면 첫 번째만) → top3
-      candidates.sort((a, b) => a.unassigned - b.unassigned)
-      const seen = new Set()
-      const top3 = []
-      for (const c of candidates) {
-        if (!seen.has(c.unassigned) || top3.length < TOP_N) {
-          seen.add(c.unassigned)
-          top3.push(c)
-          if (top3.length >= TOP_N) break
-        }
-      }
-
-      setGenerateProgress(100)
-      setGenerateCandidates(top3)
+      const result = buildSchedule(gradeConfigs, subjects, teachers, lunchConfig || { split_lunch: false, lunch_groups: [] }, rooms, roomBlockedSlots, generateOptions)
+      const { rows } = flattenResult(result.result, result.gradeLunchSlot, result.totalSlots)
+      const rowsWithId = rows.map(r => ({ ...r, id: crypto.randomUUID() }))
+      setTimetableSlots(rowsWithId)
     } catch (e) {
       console.error(e)
       alert('시간표 생성 중 오류가 발생했습니다.')
     }
     setGenerating(false)
-  }
-
-  function applyCandidate(rows) {
-    const rowsWithId = rows.map(r => ({ ...r, id: crypto.randomUUID() }))
-    setTimetableSlots(rowsWithId)
-    setGenerateCandidates(null)
   }
 
   function getSlotsForClass(grade, classNum) {
@@ -274,21 +228,14 @@ export default function Timetable() {
           >
             <Download size={14} />학급별 엑셀
           </button>
-          <div className="flex flex-col items-end gap-1">
-            <button
-              onClick={handleGenerate}
-              disabled={generating}
-              className="flex items-center gap-2 h-10 px-3 md:px-4 bg-black text-white text-[13px] font-semibold rounded-sm hover:bg-gray-800 disabled:opacity-50 whitespace-nowrap"
-            >
-              <RefreshCw size={14} className={generating ? 'animate-spin' : ''} />
-              {generating ? `탐색 중... ${generateProgress}%` : '시간표 자동 생성'}
-            </button>
-            {generating && (
-              <div className="w-full h-1 bg-gray-200 rounded-full overflow-hidden">
-                <div className="h-1 bg-black rounded-full transition-all duration-200" style={{ width: `${generateProgress}%` }} />
-              </div>
-            )}
-          </div>
+          <button
+            onClick={handleGenerate}
+            disabled={generating}
+            className="flex items-center gap-2 h-10 px-3 md:px-4 bg-black text-white text-[13px] font-semibold rounded-sm hover:bg-gray-800 disabled:opacity-50 whitespace-nowrap"
+          >
+            <RefreshCw size={14} className={generating ? 'animate-spin' : ''} />
+            {generating ? '생성 중...' : '시간표 자동 생성'}
+          </button>
         </div>
       </div>
 
@@ -417,14 +364,6 @@ export default function Timetable() {
           subjects={subjects}
           onConfirm={executeGenerate}
           onClose={() => setShowGenerateModal(false)}
-        />
-      )}
-
-      {generateCandidates && (
-        <GenerateCandidatesModal
-          candidates={generateCandidates}
-          onSelect={applyCandidate}
-          onClose={() => setGenerateCandidates(null)}
         />
       )}
     </div>
@@ -682,35 +621,6 @@ function TeacherTimetableGrid({ slots, totalSlots, gradeLunchSlot, subjects, tim
           })}
         </div>
       ))}
-    </div>
-  )
-}
-
-function GenerateCandidatesModal({ candidates, onSelect, onClose }) {
-  const LABELS = ['A안', 'B안', 'C안']
-  return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white w-full max-w-[480px] rounded-sm border border-gray-200 p-6">
-        <h2 className="text-[16px] font-bold mb-1">시간표 생성 결과</h2>
-        <p className="text-[12px] text-gray-500 mb-5">미배정 적은 순으로 최대 3가지 결과입니다. 적용할 안을 선택하세요.</p>
-        <div className="flex flex-col gap-3 mb-5">
-          {candidates.map((c, i) => (
-            <button
-              key={i}
-              onClick={() => onSelect(c.rows)}
-              className="flex items-center justify-between w-full px-4 py-3 border border-gray-200 rounded-sm hover:border-black hover:bg-gray-50 text-left transition-colors"
-            >
-              <span className="text-[14px] font-semibold text-gray-800">{LABELS[i]}</span>
-              <span className={`text-[13px] font-semibold ${c.unassigned === 0 ? 'text-green-600' : 'text-red-500'}`}>
-                {c.unassigned === 0 ? '✓ 미배정 없음' : `미배정 ${c.unassigned}건`}
-              </span>
-            </button>
-          ))}
-        </div>
-        <div className="flex justify-end">
-          <button onClick={onClose} className="h-9 px-4 border border-gray-300 rounded-sm text-[13px] hover:bg-gray-50">닫기</button>
-        </div>
-      </div>
     </div>
   )
 }
