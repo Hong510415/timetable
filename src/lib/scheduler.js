@@ -318,12 +318,19 @@ export function buildSchedule(
     const cap = Math.ceil(T / 5) + relaxCap
     const newCount = (teacherDayCount[teacherId]?.[day] || 0) + slotsCount
     if (newCount > cap) {
-      // 일반과목 cap+1 예외: 1차 패스에서만, 정확히 cap+1일 때, 같은 subject+grade만 그날 존재
-      if (block && !block.isMajor && relaxCap === 0 && newCount === cap + 1 &&
-          isAllSameSubjectGradeDay(teacherId, day, block.subjectId, block.grade)) {
-        const exDays = teacherSameDayExceptionDays[teacherId]
-        if (!exDays || exDays.has(day) || exDays.size < 2) {
-          // 예외 허용 — return false로 빠짐
+      // cap+1 예외: 1차 패스에서만, 정확히 cap+1일 때, 그날 같은 grade+subject 슬롯이 하나라도 있으면
+      // 같은 학년 과목이 한 날에 cascade되도록 허용 → 뒤 학급이 다음 날로 밀리는 것 방지
+      if (block && relaxCap === 0 && newCount === cap + 1) {
+        const hasSameGradeSubject = Object.entries(teacherSlotSubject[teacherId]?.[day] || {}).some(([s, sid]) =>
+          sid === block.subjectId && teacherSlotGrade[teacherId]?.[day]?.[s] === block.grade
+        )
+        if (hasSameGradeSubject) {
+          const exDays = teacherSameDayExceptionDays[teacherId]
+          if (!exDays || exDays.has(day) || exDays.size < 2) {
+            // 예외 허용 — return false로 빠짐
+          } else {
+            return true
+          }
         } else {
           return true
         }
@@ -681,13 +688,11 @@ export function buildSchedule(
     if (!teacherDayCount[teacherId]) teacherDayCount[teacherId] = [0, 0, 0, 0, 0]
     teacherDayCount[teacherId][day] += slots.length
 
-    // cap+1 예외 요일 기록 (일반과목이 정상 cap을 초과한 경우)
-    if (!block.isMajor) {
-      const T = teacherTotalHours[teacherId] || 0
-      if (T > 0 && teacherDayCount[teacherId][day] > Math.ceil(T / 5)) {
-        if (!teacherSameDayExceptionDays[teacherId]) teacherSameDayExceptionDays[teacherId] = new Set()
-        teacherSameDayExceptionDays[teacherId].add(day)
-      }
+    // cap+1 예외 요일 기록 (정상 cap을 초과한 경우 — 주요/일반 모두)
+    const T = teacherTotalHours[teacherId] || 0
+    if (T > 0 && teacherDayCount[teacherId][day] > Math.ceil(T / 5)) {
+      if (!teacherSameDayExceptionDays[teacherId]) teacherSameDayExceptionDays[teacherId] = new Set()
+      teacherSameDayExceptionDays[teacherId].add(day)
     }
 
     const ck = `${grade}_${classNum}`
