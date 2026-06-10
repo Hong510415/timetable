@@ -507,6 +507,9 @@ export function buildSchedule(
       let target
       if (totalBlocks === 2) {
         target = blockIdx === 0 ? 0 : 3 // 월/목
+      } else if (totalBlocks === 3) {
+        // 주3회: 마지막 블록 target을 금(4)→목(3)으로 낮춰 금요일 과부하 방지
+        target = Math.min(3, Math.round((blockIdx * 4) / (totalBlocks - 1)))
       } else {
         target = Math.round((blockIdx * 4) / (totalBlocks - 1))
       }
