@@ -97,34 +97,6 @@ export function buildSchedule(
   // 블록 = pair(2시간 한 묶음) 또는 single(1시간)
   // 같은 (class, subject)의 모든 블록은 서로 다른 요일에 배치
 
-  // 교사별 학년별 총 시수 (소수 학년 "빈 날 우선" 보너스용)
-  // 예: 56영어 교사 → { 5: 21, 6: 3 }. 시수 가장 적은 학년 = 소수 학년.
-  const teacherGradeHours = {}
-  for (const teacher of teachers) {
-    for (const a of teacher.teacher_assignments || []) {
-      const wh = a.weekly_hours || 0
-      if (wh <= 0) continue
-      if (!teacherGradeHours[teacher.id]) teacherGradeHours[teacher.id] = {}
-      teacherGradeHours[teacher.id][a.grade] = (teacherGradeHours[teacher.id][a.grade] || 0) + wh
-    }
-  }
-  // 교사별 소수 학년 집합 — 최대 시수 학년 대비 절반 이하인 모든 학년.
-  // (예: {2: 2h, 4: 3h, 5: 21h} → 소수학년 = {2, 4})
-  // 단일 학년만 가르치거나 모두 비슷한 시수면 빈 집합.
-  const teacherMinorityGrade = {} // teacherId → Set<grade> (이름 유지, 값을 Set으로 변경)
-  for (const [tid, gradeMap] of Object.entries(teacherGradeHours)) {
-    const grades = Object.keys(gradeMap)
-    if (grades.length < 2) { teacherMinorityGrade[tid] = new Set(); continue }
-    const maxH = Math.max(...grades.map(g => gradeMap[g]))
-    const minoritySet = new Set()
-    for (const [g, h] of Object.entries(gradeMap)) {
-      if (maxH >= h * 2) minoritySet.add(Number(g))
-    }
-    // 소수학년이 전체 학년의 전부거나 하나도 없으면 의미 없음
-    teacherMinorityGrade[tid] = (minoritySet.size > 0 && minoritySet.size < grades.length)
-      ? minoritySet : new Set()
-  }
-
   // 교사별 일반과목 총 시수 (우선순위 판단: 2h+ → 먼저, 1h → 나중)
   const teacherGeneralHours = {}
   for (const teacher of teachers) {
@@ -213,15 +185,6 @@ export function buildSchedule(
     if (a.generalPriority !== b.generalPriority) return a.generalPriority - b.generalPriority
     // round-robin: blockIdx 작은 것부터 (calendar order 보장)
     if (a.blockIdx !== b.blockIdx) return a.blockIdx - b.blockIdx
-    // 같은 round 안에서: 소수학년 블록을 먼저 (빈날 확보 → grade sandwich 방지)
-    const aMinority = teacherMinorityGrade[a.teacherId]?.has(a.grade) ? 0 : 1
-    const bMinority = teacherMinorityGrade[b.teacherId]?.has(b.grade) ? 0 : 1
-    if (aMinority !== bMinority) return aMinority - bMinority
-    // 같은 minority/majority 안에서: (teacherId, grade, subjectId) 그룹끼리 묶기
-    // 이 없으면 4학년 1반 → 5학년 1반 → 4학년 2반 순으로 처리되어 클러스터링 깨짐
-    const aGroup = `${a.teacherId}__${a.grade}__${a.subjectId}`
-    const bGroup = `${b.teacherId}__${b.grade}__${b.subjectId}`
-    if (aGroup !== bGroup) return aGroup < bGroup ? -1 : 1
     // 같은 round 안에서: 큰 덩어리(pair, size=2) 먼저
     if (a.size !== b.size) return b.size - a.size
     // 전담 수업 많은 학급 먼저 (제약 강한 학급 우선 — 사용자 제안)
@@ -262,8 +225,6 @@ export function buildSchedule(
   const teacherSlotGrade = {} // teacherId → [day][slot] = grade
   // 학급별 과목 트래킹 (#8 subject sandwich용)
   const teacherSlotSubject = {} // teacherId → [day][slot] = subjectId
-  // 학급별 반 번호 트래킹 (소수학년 빈날 보너스 — 같은 반 여러 회차 vs 다른 반 구별용)
-  const teacherSlotClass = {} // teacherId → [day][slot] = classNum
   // 학급-과목 사용 요일 set (#10 calendar order, #12 same-day rule)
   const classSubjectDays = {} // `${grade}_${cls}_${subjectId}` → Set<day>
   // 같은 학급-과목 같은 날 사용 슬롯 set (pair 처리용)
@@ -542,20 +503,11 @@ export function buildSchedule(
     const { teacherId, subjectId, grade, classNum, blockIdx, totalBlocks } = block
     let score = 0
 
-    // (a) 같은 교사 + 같은 과목 같은 날 (+3, 약화됨)
-    // 이전 +5에서 +3으로 줄임. (a)가 (d) day target보다 강하게 작동해서
-    // 5-1 block 1이 target Wed 대신 Fri 클러스터링 따라가서 block 2가 갈 곳 없어지는 문제 해결.
-    // 소수 학년 블록은 다른 학년 슬롯의 클러스터링 보너스를 받지 않음
-    // (다수 학년이 있는 날로 끌려가면 grade sandwich 발생)
+    // (a) 같은 교사 + 같은 과목 같은 날 (+3)
     let sameSubjSameDay = 0
     const tsd = teacherSlotSubject[teacherId]?.[day] || {}
-    const tsg = teacherSlotGrade[teacherId]?.[day] || {}
-    const isMinorityBlock = teacherMinorityGrade[teacherId]?.has(grade) ?? false
     for (const s of Object.keys(tsd)) {
-      if (tsd[s] === subjectId) {
-        if (isMinorityBlock && tsg[s] !== grade) continue
-        sameSubjSameDay++
-      }
+      if (tsd[s] === subjectId) sameSubjSameDay++
     }
     score += 3 * sameSubjSameDay
 
@@ -606,28 +558,6 @@ export function buildSchedule(
     }
 
     // (i) "1교시부터 땡기기"는 점수에 넣지 않음 — 동점일 때 tiebreaker로만 작용.
-
-    // (j) 소수 학년 "빈 날 우선" 보너스 (+10)
-    // 교사가 두 학년을 가르치고 한 학년 시수가 현저히 적을 때(소수 학년),
-    // 그 블록은 빈 날을 선호해 맨앞(slot 0)을 확보 → grade sandwich 방지.
-    // 단, 이미 같은 학년+과목이 배정된 날이 있으면 보너스 차단:
-    // 그 날로 클러스터링하면 되므로 빈날 보너스가 오히려 클러스터링을 깨뜨림.
-    if (teacherMinorityGrade[teacherId]?.has(grade)) {
-      const dayUsed = teacherDayCount[teacherId]?.[day] || 0
-      if (dayUsed === 0) {
-        // 다른 반(같은 학년+과목)이 이미 배정된 날이 있으면 → 그 날로 클러스터링해야 함
-        // 같은 반(다른 회차)만 있는 경우는 해당 안 됨 → 각 회차도 빈날 선호해야 sandwich 방지
-        const hasOtherClassSameGradeSubjectDay = Object.entries(teacherSlotSubject[teacherId] || {}).some(([d, daySlots]) => {
-          if (Number(d) === day) return false
-          return Object.entries(daySlots || {}).some(([s, sid]) =>
-            sid === subjectId &&
-            teacherSlotGrade[teacherId]?.[d]?.[s] === grade &&
-            teacherSlotClass[teacherId]?.[d]?.[s] !== classNum
-          )
-        })
-        if (!hasOtherClassSameGradeSubjectDay) score += 10
-      }
-    }
 
     return score
   }
@@ -692,8 +622,6 @@ export function buildSchedule(
       teacherSlotGrade[teacherId][day][slot] = grade
       if (!teacherSlotSubject[teacherId]) teacherSlotSubject[teacherId] = Array.from({ length: 5 }, () => ({}))
       teacherSlotSubject[teacherId][day][slot] = subjectId
-      if (!teacherSlotClass[teacherId]) teacherSlotClass[teacherId] = Array.from({ length: 5 }, () => ({}))
-      teacherSlotClass[teacherId][day][slot] = classNum
     }
 
     const csKey = `${grade}_${classNum}_${subjectId}`
