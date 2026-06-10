@@ -350,6 +350,7 @@ export default function Timetable() {
           gradeConfigs={gradeConfigs}
           rooms={rooms}
           grade={editModal.grade}
+          lunchConfig={lunchConfig}
           onSave={handleEditSave}
           onClose={() => setEditModal(null)}
           saving={saving}
@@ -705,7 +706,7 @@ function GenerateOptionsModal({ options, onChange, subjects, onConfirm, onClose 
   )
 }
 
-function EditCellModal({ modal, teachers, subjects, gradeConfigs, rooms, grade, onSave, onClose, saving }) {
+function EditCellModal({ modal, teachers, subjects, gradeConfigs, rooms, grade, lunchConfig, onSave, onClose, saving }) {
   const { day, slot, classLabel, teacherView, defaultTeacherId } = modal
   const DAY_LABELS = ['월', '화', '수', '목', '금']
   const needsGradeClass = teacherView && !modal.grade
@@ -846,10 +847,23 @@ function EditCellModal({ modal, teachers, subjects, gradeConfigs, rooms, grade, 
     }
   }
 
+  // 점심시간 충돌 감지 (분리 점심 운영 학교에서 해당 학년의 점심 교시와 겹치면 경고)
+  const lunchConflict = (() => {
+    if (!lunchConfig?.split_lunch) return false
+    const targetGrade = effectiveGrade
+    for (const group of (lunchConfig.lunch_groups || [])) {
+      if (group.grades?.includes(targetGrade) && group.slot === slot) return true
+    }
+    return false
+  })()
+
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
       <div className="bg-white w-full max-w-[400px] rounded-sm border border-gray-200 p-6">
-        <h2 className="text-[16px] font-bold mb-1">{DAY_LABELS[day]}요일 {slot + 1}교시 편집</h2>
+        <h2 className={`text-[16px] font-bold mb-1 ${lunchConflict ? 'text-red-600' : ''}`}>{DAY_LABELS[day]}요일 {slot + 1}교시 편집</h2>
+        {lunchConflict && (
+          <p className="text-[12px] text-red-500 font-semibold mb-2">⚠ {effectiveGrade}학년 점심시간과 겹칩니다</p>
+        )}
         {classLabel && !showClassSelector && <p className="text-[12px] text-gray-400 mb-4">{classLabel}</p>}
         {lockedTeacher && (
           <p className="text-[12px] text-gray-500 mb-4">
