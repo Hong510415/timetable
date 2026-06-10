@@ -905,12 +905,6 @@ function EditCellModal({ modal, teachers, subjects, gradeConfigs, rooms, grade, 
               <option value="">없음</option>
               {allowedSubjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
-            {lockedTeacher && !showClassSelector && allowedSubjects.length === 0 && (
-              <p className="text-[11px] text-gray-400 mt-1">{lockedTeacher.code}에게 {effectiveGrade}학년 {effectiveClass}반에 배정된 과목이 없습니다</p>
-            )}
-            {classViewMode && allowedSubjects.length === 0 && (
-              <p className="text-[11px] text-gray-400 mt-1">이 학급에 배정된 전담 과목이 없습니다 (전담 배정 페이지에서 먼저 배정하세요)</p>
-            )}
           </div>
           {/* 교사별 보기 기존 셀 편집: 과목 선택 후 담당 학급 드롭다운 */}
           {showClassSelector && subjectId && (
