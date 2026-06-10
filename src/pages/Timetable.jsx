@@ -410,6 +410,7 @@ export default function Timetable() {
                       slots={ts}
                       totalSlots={totalSlots}
                       gradeLunchSlot={gradeLunchSlot}
+                      gradeConfigs={gradeConfigs}
                       subjects={subjects}
                       timetableRows={timetableRows}
                       teachers={teachers}
@@ -611,8 +612,25 @@ function UnassignedStats({ teachers, subjects, timetableRows, filterClasses, pla
   )
 }
 
-function TeacherTimetableGrid({ slots, totalSlots, gradeLunchSlot, subjects, timetableRows, teachers, rooms, compact, selectedCell, onCellClick }) {
+function TeacherTimetableGrid({ slots, totalSlots, gradeLunchSlot, gradeConfigs, subjects, timetableRows, teachers, rooms, compact, selectedCell, onCellClick }) {
   const DAY_LABELS = ['월', '화', '수', '목', '금']
+  const DAY_FIELDS = ['periods_mon', 'periods_tue', 'periods_wed', 'periods_thu', 'periods_fri']
+
+  // 점심 슬롯이거나 해당 학년의 교시 편제를 벗어난 슬롯인지 확인
+  function isInvalidSlot(grade, day, slot) {
+    if (!grade) return false
+    const lunchSlot = gradeLunchSlot?.[grade] ?? -1
+    if (lunchSlot !== -1 && slot === lunchSlot) return true
+    const gc = gradeConfigs?.find(g => g.grade === grade)
+    if (!gc) return false
+    const periods = gc[DAY_FIELDS[day]] || 0
+    // 점심 슬롯을 제외하고 몇 번째 교시인지 계산
+    let validCount = 0
+    for (let s = 0; s <= slot; s++) {
+      if (s !== lunchSlot) validCount++
+    }
+    return validCount > periods
+  }
 
   function getConflicts(cell, day, slot) {
     if (!cell || !timetableRows) return []
@@ -659,6 +677,11 @@ function TeacherTimetableGrid({ slots, totalSlots, gradeLunchSlot, subjects, tim
                 )
               : []
             const isSelected = selectedCell?.day === day && selectedCell?.slot === slot
+            const invalidSlot = cell ? isInvalidSlot(cell.grade, day, slot) : false
+            const isRed = hasConflict || invalidSlot
+            const invalidTooltip = invalidSlot
+              ? (gradeLunchSlot?.[cell?.grade] === slot ? '점심시간 슬롯입니다' : '해당 학년의 교시 편제를 벗어난 슬롯입니다')
+              : ''
 
             return (
               <div
@@ -669,18 +692,18 @@ function TeacherTimetableGrid({ slots, totalSlots, gradeLunchSlot, subjects, tim
               >
                 {cell ? (
                   <>
-                    <span className={`${compact ? 'text-[12px]' : 'text-[13px]'} font-semibold ${hasConflict ? 'text-red-600' : 'text-gray-900'}`}>
+                    <span className={`${compact ? 'text-[12px]' : 'text-[13px]'} font-semibold ${isRed ? 'text-red-600' : 'text-gray-900'}`}>
                       {subject?.name ?? '—'}
                     </span>
-                    <span className={`${compact ? 'text-[10px]' : 'text-[11px]'} ${hasConflict ? 'text-red-400' : 'text-gray-400'}`}>
+                    <span className={`${compact ? 'text-[10px]' : 'text-[11px]'} ${isRed ? 'text-red-400' : 'text-gray-400'}`}>
                       {cell.label}
                     </span>
                     {room && (
-                      <span className="text-[10px] text-blue-500">{room.name}</span>
+                      <span className={`text-[10px] ${isRed ? 'text-red-400' : 'text-blue-500'}`}>{room.name}</span>
                     )}
-                    {hasConflict && (
+                    {isRed && (
                       <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1 z-30 hidden group-hover:block bg-gray-900 text-white text-[11px] rounded px-2 py-1 whitespace-nowrap">
-                        {tooltipText}
+                        {invalidSlot ? invalidTooltip : tooltipText}
                       </div>
                     )}
                   </>
