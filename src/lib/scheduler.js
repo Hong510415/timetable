@@ -593,7 +593,7 @@ export function buildSchedule(
     const hasDifferentGradeSameSubject = Object.entries(tsd).some(([s, sid]) =>
       sid === subjectId && tsg[s] !== grade
     )
-    if (hasDifferentGradeSameSubject) score -= 5
+    if (hasDifferentGradeSameSubject) score -= 7 * slots.length
 
     // (j) 소수 학년 "빈 날 우선" 보너스 (+4)
     // 교사가 두 학년을 가르치고 한 학년 시수가 현저히 적을 때(소수 학년),
