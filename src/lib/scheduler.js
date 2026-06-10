@@ -108,18 +108,21 @@ export function buildSchedule(
       teacherGradeHours[teacher.id][a.grade] = (teacherGradeHours[teacher.id][a.grade] || 0) + wh
     }
   }
-  // 교사별 소수 학년(시수 최소) 기록. 학년이 1개뿐이면 null(해당 없음).
-  const teacherMinorityGrade = {}
+  // 교사별 소수 학년 집합 — 최대 시수 학년 대비 절반 이하인 모든 학년.
+  // (예: {2: 2h, 4: 3h, 5: 21h} → 소수학년 = {2, 4})
+  // 단일 학년만 가르치거나 모두 비슷한 시수면 빈 집합.
+  const teacherMinorityGrade = {} // teacherId → Set<grade> (이름 유지, 값을 Set으로 변경)
   for (const [tid, gradeMap] of Object.entries(teacherGradeHours)) {
     const grades = Object.keys(gradeMap)
-    if (grades.length < 2) { teacherMinorityGrade[tid] = null; continue }
-    let minGrade = null, minH = Infinity
-    for (const g of grades) {
-      if (gradeMap[g] < minH) { minH = gradeMap[g]; minGrade = Number(g) }
-    }
-    // 다른 학년과 시수 차이가 크지 않으면 무시 (비슷하면 "소수" 아님)
+    if (grades.length < 2) { teacherMinorityGrade[tid] = new Set(); continue }
     const maxH = Math.max(...grades.map(g => gradeMap[g]))
-    teacherMinorityGrade[tid] = maxH >= minH * 2 ? minGrade : null
+    const minoritySet = new Set()
+    for (const [g, h] of Object.entries(gradeMap)) {
+      if (maxH >= h * 2) minoritySet.add(Number(g))
+    }
+    // 소수학년이 전체 학년의 전부거나 하나도 없으면 의미 없음
+    teacherMinorityGrade[tid] = (minoritySet.size > 0 && minoritySet.size < grades.length)
+      ? minoritySet : new Set()
   }
 
   // 교사별 일반과목 총 시수 (우선순위 판단: 2h+ → 먼저, 1h → 나중)
@@ -538,7 +541,7 @@ export function buildSchedule(
     let sameSubjSameDay = 0
     const tsd = teacherSlotSubject[teacherId]?.[day] || {}
     const tsg = teacherSlotGrade[teacherId]?.[day] || {}
-    const isMinorityBlock = teacherMinorityGrade[teacherId] === grade
+    const isMinorityBlock = teacherMinorityGrade[teacherId]?.has(grade) ?? false
     for (const s of Object.keys(tsd)) {
       if (tsd[s] === subjectId) {
         if (isMinorityBlock && tsg[s] !== grade) continue
@@ -600,7 +603,7 @@ export function buildSchedule(
     // 그 블록은 빈 날을 선호해 맨앞(slot 0)을 확보 → grade sandwich 방지.
     // 단, 이미 같은 학년+과목이 배정된 날이 있으면 보너스 차단:
     // 그 날로 클러스터링하면 되므로 빈날 보너스가 오히려 클러스터링을 깨뜨림.
-    if (teacherMinorityGrade[teacherId] === grade) {
+    if (teacherMinorityGrade[teacherId]?.has(grade)) {
       const dayUsed = teacherDayCount[teacherId]?.[day] || 0
       if (dayUsed === 0) {
         // 다른 반(같은 학년+과목)이 이미 배정된 날이 있으면 → 그 날로 클러스터링해야 함
