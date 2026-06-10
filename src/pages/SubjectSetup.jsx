@@ -70,7 +70,7 @@ export default function SubjectSetup() {
   function addSubject(grade) {
     updatePlanSubjects(activeTabId, [
       ...planSubjects,
-      { id: crypto.randomUUID(), grade, name: '', weekly_hours: 2, is_major: false },
+      { id: crypto.randomUUID(), grade, name: '', weekly_hours: 2, is_major: true },
     ])
   }
 
