@@ -213,6 +213,10 @@ export function buildSchedule(
     if (a.generalPriority !== b.generalPriority) return a.generalPriority - b.generalPriority
     // round-robin: blockIdx 작은 것부터 (calendar order 보장)
     if (a.blockIdx !== b.blockIdx) return a.blockIdx - b.blockIdx
+    // 같은 round 안에서: 소수학년 블록을 먼저 (빈날 확보 → grade sandwich 방지)
+    const aMinority = teacherMinorityGrade[a.teacherId]?.has(a.grade) ? 0 : 1
+    const bMinority = teacherMinorityGrade[b.teacherId]?.has(b.grade) ? 0 : 1
+    if (aMinority !== bMinority) return aMinority - bMinority
     // 같은 round 안에서: 큰 덩어리(pair, size=2) 먼저
     if (a.size !== b.size) return b.size - a.size
     // 전담 수업 많은 학급 먼저 (제약 강한 학급 우선 — 사용자 제안)
