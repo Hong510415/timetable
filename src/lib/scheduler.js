@@ -327,11 +327,13 @@ export function buildSchedule(
         if (hasSameGradeSubject) {
           const exDays = teacherSameDayExceptionDays[teacherId]
           if (!exDays || exDays.has(day) || exDays.size < 2) {
-            // 요일 균형 체크: max-min ≤ 2 유지
+            // 요일 균형 체크: 이미 배정된 요일끼리만 max-min ≤ 2 비교 (빈 요일 제외)
+            // 빈 요일 포함 시 cascade 시점에 "목6-금0=6>2"로 잘못 차단됨
             const counts = [0, 0, 0, 0, 0]
             for (let d = 0; d < 5; d++) counts[d] = teacherDayCount[teacherId]?.[d] || 0
             counts[day] = newCount
-            if (Math.max(...counts) - Math.min(...counts) > 2) return true
+            const filledCounts = counts.filter(c => c > 0)
+            if (filledCounts.length >= 2 && Math.max(...filledCounts) - Math.min(...filledCounts) > 2) return true
             // 예외 허용 — return false로 빠짐
           } else {
             return true
