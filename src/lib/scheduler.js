@@ -97,7 +97,18 @@ export function buildSchedule(
   // 블록 = pair(2시간 한 묶음) 또는 single(1시간)
   // 같은 (class, subject)의 모든 블록은 서로 다른 요일에 배치
 
-  const blocks = [] // { teacherId, subjectId, grade, classNum, type: 'pair'|'single', blockIdx, totalBlocks, isMajor }
+  // 교사별 일반과목 총 시수 (우선순위 판단: 2h+ → 먼저, 1h → 나중)
+  const teacherGeneralHours = {}
+  for (const teacher of teachers) {
+    for (const a of teacher.teacher_assignments || []) {
+      const subj = subjects.find(s => s.id === a.subject_id)
+      if (subj && !subj.is_major) {
+        teacherGeneralHours[teacher.id] = (teacherGeneralHours[teacher.id] || 0) + (a.weekly_hours || 0)
+      }
+    }
+  }
+
+  const blocks = [] // { teacherId, subjectId, grade, classNum, type: 'pair'|'single', blockIdx, totalBlocks, isMajor, generalPriority }
 
   for (const teacher of teachers) {
     for (const a of teacher.teacher_assignments || []) {
@@ -109,6 +120,9 @@ export function buildSchedule(
       const singleCount = wh - pairCount * 2
       const totalBlocks = pairCount + singleCount
       const isMajor = subjects.find(s => s.id === a.subject_id)?.is_major ?? true
+      // 0=먼저(일반 2h+), 1=중간(주요), 2=나중(일반 1h)
+      const generalTotal = teacherGeneralHours[teacher.id] || 0
+      const generalPriority = isMajor ? 1 : (generalTotal >= 2 ? 0 : 2)
 
       let idx = 0
       for (let p = 0; p < pairCount; p++) {
@@ -122,6 +136,7 @@ export function buildSchedule(
           blockIdx: idx++,
           totalBlocks,
           isMajor,
+          generalPriority,
         })
       }
       for (let s = 0; s < singleCount; s++) {
@@ -135,6 +150,7 @@ export function buildSchedule(
           blockIdx: idx++,
           totalBlocks,
           isMajor,
+          generalPriority,
         })
       }
     }
@@ -165,8 +181,8 @@ export function buildSchedule(
   function gsKey(b) { return `${b.teacherId}__${b.grade}__${b.subjectId}` }
 
   blocks.sort((a, b) => {
-    // 일반과목(isMajor=false) 먼저 — 클러스터링 슬롯 선점
-    if (a.isMajor !== b.isMajor) return a.isMajor ? 1 : -1
+    // 일반과목 2h+ 먼저(0) → 주요과목(1) → 일반과목 1h 나중(2)
+    if (a.generalPriority !== b.generalPriority) return a.generalPriority - b.generalPriority
     // round-robin: blockIdx 작은 것부터 (calendar order 보장)
     if (a.blockIdx !== b.blockIdx) return a.blockIdx - b.blockIdx
     // 같은 round 안에서: 큰 덩어리(pair, size=2) 먼저
