@@ -129,9 +129,52 @@ export default function Timetable() {
     setShowGenerateModal(false)
     setGenerating(true)
     try {
-      const result = buildSchedule(gradeConfigs, subjects, teachers, lunchConfig || { split_lunch: false, lunch_groups: [] }, rooms, roomBlockedSlots, generateOptions)
-      const { rows } = flattenResult(result.result, result.gradeLunchSlot, result.totalSlots)
-      const rowsWithId = rows.map(r => ({ ...r, id: crypto.randomUUID() }))
+      const RUNS = 20
+      const lunchCfg = lunchConfig || { split_lunch: false, lunch_groups: [] }
+      let best = null
+      let bestScore = -Infinity
+
+      for (let i = 0; i < RUNS; i++) {
+        // 각 반복이 UI를 블로킹하지 않도록 5회마다 yield
+        if (i % 5 === 0) await new Promise(r => setTimeout(r, 0))
+
+        const result = buildSchedule(gradeConfigs, subjects, teachers, lunchCfg, rooms, roomBlockedSlots, generateOptions)
+        const { rows } = flattenResult(result.result, result.gradeLunchSlot, result.totalSlots)
+
+        // 점수 계산: 미배정 적을수록 좋고, 같은 학년+과목이 같은 날에 묶일수록 좋음
+        const unassigned = result.errors.reduce((s, e) => s + e.unassigned, 0)
+
+        // 클러스터링 점수: (teacher, grade, subject) 그룹별로 같은 날에 묶인 반 쌍 수
+        const groupDays = {}
+        for (const row of rows) {
+          if (row.is_unassigned) continue
+          const key = `${row.teacher_id}__${row.grade}__${row.subject_id}`
+          if (!groupDays[key]) groupDays[key] = {}
+          if (!groupDays[key][row.class_num]) groupDays[key][row.class_num] = new Set()
+          groupDays[key][row.class_num].add(row.day_of_week)
+        }
+        let clusterScore = 0
+        for (const daysByClass of Object.values(groupDays)) {
+          const classes = Object.values(daysByClass)
+          for (let a = 0; a < classes.length; a++) {
+            for (let b = a + 1; b < classes.length; b++) {
+              // 두 반이 공유하는 요일 수만큼 보너스
+              for (const d of classes[a]) {
+                if (classes[b].has(d)) clusterScore++
+              }
+            }
+          }
+        }
+
+        // 미배정 0 우선, 그 다음 클러스터링 점수
+        const score = -unassigned * 10000 + clusterScore
+        if (score > bestScore) {
+          bestScore = score
+          best = { rows, result }
+        }
+      }
+
+      const rowsWithId = best.rows.map(r => ({ ...r, id: crypto.randomUUID() }))
       setTimetableSlots(rowsWithId)
     } catch (e) {
       console.error(e)
