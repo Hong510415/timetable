@@ -506,6 +506,7 @@ export function buildSchedule(
     // (a) 같은 교사 + 같은 과목 같은 날 (+3)
     let sameSubjSameDay = 0
     const tsd = teacherSlotSubject[teacherId]?.[day] || {}
+    const tsg = teacherSlotGrade[teacherId]?.[day] || {}
     for (const s of Object.keys(tsd)) {
       if (tsd[s] === subjectId) sameSubjSameDay++
     }
