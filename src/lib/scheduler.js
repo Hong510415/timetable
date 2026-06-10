@@ -806,18 +806,21 @@ export function buildSchedule(
 
               unplaceCell(teacherId, grade, classNum, subjectId, maxDay, slot, roomId)
 
-              // targetDay에서 유효 슬롯 탐색
+              // targetDay에서 유효 슬롯 탐색 — 점수 비교 후 최고 슬롯 선택 (gap 최소화)
               const candidates = getCandidateSlotSets({ ...block, size: 1 }, targetDay)
-              let placed = false
+              let bestNewSlots = null
+              let bestNewScore = -Infinity
               for (const newSlots of candidates) {
-                // calendar order를 직접 검사 (isPlacementValid의 #10은 classSubjectLastDay 기반)
-                if (isPlacementValid(block, targetDay, newSlots, {})) {
-                  applyPlacement(block, targetDay, newSlots)
-                  placed = true
-                  moved = true
-                  didMove = true
-                  break
-                }
+                if (!isPlacementValid(block, targetDay, newSlots, {})) continue
+                const sc = computeScore(block, targetDay, newSlots)
+                if (sc > bestNewScore) { bestNewScore = sc; bestNewSlots = newSlots }
+              }
+              let placed = false
+              if (bestNewSlots) {
+                applyPlacement(block, targetDay, bestNewSlots)
+                placed = true
+                moved = true
+                didMove = true
               }
 
               if (!placed) {
