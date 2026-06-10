@@ -327,6 +327,11 @@ export function buildSchedule(
         if (hasSameGradeSubject) {
           const exDays = teacherSameDayExceptionDays[teacherId]
           if (!exDays || exDays.has(day) || exDays.size < 2) {
+            // 요일 균형 체크: max-min ≤ 2 유지
+            const counts = [0, 0, 0, 0, 0]
+            for (let d = 0; d < 5; d++) counts[d] = teacherDayCount[teacherId]?.[d] || 0
+            counts[day] = newCount
+            if (Math.max(...counts) - Math.min(...counts) > 2) return true
             // 예외 허용 — return false로 빠짐
           } else {
             return true
