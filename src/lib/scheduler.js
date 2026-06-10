@@ -476,7 +476,16 @@ export function buildSchedule(
 
     // #12 same-day rule: 같은 (class, subject) 같은 날 중복 금지 (pair는 atomic이라 OK)
     const csDays = classSubjectDays[csKey]
-    if (csDays && csDays.has(day)) return false
+    if (csDays && csDays.has(day)) {
+      // 2차 패스: 기존 교시보다 이후 교시에 배치하면 허용 (round cascade 미배정 구제)
+      if (opts.relaxSameDay) {
+        const existingSlots = classSubjectDaySlots[`${csKey}_${day}`] || new Set()
+        const maxExisting = existingSlots.size > 0 ? Math.max(...existingSlots) : -1
+        if (Math.min(...slots) <= maxExisting) return false
+      } else {
+        return false
+      }
+    }
 
     // #8 subject sandwich
     if (wouldSubjectSandwich(teacherId, day, slots, subjectId)) return false
@@ -524,8 +533,9 @@ export function buildSchedule(
       if (totalBlocks === 2) {
         target = blockIdx === 0 ? 0 : 3 // 월/목
       } else if (totalBlocks === 3) {
-        // 주3회: 마지막 블록 target을 금(4)→목(3)으로 낮춰 금요일 과부하 방지
-        target = Math.min(3, Math.round((blockIdx * 4) / (totalBlocks - 1)))
+        // 주3회: 월(0)/화(1)/목(3) 고정
+        const targets3 = [0, 1, 3]
+        target = targets3[blockIdx] ?? 3
       } else {
         target = Math.round((blockIdx * 4) / (totalBlocks - 1))
       }
@@ -657,7 +667,7 @@ export function buildSchedule(
   // (편차 ±2는 violatesDayBalance에서 max-min ≤ 2 체크로 유지)
   const stillFailed = []
   for (const block of failedBlocks) {
-    if (!placeBlock(block, { relaxCap: 1 })) stillFailed.push(block)
+    if (!placeBlock(block, { relaxCap: 1, relaxSameDay: true })) stillFailed.push(block)
   }
 
   // 최종 미배정 → errorMap
