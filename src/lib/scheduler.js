@@ -250,6 +250,8 @@ export function buildSchedule(
   const teacherSlotGrade = {} // teacherId → [day][slot] = grade
   // 학급별 과목 트래킹 (#8 subject sandwich용)
   const teacherSlotSubject = {} // teacherId → [day][slot] = subjectId
+  // 학급별 반 번호 트래킹 (소수학년 빈날 보너스 — 같은 반 여러 회차 vs 다른 반 구별용)
+  const teacherSlotClass = {} // teacherId → [day][slot] = classNum
   // 학급-과목 사용 요일 set (#10 calendar order, #12 same-day rule)
   const classSubjectDays = {} // `${grade}_${cls}_${subjectId}` → Set<day>
   // 같은 학급-과목 같은 날 사용 슬롯 set (pair 처리용)
@@ -601,13 +603,17 @@ export function buildSchedule(
     if (teacherMinorityGrade[teacherId] === grade) {
       const dayUsed = teacherDayCount[teacherId]?.[day] || 0
       if (dayUsed === 0) {
-        const hasSameGradeSubjectDay = Object.entries(teacherSlotSubject[teacherId] || {}).some(([d, daySlots]) => {
+        // 다른 반(같은 학년+과목)이 이미 배정된 날이 있으면 → 그 날로 클러스터링해야 함
+        // 같은 반(다른 회차)만 있는 경우는 해당 안 됨 → 각 회차도 빈날 선호해야 sandwich 방지
+        const hasOtherClassSameGradeSubjectDay = Object.entries(teacherSlotSubject[teacherId] || {}).some(([d, daySlots]) => {
           if (Number(d) === day) return false
           return Object.entries(daySlots || {}).some(([s, sid]) =>
-            sid === subjectId && teacherSlotGrade[teacherId]?.[d]?.[s] === grade
+            sid === subjectId &&
+            teacherSlotGrade[teacherId]?.[d]?.[s] === grade &&
+            teacherSlotClass[teacherId]?.[d]?.[s] !== classNum
           )
         })
-        if (!hasSameGradeSubjectDay) score += 10
+        if (!hasOtherClassSameGradeSubjectDay) score += 10
       }
     }
 
@@ -674,6 +680,8 @@ export function buildSchedule(
       teacherSlotGrade[teacherId][day][slot] = grade
       if (!teacherSlotSubject[teacherId]) teacherSlotSubject[teacherId] = Array.from({ length: 5 }, () => ({}))
       teacherSlotSubject[teacherId][day][slot] = subjectId
+      if (!teacherSlotClass[teacherId]) teacherSlotClass[teacherId] = Array.from({ length: 5 }, () => ({}))
+      teacherSlotClass[teacherId][day][slot] = classNum
     }
 
     const csKey = `${grade}_${classNum}_${subjectId}`
