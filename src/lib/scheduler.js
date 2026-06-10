@@ -97,7 +97,43 @@ export function buildSchedule(
   // 블록 = pair(2시간 한 묶음) 또는 single(1시간)
   // 같은 (class, subject)의 모든 블록은 서로 다른 요일에 배치
 
-  const blocks = [] // { teacherId, subjectId, grade, classNum, type: 'pair'|'single', blockIdx, totalBlocks }
+  // 교사별 학년별 총 시수 (소수 학년 "빈 날 우선" 보너스용)
+  // 예: 56영어 교사 → { 5: 21, 6: 3 }. 시수 가장 적은 학년 = 소수 학년.
+  const teacherGradeHours = {}
+  for (const teacher of teachers) {
+    for (const a of teacher.teacher_assignments || []) {
+      const wh = a.weekly_hours || 0
+      if (wh <= 0) continue
+      if (!teacherGradeHours[teacher.id]) teacherGradeHours[teacher.id] = {}
+      teacherGradeHours[teacher.id][a.grade] = (teacherGradeHours[teacher.id][a.grade] || 0) + wh
+    }
+  }
+  // 교사별 소수 학년(시수 최소) 기록. 학년이 1개뿐이면 null(해당 없음).
+  const teacherMinorityGrade = {}
+  for (const [tid, gradeMap] of Object.entries(teacherGradeHours)) {
+    const grades = Object.keys(gradeMap)
+    if (grades.length < 2) { teacherMinorityGrade[tid] = null; continue }
+    let minGrade = null, minH = Infinity
+    for (const g of grades) {
+      if (gradeMap[g] < minH) { minH = gradeMap[g]; minGrade = Number(g) }
+    }
+    // 다른 학년과 시수 차이가 크지 않으면 무시 (비슷하면 "소수" 아님)
+    const maxH = Math.max(...grades.map(g => gradeMap[g]))
+    teacherMinorityGrade[tid] = maxH >= minH * 2 ? minGrade : null
+  }
+
+  // 교사별 일반과목 총 시수 (우선순위 판단: 2h+ → 먼저, 1h → 나중)
+  const teacherGeneralHours = {}
+  for (const teacher of teachers) {
+    for (const a of teacher.teacher_assignments || []) {
+      const subj = subjects.find(s => s.id === a.subject_id)
+      if (subj && !subj.is_major) {
+        teacherGeneralHours[teacher.id] = (teacherGeneralHours[teacher.id] || 0) + (a.weekly_hours || 0)
+      }
+    }
+  }
+
+  const blocks = [] // { teacherId, subjectId, grade, classNum, type: 'pair'|'single', blockIdx, totalBlocks, isMajor, generalPriority }
 
   for (const teacher of teachers) {
     for (const a of teacher.teacher_assignments || []) {
@@ -108,6 +144,10 @@ export function buildSchedule(
       const pairCount = usePair ? Math.floor(wh / 2) : 0
       const singleCount = wh - pairCount * 2
       const totalBlocks = pairCount + singleCount
+      const isMajor = subjects.find(s => s.id === a.subject_id)?.is_major ?? true
+      // 0=먼저(일반 2h+), 1=중간(주요), 2=나중(일반 1h)
+      const generalTotal = teacherGeneralHours[teacher.id] || 0
+      const generalPriority = isMajor ? 1 : (generalTotal >= 2 ? 0 : 2)
 
       let idx = 0
       for (let p = 0; p < pairCount; p++) {
@@ -120,6 +160,8 @@ export function buildSchedule(
           size: 2,
           blockIdx: idx++,
           totalBlocks,
+          isMajor,
+          generalPriority,
         })
       }
       for (let s = 0; s < singleCount; s++) {
@@ -132,6 +174,8 @@ export function buildSchedule(
           size: 1,
           blockIdx: idx++,
           totalBlocks,
+          isMajor,
+          generalPriority,
         })
       }
     }
@@ -162,6 +206,8 @@ export function buildSchedule(
   function gsKey(b) { return `${b.teacherId}__${b.grade}__${b.subjectId}` }
 
   blocks.sort((a, b) => {
+    // 일반과목 2h+ 먼저(0) → 주요과목(1) → 일반과목 1h 나중(2)
+    if (a.generalPriority !== b.generalPriority) return a.generalPriority - b.generalPriority
     // round-robin: blockIdx 작은 것부터 (calendar order 보장)
     if (a.blockIdx !== b.blockIdx) return a.blockIdx - b.blockIdx
     // 같은 round 안에서: 큰 덩어리(pair, size=2) 먼저
@@ -217,6 +263,9 @@ export function buildSchedule(
   // 학년별 진행도 (소프트 (g))
   const gradeBlockProgress = {} // grade → maxBlockIdx so far
 
+  // 일반과목 cap+1 예외 허용 요일 추적 (교사별, 최대 2일)
+  const teacherSameDayExceptionDays = {} // teacherId → Set<day>
+
   // 교사별 총 시수 (소프트 (e) ceil 계산용)
   const teacherTotalHours = {}
   for (const b of blocks) teacherTotalHours[b.teacherId] = (teacherTotalHours[b.teacherId] || 0) + b.size
@@ -250,14 +299,38 @@ export function buildSchedule(
     return occLunch.length >= allLunchSlotIndexes.length - 1
   }
 
+  // 해당 교사의 그날 슬롯이 전부 주어진 subjectId+grade인지 확인 (cap+1 예외 조건)
+  function isAllSameSubjectGradeDay(teacherId, day, subjectId, grade) {
+    const subjectSlots = teacherSlotSubject[teacherId]?.[day] || {}
+    const gradeSlots = teacherSlotGrade[teacherId]?.[day] || {}
+    for (const s of Object.keys(subjectSlots)) {
+      if (subjectSlots[s] !== subjectId || gradeSlots[s] !== grade) return false
+    }
+    return true
+  }
+
   // 교사 요일 부하 균형 (#13): cap = ceil(T/5)
   // 2-pass: 1차에는 strict cap, 2차에는 +1 relax (편차 ±2 유지하면서 미배정 구제)
-  function violatesDayBalance(teacherId, day, slotsCount, relaxCap = 0) {
+  // 일반과목 + 같은 subject+grade만 그날 존재 시 cap+1 추가 허용 (최대 2일)
+  function violatesDayBalance(teacherId, day, slotsCount, relaxCap = 0, block = null) {
     const T = teacherTotalHours[teacherId] || 0
     if (T === 0) return false
     const cap = Math.ceil(T / 5) + relaxCap
     const newCount = (teacherDayCount[teacherId]?.[day] || 0) + slotsCount
-    if (newCount > cap) return true
+    if (newCount > cap) {
+      // 일반과목 cap+1 예외: 1차 패스에서만, 정확히 cap+1일 때, 같은 subject+grade만 그날 존재
+      if (block && !block.isMajor && relaxCap === 0 && newCount === cap + 1 &&
+          isAllSameSubjectGradeDay(teacherId, day, block.subjectId, block.grade)) {
+        const exDays = teacherSameDayExceptionDays[teacherId]
+        if (!exDays || exDays.has(day) || exDays.size < 2) {
+          // 예외 허용 — return false로 빠짐
+        } else {
+          return true
+        }
+      } else {
+        return true
+      }
+    }
     // relax 적용 시 max-min ≤ 2 보장
     if (relaxCap > 0) {
       const counts = [0, 0, 0, 0, 0]
@@ -332,6 +405,62 @@ export function buildSchedule(
     return false
   }
 
+  // 일반/주요 연속성 규칙:
+  // - 일반과목 슬롯들 사이에 주요과목 슬롯이 끼면 안 됨
+  // - 일반과목 내에서 같은 학년 그룹끼리 연속 (다른 학년이 중간에 끼면 안 됨)
+  function wouldViolateGeneralContinuity(teacherId, day, addSlots, addIsMajor, addGrade) {
+    const subjectSlots = teacherSlotSubject[teacherId]?.[day] || {}
+    const gradeSlots = teacherSlotGrade[teacherId]?.[day] || {}
+
+    // 슬롯 → {isMajor, grade} 맵 구성
+    const slotInfo = {}
+    for (const s of Object.keys(subjectSlots)) {
+      const subjId = subjectSlots[s]
+      slotInfo[Number(s)] = {
+        isMajor: subjects.find(sub => sub.id === subjId)?.is_major ?? true,
+        grade: gradeSlots[s],
+      }
+    }
+    for (const s of addSlots) {
+      slotInfo[s] = { isMajor: addIsMajor, grade: addGrade }
+    }
+
+    const sortedSlots = Object.keys(slotInfo).map(Number).sort((a, b) => a - b)
+    if (sortedSlots.length <= 1) return false
+
+    const generalSlots = sortedSlots.filter(s => !slotInfo[s].isMajor)
+    if (generalSlots.length === 0) return false
+
+    const generalMin = Math.min(...generalSlots)
+    const generalMax = Math.max(...generalSlots)
+
+    // 규칙1: 주요과목이 일반과목 범위 사이에 끼면 안 됨
+    for (const s of sortedSlots) {
+      if (slotInfo[s].isMajor && s > generalMin && s < generalMax) return true
+    }
+
+    // 규칙2: 같은 학년 일반과목 그룹이 다른 학년에 의해 분리되면 안 됨
+    const gradeRanges = {}
+    for (const s of generalSlots) {
+      const g = slotInfo[s].grade
+      if (!gradeRanges[g]) gradeRanges[g] = [s, s]
+      else {
+        gradeRanges[g][0] = Math.min(gradeRanges[g][0], s)
+        gradeRanges[g][1] = Math.max(gradeRanges[g][1], s)
+      }
+    }
+    const gradeEntries = Object.entries(gradeRanges)
+    for (let i = 0; i < gradeEntries.length; i++) {
+      for (let j = i + 1; j < gradeEntries.length; j++) {
+        const [, [minA, maxA]] = gradeEntries[i]
+        const [, [minB, maxB]] = gradeEntries[j]
+        if (minA < maxB && minB < maxA) return true // 범위 겹침 = 학년 인터리브
+      }
+    }
+
+    return false
+  }
+
   // 슬롯 N개 (block size)가 day에 valid한지 검사 — 모든 하드 제약 적용
   function isPlacementValid(block, day, slots, opts = {}) {
     const { teacherId, subjectId, grade, classNum } = block
@@ -353,7 +482,7 @@ export function buildSchedule(
     }
 
     // #13 교사 요일 부하 cap (relaxCap 적용 가능 — 2차 패스)
-    if (violatesDayBalance(teacherId, day, slots.length, relaxCap)) return false
+    if (violatesDayBalance(teacherId, day, slots.length, relaxCap, block)) return false
 
     // #14 학급 요일 부하 cap — 한 학급의 일일 전담 수업이 ceil(C/5)을 넘지 않게
     if (violatesClassDayBalance(grade, classNum, day, slots.length, relaxCap)) return false
@@ -372,12 +501,23 @@ export function buildSchedule(
 
     // #12 same-day rule: 같은 (class, subject) 같은 날 중복 금지 (pair는 atomic이라 OK)
     const csDays = classSubjectDays[csKey]
-    if (csDays && csDays.has(day)) return false
+    if (csDays && csDays.has(day)) {
+      // 2차 패스: 기존 교시보다 이후 교시에 배치하면 허용 (round cascade 미배정 구제)
+      if (opts.relaxSameDay) {
+        const existingSlots = classSubjectDaySlots[`${csKey}_${day}`] || new Set()
+        const maxExisting = existingSlots.size > 0 ? Math.max(...existingSlots) : -1
+        if (Math.min(...slots) <= maxExisting) return false
+      } else {
+        return false
+      }
+    }
 
     // #8 subject sandwich
     if (wouldSubjectSandwich(teacherId, day, slots, subjectId)) return false
     // #9 grade sandwich
     if (wouldGradeSandwich(teacherId, day, slots, grade)) return false
+    // #15 일반/주요 연속성: 일반과목은 서로 연속, 학년 그룹도 연속
+    if (wouldViolateGeneralContinuity(teacherId, day, slots, block.isMajor, grade)) return false
 
     return true
   }
@@ -417,6 +557,10 @@ export function buildSchedule(
       let target
       if (totalBlocks === 2) {
         target = blockIdx === 0 ? 0 : 3 // 월/목
+      } else if (totalBlocks === 3) {
+        // 주3회: 월(0)/화(1)/목(3) 고정
+        const targets3 = [0, 1, 3]
+        target = targets3[blockIdx] ?? 3
       } else {
         target = Math.round((blockIdx * 4) / (totalBlocks - 1))
       }
@@ -442,6 +586,15 @@ export function buildSchedule(
     }
 
     // (i) "1교시부터 땡기기"는 점수에 넣지 않음 — 동점일 때 tiebreaker로만 작용.
+
+    // (j) 소수 학년 "빈 날 우선" 보너스 (+4)
+    // 교사가 두 학년을 가르치고 한 학년 시수가 현저히 적을 때(소수 학년),
+    // 그 블록은 해당 날 맨앞(slot 0) 위치를 확보하도록 빈 날을 선호.
+    // → grade sandwich 없이 [소수학년, 다수학년×N] 패턴이 자연스럽게 형성됨.
+    if (teacherMinorityGrade[teacherId] === grade) {
+      const dayUsed = teacherDayCount[teacherId]?.[day] || 0
+      if (dayUsed === 0) score += 4
+    }
 
     return score
   }
@@ -520,6 +673,15 @@ export function buildSchedule(
     if (!teacherDayCount[teacherId]) teacherDayCount[teacherId] = [0, 0, 0, 0, 0]
     teacherDayCount[teacherId][day] += slots.length
 
+    // cap+1 예외 요일 기록 (일반과목이 정상 cap을 초과한 경우)
+    if (!block.isMajor) {
+      const T = teacherTotalHours[teacherId] || 0
+      if (T > 0 && teacherDayCount[teacherId][day] > Math.ceil(T / 5)) {
+        if (!teacherSameDayExceptionDays[teacherId]) teacherSameDayExceptionDays[teacherId] = new Set()
+        teacherSameDayExceptionDays[teacherId].add(day)
+      }
+    }
+
     const ck = `${grade}_${classNum}`
     if (!classDayCount[ck]) classDayCount[ck] = [0, 0, 0, 0, 0]
     classDayCount[ck][day] += slots.length
@@ -539,7 +701,7 @@ export function buildSchedule(
   // (편차 ±2는 violatesDayBalance에서 max-min ≤ 2 체크로 유지)
   const stillFailed = []
   for (const block of failedBlocks) {
-    if (!placeBlock(block, { relaxCap: 1 })) stillFailed.push(block)
+    if (!placeBlock(block, { relaxCap: 1, relaxSameDay: true })) stillFailed.push(block)
   }
 
   // 최종 미배정 → errorMap
