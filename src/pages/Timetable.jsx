@@ -751,9 +751,15 @@ function EditCellModal({ modal, teachers, subjects, gradeConfigs, rooms, grade, 
   let allowedSubjects
   if (lockedTeacher && showClassSelector) {
     // 교사가 담당하는 모든 과목 — 과목명 기준으로 중복 제거 (3학년 영어·6학년 영어 → 영어 하나)
+    // 현재 셀의 subject_id를 우선 대표로 선택해야 select value가 일치함
     const assigns = lockedTeacher.teacher_assignments || []
     const seenNames = new Set()
-    allowedSubjects = subjects.filter(s => {
+    const sorted = [...subjects].sort((a, b) => {
+      if (a.id === subjectId) return -1
+      if (b.id === subjectId) return 1
+      return 0
+    })
+    allowedSubjects = sorted.filter(s => {
       if (seenNames.has(s.name)) return false
       if (assigns.some(a => a.subject_id === s.id)) { seenNames.add(s.name); return true }
       return false
