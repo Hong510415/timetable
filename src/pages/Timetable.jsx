@@ -736,9 +736,13 @@ function EditCellModal({ modal, teachers, subjects, gradeConfigs, rooms, grade, 
   const effectiveGrade = (needsGradeClass || showClassSelector) ? formGrade : grade
   const effectiveClass = (needsGradeClass || showClassSelector) ? formClass : modal.classNum
 
-  // showClassSelector 모드: 선택된 과목에 대해 이 교사가 담당하는 학년·반 목록
-  const assignsForSelectedSubject = (showClassSelector && subjectId && lockedTeacher)
-    ? (lockedTeacher.teacher_assignments || []).filter(a => a.subject_id === subjectId)
+  // showClassSelector 모드: 선택된 과목 이름으로 이 교사 담당 학년·반 목록 파악
+  // (같은 이름의 과목이 여러 학년에 있어도 하나로 묶어 처리)
+  const selectedSubjectName = showClassSelector ? (subjects.find(s => s.id === subjectId)?.name ?? '') : null
+  const assignsForSelectedSubject = (showClassSelector && selectedSubjectName && lockedTeacher)
+    ? (lockedTeacher.teacher_assignments || []).filter(a =>
+        subjects.find(s => s.id === a.subject_id)?.name === selectedSubjectName
+      )
     : []
   const allowedGradesForSubject = [...new Set(assignsForSelectedSubject.map(a => a.grade))].sort((a, b) => a - b)
   const allowedClassesForSubject = [...new Set(assignsForSelectedSubject.filter(a => a.grade === formGrade).map(a => a.class_num))].sort((a, b) => a - b)
@@ -746,12 +750,12 @@ function EditCellModal({ modal, teachers, subjects, gradeConfigs, rooms, grade, 
   // 허용 과목 산정
   let allowedSubjects
   if (lockedTeacher && showClassSelector) {
-    // 교사가 담당하는 모든 과목 (학급 필터 없음 — 과목 선택 후 학급 좁힘)
+    // 교사가 담당하는 모든 과목 — 과목명 기준으로 중복 제거 (3학년 영어·6학년 영어 → 영어 하나)
     const assigns = lockedTeacher.teacher_assignments || []
-    const seenIds = new Set()
+    const seenNames = new Set()
     allowedSubjects = subjects.filter(s => {
-      if (seenIds.has(s.id)) return false
-      if (assigns.some(a => a.subject_id === s.id)) { seenIds.add(s.id); return true }
+      if (seenNames.has(s.name)) return false
+      if (assigns.some(a => a.subject_id === s.id)) { seenNames.add(s.name); return true }
       return false
     })
   } else if (lockedTeacher) {
@@ -818,11 +822,17 @@ function EditCellModal({ modal, teachers, subjects, gradeConfigs, rooms, grade, 
     if (classViewMode) {
       setTeacherId(findTeacherForSubject(sid))
     }
-    // showClassSelector 모드: 과목 변경 시 학년·반을 해당 과목 담당 학급으로 자동 조정
+    // showClassSelector 모드: 과목 변경 시 학년·반을 해당 과목명 담당 학급으로 자동 조정
     if (showClassSelector && sid && lockedTeacher) {
-      const assigns = (lockedTeacher.teacher_assignments || []).filter(a => a.subject_id === sid)
+      const name = subjects.find(s => s.id === sid)?.name
+      const assigns = name
+        ? (lockedTeacher.teacher_assignments || []).filter(a => subjects.find(s => s.id === a.subject_id)?.name === name)
+        : []
       const grades = [...new Set(assigns.map(a => a.grade))].sort((a, b) => a - b)
       const newGrade = grades.includes(formGrade) ? formGrade : (grades[0] ?? formGrade)
+      // 새 학년에 맞는 subject_id로 교체
+      const subjForGrade = subjects.find(s => s.name === name && assigns.some(a => a.subject_id === s.id && a.grade === newGrade))
+      if (subjForGrade && subjForGrade.id !== sid) setSubjectId(subjForGrade.id)
       const classes = assigns.filter(a => a.grade === newGrade).map(a => a.class_num).sort((a, b) => a - b)
       const newClass = classes.includes(formClass) ? formClass : (classes[0] ?? formClass)
       setFormGrade(newGrade)
@@ -893,6 +903,10 @@ function EditCellModal({ modal, teachers, subjects, gradeConfigs, rooms, grade, 
                     onChange={e => {
                       const g = Number(e.target.value)
                       const classes = assignsForSelectedSubject.filter(a => a.grade === g).map(a => a.class_num).sort((a, b) => a - b)
+                      // 새 학년에 맞는 subject_id로 교체 (3학년 영어 → 6학년 영어)
+                      const subjForGrade = subjects.find(s => s.name === selectedSubjectName && s.grade === g &&
+                        assignsForSelectedSubject.some(a => a.subject_id === s.id && a.grade === g))
+                      if (subjForGrade) setSubjectId(subjForGrade.id)
                       setFormGrade(g)
                       setFormClass(classes[0] ?? 1)
                     }}
