@@ -13,7 +13,7 @@ export const initialState = {
     periods_tue: 5,
     periods_wed: 5,
     periods_thu: 5,
-    periods_fri: 4,
+    periods_fri: 5,
   })),
   lunchConfig: { split_lunch: false, lunch_groups: [] },
   subjects: [],

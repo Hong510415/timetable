@@ -458,7 +458,7 @@ function UnassignedStats({ teachers, subjects, timetableRows, filterClasses, pla
         r.class_num === a.class_num &&
         !r.is_unassigned
       ).length
-      const deficit = target - scheduled
+      const deficit = target - scheduled  // 양수 = 미배정, 음수 = 과배정
       const subj = subjects.find(s => s.id === a.subject_id)
       rows.push({
         teacherCode: t.code,
@@ -471,40 +471,56 @@ function UnassignedStats({ teachers, subjects, timetableRows, filterClasses, pla
       })
     }
   }
-  // 부족한 것만 우선
-  rows.sort((a, b) => b.deficit - a.deficit || a.teacherCode.localeCompare(b.teacherCode))
-  const deficitRows = rows.filter(r => r.deficit > 0)
-  if (deficitRows.length === 0) return null
+
+  const deficitRows = rows.filter(r => r.deficit > 0).sort((a, b) => b.deficit - a.deficit || a.teacherCode.localeCompare(b.teacherCode))
+  const surplusRows = rows.filter(r => r.deficit < 0).sort((a, b) => a.deficit - b.deficit || a.teacherCode.localeCompare(b.teacherCode))
+
+  if (deficitRows.length === 0 && surplusRows.length === 0) return null
 
   const isClassView = filterClasses != null
-  const isSingleClass = isClassView && filterClasses.length === 1
+  const isSingleClass = isClassView && filterClasses?.length === 1
+  const hasBoth = deficitRows.length > 0 && surplusRows.length > 0
+
   const gridStyle = isSingleClass
     ? { gridTemplateColumns: '1fr 1fr 70px 70px 70px' }
     : { gridTemplateColumns: '1fr 1fr 110px 60px 60px 60px' }
 
-  return (
-    <div className={`${placement === 'top' ? 'mb-4' : 'mt-6'} max-w-[540px] bg-white border border-red-200 rounded-sm overflow-hidden`}>
-      <div className="px-4 py-2.5 bg-red-50 border-b border-red-200 text-[12px] font-semibold text-red-700">
-        미배정 시수 ({deficitRows.length}건){isSingleClass ? ` — ${filterClasses[0].grade}학년 ${filterClasses[0].classNum}반` : ''}
-      </div>
-      <div className="grid bg-gray-50 border-b border-gray-200 text-[11px] font-semibold text-gray-500" style={gridStyle}>
-        <div className="px-3 py-2 border-r border-gray-200">교사</div>
-        <div className="px-3 py-2 border-r border-gray-200">과목</div>
-        {!isSingleClass && <div className="px-3 py-2 border-r border-gray-200">학년 · 반</div>}
-        <div className="px-3 py-2 border-r border-gray-200 text-center">목표</div>
-        <div className="px-3 py-2 border-r border-gray-200 text-center">배정</div>
-        <div className="px-3 py-2 text-center">부족</div>
-      </div>
-      {deficitRows.map((r, i) => (
-        <div key={i} className="grid border-b border-gray-100 last:border-b-0 text-[12px]" style={gridStyle}>
-          <div className="px-3 py-2 border-r border-gray-100 font-semibold">{r.teacherCode}</div>
-          <div className="px-3 py-2 border-r border-gray-100">{r.subjectName}</div>
-          {!isSingleClass && <div className="px-3 py-2 border-r border-gray-100">{r.grade}학년 {r.classNum}반</div>}
-          <div className="px-3 py-2 border-r border-gray-100 text-center text-gray-600">{r.target}h</div>
-          <div className="px-3 py-2 border-r border-gray-100 text-center text-gray-600">{r.scheduled}h</div>
-          <div className="px-3 py-2 text-center font-bold text-red-600">−{r.deficit}h</div>
+  function renderTable(tableRows, type) {
+    const isDeficit = type === 'deficit'
+    const classSuffix = isSingleClass ? ` — ${filterClasses[0].grade}학년 ${filterClasses[0].classNum}반` : ''
+    return (
+      <div className={`bg-white border rounded-sm overflow-hidden ${hasBoth ? 'flex-1 min-w-0' : 'max-w-[540px]'} ${isDeficit ? 'border-red-200' : 'border-orange-200'}`}>
+        <div className={`px-4 py-2.5 border-b text-[12px] font-semibold ${isDeficit ? 'bg-red-50 border-red-200 text-red-700' : 'bg-orange-50 border-orange-200 text-orange-700'}`}>
+          {isDeficit ? '미배정 시수' : '과배정 시수'} ({tableRows.length}건){classSuffix}
         </div>
-      ))}
+        <div className="grid bg-gray-50 border-b border-gray-200 text-[11px] font-semibold text-gray-500" style={gridStyle}>
+          <div className="px-3 py-2 border-r border-gray-200">교사</div>
+          <div className="px-3 py-2 border-r border-gray-200">과목</div>
+          {!isSingleClass && <div className="px-3 py-2 border-r border-gray-200">학년 · 반</div>}
+          <div className="px-3 py-2 border-r border-gray-200 text-center">목표</div>
+          <div className="px-3 py-2 border-r border-gray-200 text-center">배정</div>
+          <div className="px-3 py-2 text-center">{isDeficit ? '부족' : '초과'}</div>
+        </div>
+        {tableRows.map((r, i) => (
+          <div key={i} className="grid border-b border-gray-100 last:border-b-0 text-[12px]" style={gridStyle}>
+            <div className="px-3 py-2 border-r border-gray-100 font-semibold">{r.teacherCode}</div>
+            <div className="px-3 py-2 border-r border-gray-100">{r.subjectName}</div>
+            {!isSingleClass && <div className="px-3 py-2 border-r border-gray-100">{r.grade}학년 {r.classNum}반</div>}
+            <div className="px-3 py-2 border-r border-gray-100 text-center text-gray-600">{r.target}h</div>
+            <div className="px-3 py-2 border-r border-gray-100 text-center text-gray-600">{r.scheduled}h</div>
+            <div className={`px-3 py-2 text-center font-bold ${isDeficit ? 'text-red-600' : 'text-orange-600'}`}>
+              {isDeficit ? `−${r.deficit}h` : `+${Math.abs(r.deficit)}h`}
+            </div>
+          </div>
+        ))}
+      </div>
+    )
+  }
+
+  return (
+    <div className={`${placement === 'top' ? 'mb-4' : 'mt-6'} ${hasBoth ? 'flex gap-4 flex-wrap max-w-[1100px]' : ''}`}>
+      {deficitRows.length > 0 && renderTable(deficitRows, 'deficit')}
+      {surplusRows.length > 0 && renderTable(surplusRows, 'surplus')}
     </div>
   )
 }
