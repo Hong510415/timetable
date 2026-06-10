@@ -728,6 +728,122 @@ export function buildSchedule(
     errorMap[key].unassigned += block.size
   }
 
+  // ---------- 9. 3차 패스: 요일 균형 리밸런싱 ----------
+  // 교사별 요일 시수 max-min > 1인 경우, 무거운 날 블록을 가벼운 날로 이동 시도
+  // 조건: calendar order 유지, 모든 하드 제약 통과
+  function unplaceCell(teacherId, grade, classNum, subjectId, day, slot, roomId) {
+    result[grade][classNum][day][slot] = null
+    teacherOccupied[teacherId][day].delete(slot)
+    gradeClassSlots[grade][classNum][day].add(slot)
+    if (roomId) roomOccupied[roomId][day].delete(slot)
+    if (teacherSlotGrade[teacherId]?.[day]) delete teacherSlotGrade[teacherId][day][slot]
+    if (teacherSlotSubject[teacherId]?.[day]) delete teacherSlotSubject[teacherId][day][slot]
+    teacherDayCount[teacherId][day]--
+    const ck = `${grade}_${classNum}`
+    classDayCount[ck][day]--
+    const csKey = `${grade}_${classNum}_${subjectId}`
+    const csdKey = `${csKey}_${day}`
+    classSubjectDaySlots[csdKey]?.delete(slot)
+    if (!classSubjectDaySlots[csdKey]?.size) {
+      delete classSubjectDaySlots[csdKey]
+      classSubjectDays[csKey]?.delete(day)
+      const rem = [...(classSubjectDays[csKey] || [])]
+      classSubjectLastDay[csKey] = rem.length ? Math.max(...rem) : undefined
+    }
+  }
+
+  for (let iter = 0; iter < 20; iter++) {
+    let moved = false
+    for (const teacherId of Object.keys(teacherDayCount)) {
+      const counts = teacherDayCount[teacherId]
+      const maxVal = Math.max(...counts)
+      const filled = counts.filter(c => c > 0)
+      if (!filled.length) continue
+      const minVal = Math.min(...filled)
+      if (maxVal - minVal <= 1) continue
+
+      const maxDay = counts.lastIndexOf(maxVal)
+      // 가능한 목표 날짜: 시수가 minVal인 날 중 maxDay보다 앞 (calendar order 위해 블록이 이동 가능한 날)
+      const targetDays = counts
+        .map((c, d) => ({ c, d }))
+        .filter(({ c, d }) => c === minVal && d !== maxDay)
+        .map(({ d }) => d)
+      if (!targetDays.length) continue
+
+      // maxDay에서 이동 가능한 블록 찾기 (마지막 슬롯부터)
+      let didMove = false
+      outer: for (let slot = totalSlots - 1; slot >= 0; slot--) {
+        for (const [gradeStr, classes] of Object.entries(result)) {
+          const grade = Number(gradeStr)
+          for (const [classStr, days] of Object.entries(classes)) {
+            const classNum = Number(classStr)
+            const cell = days[maxDay]?.[slot]
+            if (!cell || cell.teacherId !== teacherId) continue
+            const { subjectId, roomId } = cell
+
+            for (const targetDay of targetDays) {
+              // calendar order: targetDay >= 이 블록보다 이전 같은(class,subject) 블록의 마지막 날
+              const csKey = `${grade}_${classNum}_${subjectId}`
+              const otherDays = [...(classSubjectDays[csKey] || [])].filter(d => d !== maxDay)
+              const prevMaxDay = otherDays.length ? Math.max(...otherDays) : -1
+              if (targetDay < prevMaxDay) continue
+              // same-day rule: targetDay에 같은(class,subject) 없어야
+              if (classSubjectDays[csKey]?.has(targetDay)) continue
+
+              const block = {
+                teacherId, subjectId, grade, classNum,
+                isMajor: subjects.find(s => s.id === subjectId)?.is_major ?? true,
+                size: 1, blockIdx: 0, totalBlocks: 1,
+              }
+
+              unplaceCell(teacherId, grade, classNum, subjectId, maxDay, slot, roomId)
+
+              // targetDay에서 유효 슬롯 탐색
+              const candidates = getCandidateSlotSets({ ...block, size: 1 }, targetDay)
+              let placed = false
+              for (const newSlots of candidates) {
+                // calendar order를 직접 검사 (isPlacementValid의 #10은 classSubjectLastDay 기반)
+                if (isPlacementValid(block, targetDay, newSlots, {})) {
+                  applyPlacement(block, targetDay, newSlots)
+                  placed = true
+                  moved = true
+                  didMove = true
+                  break
+                }
+              }
+
+              if (!placed) {
+                // 원위치 복구: 같은 슬롯에 다시 놓기
+                result[grade][classNum][maxDay][slot] = { teacherId, subjectId, roomId: roomId || undefined }
+                teacherOccupied[teacherId][maxDay].add(slot)
+                gradeClassSlots[grade][classNum][maxDay].delete(slot)
+                if (roomId) roomOccupied[roomId][maxDay].add(slot)
+                if (!teacherSlotGrade[teacherId]) teacherSlotGrade[teacherId] = Array.from({ length: 5 }, () => ({}))
+                teacherSlotGrade[teacherId][maxDay][slot] = grade
+                if (!teacherSlotSubject[teacherId]) teacherSlotSubject[teacherId] = Array.from({ length: 5 }, () => ({}))
+                teacherSlotSubject[teacherId][maxDay][slot] = subjectId
+                teacherDayCount[teacherId][maxDay]++
+                const ck = `${grade}_${classNum}`
+                if (!classDayCount[ck]) classDayCount[ck] = [0,0,0,0,0]
+                classDayCount[ck][maxDay]++
+                if (!classSubjectDays[csKey]) classSubjectDays[csKey] = new Set()
+                classSubjectDays[csKey].add(maxDay)
+                classSubjectLastDay[csKey] = Math.max(classSubjectLastDay[csKey] ?? -1, maxDay)
+                const csdKey = `${csKey}_${maxDay}`
+                if (!classSubjectDaySlots[csdKey]) classSubjectDaySlots[csdKey] = new Set()
+                classSubjectDaySlots[csdKey].add(slot)
+              } else {
+                break outer
+              }
+            }
+          }
+        }
+      }
+      if (didMove) break
+    }
+    if (!moved) break
+  }
+
   return {
     result,
     errors: Object.values(errorMap),
