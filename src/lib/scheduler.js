@@ -587,6 +587,14 @@ export function buildSchedule(
 
     // (i) "1교시부터 땡기기"는 점수에 넣지 않음 — 동점일 때 tiebreaker로만 작용.
 
+    // (k) 같은 과목 다른 학년이 그날 이미 있으면 페널티 (-5)
+    // 각 날에 같은 학년끼리만 묶이도록 유도 — 다른 학년이 끼어드는 것을 억제.
+    // (c) 클러스터링 보너스 +5와 동일한 강도로 균형 유지.
+    const hasDifferentGradeSameSubject = Object.entries(tsd).some(([s, sid]) =>
+      sid === subjectId && tsg[s] !== grade
+    )
+    if (hasDifferentGradeSameSubject) score -= 5
+
     // (j) 소수 학년 "빈 날 우선" 보너스 (+4)
     // 교사가 두 학년을 가르치고 한 학년 시수가 현저히 적을 때(소수 학년),
     // 그 블록은 해당 날 맨앞(slot 0) 위치를 확보하도록 빈 날을 선호.
