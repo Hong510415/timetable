@@ -61,6 +61,7 @@ export default function Timetable() {
   const { gradeConfigs, subjects, teachers, lunchConfig, timetableSlots: timetableRows, rooms, roomBlockedSlots } = state
 
   const [generating, setGenerating] = useState(false)
+  const [swapCell, setSwapCell] = useState(null) // { teacherId, day, slot, rowId }
   // (이전 errors state 제거 — 미배정 표시는 UnassignedStats가 timetableRows에서 직접 계산해서 실시간 동기화됨)
   const [tab, setTab] = useState('teacher')
   const [showGenerateModal, setShowGenerateModal] = useState(false)
@@ -218,6 +219,33 @@ export default function Timetable() {
       }
     }
     return daySlots
+  }
+
+  function handleTeacherCellClick(teacherId, day, slot, cell) {
+    if (!swapCell) {
+      // 첫 클릭: 셀 선택
+      setSwapCell({ teacherId, day, slot, rowId: cell?.id || null })
+    } else if (swapCell.teacherId === teacherId && swapCell.day === day && swapCell.slot === slot) {
+      // 같은 셀 재클릭: 선택 해제 + 편집 모달
+      setSwapCell(null)
+      openEditModal(day, slot, cell, { defaultTeacherId: teacherId })
+    } else {
+      // 다른 셀 클릭: 교환
+      const idA = swapCell.rowId
+      const idB = cell?.id || null
+      const dayA = swapCell.day, slotA = swapCell.slot
+      const dayB = day, slotB = slot
+
+      let updated = timetableRows.map(r => {
+        if (idA && r.id === idA) return { ...r, day_of_week: dayB, slot: slotB }
+        if (idB && r.id === idB) return { ...r, day_of_week: dayA, slot: slotA }
+        return r
+      })
+      // idA가 있고 idB가 없으면 (빈 셀로 이동) — 이동만
+      // idA가 없으면 (빈 셀 → 빈 셀) — 아무것도 안 함
+      setTimetableSlots(updated)
+      setSwapCell(null)
+    }
   }
 
   function openEditModal(day, slot, cell, ctx = {}) {
@@ -387,7 +415,8 @@ export default function Timetable() {
                       teachers={teachers}
                       rooms={rooms}
                       compact
-                      onCellClick={(day, slot, cell) => openEditModal(day, slot, cell, { defaultTeacherId: t.id })}
+                      selectedCell={swapCell?.teacherId === t.id ? swapCell : null}
+                      onCellClick={(day, slot, cell) => handleTeacherCellClick(t.id, day, slot, cell)}
                     />
                   </div>
                 )
@@ -582,7 +611,7 @@ function UnassignedStats({ teachers, subjects, timetableRows, filterClasses, pla
   )
 }
 
-function TeacherTimetableGrid({ slots, totalSlots, gradeLunchSlot, subjects, timetableRows, teachers, rooms, compact, onCellClick }) {
+function TeacherTimetableGrid({ slots, totalSlots, gradeLunchSlot, subjects, timetableRows, teachers, rooms, compact, selectedCell, onCellClick }) {
   const DAY_LABELS = ['월', '화', '수', '목', '금']
 
   function getConflicts(cell, day, slot) {
@@ -629,12 +658,14 @@ function TeacherTimetableGrid({ slots, totalSlots, gradeLunchSlot, subjects, tim
                   r.day_of_week === day && r.slot === slot && r.teacher_id && !r.is_unassigned
                 )
               : []
+            const isSelected = selectedCell?.day === day && selectedCell?.slot === slot
 
             return (
               <div
                 key={day}
                 onClick={() => onCellClick?.(day, slot, cell)}
-                className="relative group flex-1 border-r border-gray-100 last:border-r-0 flex flex-col items-center justify-center gap-0 cursor-pointer hover:bg-blue-50 transition-colors"
+                className={`relative group flex-1 border-r border-gray-100 last:border-r-0 flex flex-col items-center justify-center gap-0 cursor-pointer transition-colors
+                  ${isSelected ? 'bg-blue-100 ring-2 ring-inset ring-blue-400' : 'hover:bg-blue-50'}`}
               >
                 {cell ? (
                   <>
