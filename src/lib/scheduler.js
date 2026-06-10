@@ -508,6 +508,8 @@ export function buildSchedule(
         const existingSlots = classSubjectDaySlots[`${csKey}_${day}`] || new Set()
         const maxExisting = existingSlots.size > 0 ? Math.max(...existingSlots) : -1
         if (Math.min(...slots) <= maxExisting) return false
+        // 하루 최대 시수(maxSameDay) 초과 방지 — pair+single 합산이 초과하면 차단
+        if (existingSlots.size + slots.length > getMaxSameDay(subjectId)) return false
       } else {
         return false
       }
