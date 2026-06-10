@@ -531,10 +531,17 @@ export function buildSchedule(
     // (a) 같은 교사 + 같은 과목 같은 날 (+3, 약화됨)
     // 이전 +5에서 +3으로 줄임. (a)가 (d) day target보다 강하게 작동해서
     // 5-1 block 1이 target Wed 대신 Fri 클러스터링 따라가서 block 2가 갈 곳 없어지는 문제 해결.
+    // 소수 학년 블록은 다른 학년 슬롯의 클러스터링 보너스를 받지 않음
+    // (다수 학년이 있는 날로 끌려가면 grade sandwich 발생)
     let sameSubjSameDay = 0
     const tsd = teacherSlotSubject[teacherId]?.[day] || {}
+    const tsg = teacherSlotGrade[teacherId]?.[day] || {}
+    const isMinorityBlock = teacherMinorityGrade[teacherId] === grade
     for (const s of Object.keys(tsd)) {
-      if (tsd[s] === subjectId) sameSubjSameDay++
+      if (tsd[s] === subjectId) {
+        if (isMinorityBlock && tsg[s] !== grade) continue
+        sameSubjSameDay++
+      }
     }
     score += 3 * sameSubjSameDay
 
@@ -544,7 +551,6 @@ export function buildSchedule(
     // 인간 시간표는 같은 학년 같은 과목을 같은 날에 통째로 묶는 경향이 강함
     // (예: 3학년 영어 둘 다 화요일, 4학년 과학 둘 다 목요일)
     let sameGradeSubjSameDay = 0
-    const tsg = teacherSlotGrade[teacherId]?.[day] || {}
     for (const s of Object.keys(tsg)) {
       if (tsg[s] === grade && tsd[s] === subjectId) sameGradeSubjSameDay++
     }
@@ -593,7 +599,7 @@ export function buildSchedule(
     // → grade sandwich 없이 [소수학년, 다수학년×N] 패턴이 자연스럽게 형성됨.
     if (teacherMinorityGrade[teacherId] === grade) {
       const dayUsed = teacherDayCount[teacherId]?.[day] || 0
-      if (dayUsed === 0) score += 4
+      if (dayUsed === 0) score += 10
     }
 
     return score
