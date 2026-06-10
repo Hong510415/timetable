@@ -318,26 +318,12 @@ export function buildSchedule(
     const cap = Math.ceil(T / 5) + relaxCap
     const newCount = (teacherDayCount[teacherId]?.[day] || 0) + slotsCount
     if (newCount > cap) {
-      // cap+1 예외: 1차 패스에서만, 정확히 cap+1일 때, 그날 같은 grade+subject 슬롯이 하나라도 있으면
-      // 같은 학년 과목이 한 날에 cascade되도록 허용 → 뒤 학급이 다음 날로 밀리는 것 방지
-      if (block && relaxCap === 0 && newCount === cap + 1) {
-        const hasSameGradeSubject = Object.entries(teacherSlotSubject[teacherId]?.[day] || {}).some(([s, sid]) =>
-          sid === block.subjectId && teacherSlotGrade[teacherId]?.[day]?.[s] === block.grade
-        )
-        if (hasSameGradeSubject) {
-          const exDays = teacherSameDayExceptionDays[teacherId]
-          if (!exDays || exDays.has(day) || exDays.size < 2) {
-            // 요일 균형 체크: 이미 배정된 요일끼리만 max-min ≤ 2 비교 (빈 요일 제외)
-            // 빈 요일 포함 시 cascade 시점에 "목6-금0=6>2"로 잘못 차단됨
-            const counts = [0, 0, 0, 0, 0]
-            for (let d = 0; d < 5; d++) counts[d] = teacherDayCount[teacherId]?.[d] || 0
-            counts[day] = newCount
-            const filledCounts = counts.filter(c => c > 0)
-            if (filledCounts.length >= 2 && Math.max(...filledCounts) - Math.min(...filledCounts) > 2) return true
-            // 예외 허용 — return false로 빠짐
-          } else {
-            return true
-          }
+      // cap+1 예외: 1차 패스에서만, 정확히 cap+1일 때, 일반과목 + 그날 모든 슬롯이 같은 grade+subject
+      if (block && !block.isMajor && relaxCap === 0 && newCount === cap + 1 &&
+          isAllSameSubjectGradeDay(teacherId, day, block.subjectId, block.grade)) {
+        const exDays = teacherSameDayExceptionDays[teacherId]
+        if (!exDays || exDays.has(day) || exDays.size < 2) {
+          // 예외 허용 — return false로 빠짐
         } else {
           return true
         }
@@ -695,11 +681,13 @@ export function buildSchedule(
     if (!teacherDayCount[teacherId]) teacherDayCount[teacherId] = [0, 0, 0, 0, 0]
     teacherDayCount[teacherId][day] += slots.length
 
-    // cap+1 예외 요일 기록 (정상 cap을 초과한 경우 — 주요/일반 모두)
-    const T = teacherTotalHours[teacherId] || 0
-    if (T > 0 && teacherDayCount[teacherId][day] > Math.ceil(T / 5)) {
-      if (!teacherSameDayExceptionDays[teacherId]) teacherSameDayExceptionDays[teacherId] = new Set()
-      teacherSameDayExceptionDays[teacherId].add(day)
+    // cap+1 예외 요일 기록 (일반과목이 정상 cap을 초과한 경우)
+    if (!block.isMajor) {
+      const T = teacherTotalHours[teacherId] || 0
+      if (T > 0 && teacherDayCount[teacherId][day] > Math.ceil(T / 5)) {
+        if (!teacherSameDayExceptionDays[teacherId]) teacherSameDayExceptionDays[teacherId] = new Set()
+        teacherSameDayExceptionDays[teacherId].add(day)
+      }
     }
 
     const ck = `${grade}_${classNum}`
