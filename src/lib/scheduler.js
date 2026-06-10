@@ -593,13 +593,22 @@ export function buildSchedule(
 
     // (i) "1교시부터 땡기기"는 점수에 넣지 않음 — 동점일 때 tiebreaker로만 작용.
 
-    // (j) 소수 학년 "빈 날 우선" 보너스 (+4)
+    // (j) 소수 학년 "빈 날 우선" 보너스 (+10)
     // 교사가 두 학년을 가르치고 한 학년 시수가 현저히 적을 때(소수 학년),
-    // 그 블록은 해당 날 맨앞(slot 0) 위치를 확보하도록 빈 날을 선호.
-    // → grade sandwich 없이 [소수학년, 다수학년×N] 패턴이 자연스럽게 형성됨.
+    // 그 블록은 빈 날을 선호해 맨앞(slot 0)을 확보 → grade sandwich 방지.
+    // 단, 이미 같은 학년+과목이 배정된 날이 있으면 보너스 차단:
+    // 그 날로 클러스터링하면 되므로 빈날 보너스가 오히려 클러스터링을 깨뜨림.
     if (teacherMinorityGrade[teacherId] === grade) {
       const dayUsed = teacherDayCount[teacherId]?.[day] || 0
-      if (dayUsed === 0) score += 10
+      if (dayUsed === 0) {
+        const hasSameGradeSubjectDay = Object.entries(teacherSlotSubject[teacherId] || {}).some(([d, daySlots]) => {
+          if (Number(d) === day) return false
+          return Object.entries(daySlots || {}).some(([s, sid]) =>
+            sid === subjectId && teacherSlotGrade[teacherId]?.[d]?.[s] === grade
+          )
+        })
+        if (!hasSameGradeSubjectDay) score += 10
+      }
     }
 
     return score
