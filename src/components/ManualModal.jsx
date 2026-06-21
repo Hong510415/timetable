@@ -8,7 +8,7 @@ export default function ManualModal({ title, sections }) {
     <>
       <button
         onClick={() => setOpen(true)}
-        className="flex items-center gap-1.5 h-8 px-3 border border-gray-300 rounded-sm text-[12px] text-gray-500 hover:bg-gray-50"
+        className="flex items-center gap-1.5 h-8 px-3 border border-gray-300 rounded-sm text-[12px] text-gray-500 hover:bg-gray-50 whitespace-nowrap flex-shrink-0"
       >
         <HelpCircle size={13} />
         매뉴얼

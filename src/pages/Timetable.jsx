@@ -370,7 +370,7 @@ export default function Timetable() {
         </div>
       </div>
 
-      <p className="max-w-[1100px] text-[12px] text-gray-400 -mt-3 mb-5">⑤ "시간표 자동 생성"으로 만들거나, 교사별 보기에서 빈 칸을 클릭해 직접 입력하세요. 칸을 클릭해 수정·교환할 수 있습니다.</p>
+      <p className="max-w-[1100px] text-[12px] text-gray-400 -mt-3 mb-5 break-keep">⑤ "시간표 자동 생성"으로 만들거나, 교사별 보기에서 빈 칸을 클릭해 직접 입력하세요. 칸을 클릭해 수정·교환할 수 있습니다.</p>
 
       {/* 미배정 시수 표 — 수동 편집과 실시간 동기화 위해 상단으로 이동 (이전 빨간 경고 블록은 초기 생성 결과만 보여줘서 제거) */}
       {timetableRows.length > 0 && (
