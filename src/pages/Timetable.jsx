@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect } from 'react'
-import { Download, RefreshCw, ChevronDown } from 'lucide-react'
+import { Download, RefreshCw, ChevronDown, Printer, Upload } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { buildSchedule, flattenResult } from '../lib/scheduler'
 import { exportTimetableByClass, exportTimetableByTeacher } from '../lib/excelExport'
+import { importClassTimetable } from '../lib/excelIO'
 import TimetableGrid from '../components/TimetableGrid'
 import ManualModal from '../components/ManualModal'
 
@@ -16,6 +17,18 @@ const MANUAL = [
       '연속 허용 + 주 2시간 → pair (같은 날 2시간 연속)로 묶입니다.',
       '연속 허용 + 주 3시간 → 1시간 + pair(2시간 연속) 구조로 배치됩니다.',
       '교사·학급별 일일 부하가 균등하게 자동 분산됩니다 (요일간 편차 최소화).',
+    ],
+  },
+  {
+    title: '자동 배정 규칙 (어떻게 배정되나요?)',
+    items: [
+      '같은 학년·같은 과목은 되도록 같은 요일에 모읍니다 (교사가 같은 수업 자료를 하루에 준비하도록).',
+      '한 학급의 같은 과목이 주 2회 이상이면 서로 다른 요일에 나눠 배치하고, 요일 순서대로(앞 회차가 먼저) 채웁니다.',
+      '교사·학급마다 하루 수업량이 특정 요일에 몰리지 않도록 요일별로 고르게 분산합니다.',
+      '한 교사의 하루 수업 사이에 다른 학년·과목이 끼어들지 않도록 연속으로 붙여 배치합니다.',
+      '특별실을 쓰는 과목은 그 특별실이 비어 있는 시간에만 배정됩니다 (같은 시간 중복 사용 방지).',
+      '점심 분리 배정 시 점심시간 슬롯에는 수업이 배정되지 않습니다.',
+      '위 규칙을 모두 지키며 20번 탐색해, 미배정이 가장 적고 가장 고르게 묶인 결과를 자동으로 선택합니다.',
     ],
   },
   {
@@ -65,6 +78,15 @@ const MANUAL = [
     ],
   },
   {
+    title: '작년 시간표 가져오기 (엑셀)',
+    items: [
+      '"엑셀 가져오기"를 누르면 학급별 엑셀 양식의 시간표를 그대로 불러와 표를 채웁니다.',
+      '양식은 "학급별 엑셀"로 내려받은 파일과 동일합니다 (시트명 "N학년M반", 셀 형식 "과목명(교사코드)").',
+      '작년 시간표를 이 형식으로 채워 가져온 뒤, 올해 바뀐 부분만 수정해 출력할 수 있습니다.',
+      '먼저 전담 과목·교사를 등록해야 과목명·교사코드가 매칭됩니다. 매칭 안 된 칸은 건너뛰고 사유를 알려줍니다.',
+    ],
+  },
+  {
     title: '점심시간 분리 배정',
     items: ['점심시간 분리 배정 시 특별실 시간표, 전담교사 시간표는 7교시 형식으로 제시됩니다.'],
   },
@@ -83,6 +105,32 @@ export default function Timetable() {
   const [showGenerateModal, setShowGenerateModal] = useState(false)
   const [generateOptions, setGenerateOptions] = useState({ subjectSettings: {} })
   const [selectedClasses, setSelectedClasses] = useState([{ grade: 1, classNum: 1 }])
+  const ttImportRef = useRef(null)
+
+  async function handleImportTimetable(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (timetableRows.length > 0 && !confirm('현재 시간표를 가져온 파일 내용으로 덮어씁니다. 계속하시겠습니까?')) {
+      e.target.value = ''
+      return
+    }
+    try {
+      const totalSlots = lunchConfig?.split_lunch ? 7 : 6
+      const { rows, warnings } = await importClassTimetable(file, { gradeConfigs, teachers, subjects, totalSlots })
+      if (rows.length === 0) {
+        alert('가져올 수업을 찾지 못했습니다. "학급별 엑셀" 양식(시트명 "N학년M반", 셀 "과목명(교사코드)")인지, 과목·교사가 먼저 등록되어 있는지 확인하세요.')
+        e.target.value = ''
+        return
+      }
+      setTimetableSlots(rows)
+      const msg = `${rows.length}개 수업을 불러왔습니다.` +
+        (warnings.length ? `\n\n건너뛴 항목 ${warnings.length}건:\n- ${warnings.slice(0, 10).join('\n- ')}${warnings.length > 10 ? `\n외 ${warnings.length - 10}건` : ''}` : '')
+      alert(msg)
+    } catch (err) {
+      alert('파일을 읽는 중 오류가 발생했습니다: ' + err.message)
+    }
+    e.target.value = ''
+  }
 
   function toggleSelectedClass(grade, classNum) {
     setSelectedClasses(prev => {
@@ -317,18 +365,42 @@ export default function Timetable() {
         <div className="flex flex-wrap gap-2">
           <ManualModal title="전담 시간표" sections={MANUAL} />
           <button
+            title="현재 시간표를 교사 단위 엑셀 파일로 내려받습니다."
             onClick={() => exportTimetableByTeacher(timetableRows, teachers, subjects, gradeConfigs, gradeLunchSlot, totalSlots)}
             className="flex items-center gap-2 h-10 px-3 md:px-4 border border-gray-300 text-[13px] rounded-sm hover:bg-gray-50 whitespace-nowrap"
           >
             <Download size={14} />교사별 엑셀
           </button>
           <button
+            title="현재 시간표를 학급 단위 엑셀 파일로 내려받습니다. 이 파일이 곧 '가져오기' 양식입니다 — 작년 시간표를 이 형식으로 채워 다시 가져올 수 있습니다."
             onClick={() => exportTimetableByClass(timetableRows, gradeConfigs, teachers, subjects, gradeLunchSlot, totalSlots)}
             className="flex items-center gap-2 h-10 px-3 md:px-4 border border-gray-300 text-[13px] rounded-sm hover:bg-gray-50 whitespace-nowrap"
           >
             <Download size={14} />학급별 엑셀
           </button>
+          <input
+            ref={ttImportRef}
+            type="file"
+            accept=".xlsx"
+            onChange={handleImportTimetable}
+            className="hidden"
+          />
           <button
+            title="학급별 엑셀 양식(작년 시간표 등)을 불러와 표에 채웁니다. 과목·교사를 먼저 등록한 뒤 사용하세요."
+            onClick={() => ttImportRef.current?.click()}
+            className="flex items-center gap-2 h-10 px-3 md:px-4 border border-gray-300 text-[13px] rounded-sm hover:bg-gray-50 whitespace-nowrap"
+          >
+            <Upload size={14} />엑셀 가져오기
+          </button>
+          <button
+            title="현재 보고 있는 시간표를 인쇄(또는 PDF로 저장)합니다."
+            onClick={() => window.print()}
+            className="flex items-center gap-2 h-10 px-3 md:px-4 border border-gray-300 text-[13px] rounded-sm hover:bg-gray-50 whitespace-nowrap"
+          >
+            <Printer size={14} />인쇄
+          </button>
+          <button
+            title="배정 규칙에 따라 20번 탐색해 가장 좋은 시간표를 자동으로 만듭니다. 기존 결과는 새 결과로 대체됩니다."
             onClick={handleGenerate}
             disabled={generating}
             className="flex items-center gap-2 h-10 px-3 md:px-4 bg-black text-white text-[13px] font-semibold rounded-sm hover:bg-gray-800 disabled:opacity-50 whitespace-nowrap"
@@ -384,7 +456,7 @@ export default function Timetable() {
               {selectedClasses.length === 0 ? (
                 <div className="max-w-[1100px] text-center py-12 text-gray-300 text-[13px]">학급을 선택하세요</div>
               ) : (
-                <div className="max-w-[1100px] grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div className="print-area max-w-[1100px] grid grid-cols-1 lg:grid-cols-2 gap-4">
                   {selectedClasses.map(({ grade, classNum }) => (
                     <div key={`${grade}-${classNum}`} className="flex flex-col gap-1">
                       <div className="px-1 text-[13px] font-bold text-gray-800">{grade}학년 {classNum}반</div>
@@ -409,7 +481,7 @@ export default function Timetable() {
           )}
 
           {tab === 'teacher' && (
-            <div className="max-w-[1100px] grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="print-area max-w-[1100px] grid grid-cols-1 lg:grid-cols-2 gap-4">
               {teachers.map(t => {
                 const ts = getSlotsForTeacher(t.id)
                 const scheduled = timetableRows.filter(r => r.teacher_id === t.id && !r.is_unassigned).length

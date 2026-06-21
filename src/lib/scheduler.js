@@ -502,14 +502,11 @@ export function buildSchedule(
     // #12 same-day rule: 같은 (class, subject) 같은 날 중복 금지 (pair는 atomic이라 OK)
     const csDays = classSubjectDays[csKey]
     if (csDays && csDays.has(day)) {
-      // 2차 패스: 연속 허용(maxSameDay>=2) 과목만 이후 교시 cascade 허용
-      // maxSameDay=1(연속 불가) 과목은 relaxSameDay여도 같은 날 두 번 배치 차단
-      if (opts.relaxSameDay && getMaxSameDay(subjectId) >= 2) {
+      // 2차 패스: 기존 교시보다 이후 교시에 배치하면 허용 (round cascade 미배정 구제)
+      if (opts.relaxSameDay) {
         const existingSlots = classSubjectDaySlots[`${csKey}_${day}`] || new Set()
         const maxExisting = existingSlots.size > 0 ? Math.max(...existingSlots) : -1
         if (Math.min(...slots) <= maxExisting) return false
-        // 하루 최대 시수(maxSameDay) 초과 방지 — pair+single 합산이 초과하면 차단
-        if (existingSlots.size + slots.length > getMaxSameDay(subjectId)) return false
       } else {
         return false
       }
@@ -590,18 +587,13 @@ export function buildSchedule(
 
     // (i) "1교시부터 땡기기"는 점수에 넣지 않음 — 동점일 때 tiebreaker로만 작용.
 
-    // (k) 같은 과목명 다른 학년이 그날 이미 있으면 페널티 (-7×slots)
-    // 과목명 기준: 학년별 subjectId가 달라도 같은 이름(체육/과학/영어)이면 동일 과목으로 간주.
-    // 각 날에 같은 학년끼리만 묶이도록 유도.
-    const subjectName = subjects.find(s => s.id === subjectId)?.name
-    const hasDifferentGradeSameSubjectName = subjectName
-      ? Object.entries(tsd).some(([s, sid]) => {
-          if (tsg[s] === grade) return false // 같은 학년이면 패널티 없음
-          const otherName = subjects.find(sub => sub.id === sid)?.name
-          return otherName === subjectName
-        })
-      : false
-    if (hasDifferentGradeSameSubjectName) score -= 7 * slots.length
+    // (k) 같은 과목 다른 학년이 그날 이미 있으면 페널티 (-5)
+    // 각 날에 같은 학년끼리만 묶이도록 유도 — 다른 학년이 끼어드는 것을 억제.
+    // (c) 클러스터링 보너스 +5와 동일한 강도로 균형 유지.
+    const hasDifferentGradeSameSubject = Object.entries(tsd).some(([s, sid]) =>
+      sid === subjectId && tsg[s] !== grade
+    )
+    if (hasDifferentGradeSameSubject) score -= 7 * slots.length
 
     // (j) 소수 학년 "빈 날 우선" 보너스 (+4)
     // 교사가 두 학년을 가르치고 한 학년 시수가 현저히 적을 때(소수 학년),
@@ -806,21 +798,18 @@ export function buildSchedule(
 
               unplaceCell(teacherId, grade, classNum, subjectId, maxDay, slot, roomId)
 
-              // targetDay에서 유효 슬롯 탐색 — 점수 비교 후 최고 슬롯 선택 (gap 최소화)
+              // targetDay에서 유효 슬롯 탐색
               const candidates = getCandidateSlotSets({ ...block, size: 1 }, targetDay)
-              let bestNewSlots = null
-              let bestNewScore = -Infinity
-              for (const newSlots of candidates) {
-                if (!isPlacementValid(block, targetDay, newSlots, {})) continue
-                const sc = computeScore(block, targetDay, newSlots)
-                if (sc > bestNewScore) { bestNewScore = sc; bestNewSlots = newSlots }
-              }
               let placed = false
-              if (bestNewSlots) {
-                applyPlacement(block, targetDay, bestNewSlots)
-                placed = true
-                moved = true
-                didMove = true
+              for (const newSlots of candidates) {
+                // calendar order를 직접 검사 (isPlacementValid의 #10은 classSubjectLastDay 기반)
+                if (isPlacementValid(block, targetDay, newSlots, {})) {
+                  applyPlacement(block, targetDay, newSlots)
+                  placed = true
+                  moved = true
+                  didMove = true
+                  break
+                }
               }
 
               if (!placed) {

@@ -69,17 +69,24 @@ export default function Layout({ children }) {
 
         <div className="mt-auto px-4 flex flex-col gap-2">
           <button
+            title="모든 설정·배정·시간표를 하나의 엑셀 파일로 저장합니다. 백업이나 다른 컴퓨터로 옮길 때 사용하세요."
             onClick={handleExport}
             className="flex items-center gap-2 h-9 px-3 border border-gray-300 rounded-sm text-[12px] text-gray-500 hover:bg-gray-50 w-full"
           >
             <Download size={12} />저장 (엑셀 내보내기)
           </button>
           <button
+            title="저장(엑셀 내보내기)으로 만든 파일을 불러와 현재 데이터를 덮어씁니다."
             onClick={() => fileInputRef.current?.click()}
             className="flex items-center gap-2 h-9 px-3 border border-gray-300 rounded-sm text-[12px] text-gray-500 hover:bg-gray-50 w-full"
           >
             <Upload size={12} />불러오기 (엑셀 가져오기)
           </button>
+          <p className="text-[10px] leading-relaxed text-gray-400 px-1">
+            🔒 모든 데이터는 이 브라우저에만 저장되며 외부로 전송되지 않습니다.
+            기기·브라우저 변경이나 만일의 데이터 손실에 대비해
+            <b className="text-gray-500"> 저장(엑셀 내보내기)</b>로 정기적으로 백업하세요.
+          </p>
           <a
             href={typeof window !== 'undefined' && window.location.protocol === 'file:' ? 'user-manual.pdf' : '/user-manual.pdf'}
             download="시간표_자동_작성_사용자_매뉴얼.pdf"

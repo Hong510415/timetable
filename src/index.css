@@ -11,6 +11,22 @@ body { margin: 0; font-family: -apple-system, 'Apple SD Gothic Neo', 'Malgun Got
   .print-modal-root,
   .print-modal-root * { visibility: visible; }
 
+  /* 시간표 인쇄: print-area 안쪽만 보이게 */
+  .print-area,
+  .print-area * { visibility: visible; }
+
+  .print-area {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .no-print { display: none !important; }
+
   .print-modal-root {
     position: fixed !important;
     inset: 0 !important;

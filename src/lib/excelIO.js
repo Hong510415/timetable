@@ -320,3 +320,65 @@ export async function importFullWorkbook(file) {
 
   return state
 }
+
+const TT_DAYS = ['월', '화', '수', '목', '금']
+
+// 학급별 시간표 엑셀(내보내기와 동일 형식: 시트명 "N학년M반", 셀 "과목명(교사코드)")을
+// 읽어 timetableRows로 변환한다. 작년에 내보낸 학급별 엑셀을 그대로 다시 가져올 때 사용.
+// 반환: { rows, warnings } — 해석 못 한 셀은 건너뛰고 warnings에 사유 기록.
+export async function importClassTimetable(file, ctx) {
+  const { gradeConfigs = [], teachers = [], subjects = [], totalSlots = 6 } = ctx || {}
+  const buffer = await file.arrayBuffer()
+  const wb = XLSX.read(buffer, { type: 'array' })
+  const rows = []
+  const warnings = []
+  const cellRe = /^(.*)\((.+)\)$/
+
+  for (const gc of gradeConfigs) {
+    for (let cls = 1; cls <= gc.num_classes; cls++) {
+      const sheetName = `${gc.grade}학년${cls}반`
+      const ws = wb.Sheets[sheetName]
+      if (!ws) continue
+      const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' })
+      // aoa[0] = 헤더(교시,월~금). 데이터 행은 index 1부터, 행 순서 = slot 0,1,2...
+      for (let r = 1; r < aoa.length; r++) {
+        const slot = r - 1
+        if (slot >= totalSlots) break
+        const dataRow = aoa[r] || []
+        for (let day = 0; day < 5; day++) {
+          const text = String(dataRow[day + 1] ?? '').trim()
+          if (!text || text === '점심시간' || text === '점심') continue
+          const m = text.match(cellRe)
+          if (!m) {
+            warnings.push(`${sheetName} ${slot + 1}교시 ${TT_DAYS[day]}: '${text}' 형식을 인식할 수 없어 건너뜀 (형식: 과목명(교사코드))`)
+            continue
+          }
+          const subjName = m[1].trim()
+          const teacherCode = m[2].trim()
+          const subject = subjects.find(s => s.grade === gc.grade && s.name === subjName)
+          const teacher = teachers.find(t => t.code === teacherCode)
+          if (!subject) {
+            warnings.push(`${sheetName} ${slot + 1}교시 ${TT_DAYS[day]}: ${gc.grade}학년 과목 '${subjName}'을(를) 찾을 수 없음`)
+            continue
+          }
+          if (!teacher) {
+            warnings.push(`${sheetName} ${slot + 1}교시 ${TT_DAYS[day]}: 교사코드 '${teacherCode}'를 찾을 수 없음`)
+            continue
+          }
+          rows.push({
+            id: crypto.randomUUID(),
+            grade: gc.grade,
+            class_num: cls,
+            day_of_week: day,
+            slot,
+            teacher_id: teacher.id,
+            subject_id: subject.id,
+            room_id: null,
+            is_unassigned: false,
+          })
+        }
+      }
+    }
+  }
+  return { rows, warnings }
+}
