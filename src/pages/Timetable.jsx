@@ -619,6 +619,10 @@ export default function Timetable() {
           lunchConfig={lunchConfig}
           onSave={handleEditSave}
           onClose={() => setEditModal(null)}
+          onDelete={() => {
+            if (editModal?.rowId) setTimetableSlots(timetableRows.filter(r => r.id !== editModal.rowId))
+            setEditModal(null)
+          }}
           saving={saving}
         />
       )}
@@ -1135,7 +1139,7 @@ function GenerateOptionsModal({ options, onChange, subjects, onConfirm, onClose 
   )
 }
 
-function EditCellModal({ modal, teachers, subjects, gradeConfigs, rooms, grade, lunchConfig, onSave, onClose, saving }) {
+function EditCellModal({ modal, teachers, subjects, gradeConfigs, rooms, grade, lunchConfig, onSave, onClose, onDelete, saving }) {
   const { day, slot, classLabel, teacherView, defaultTeacherId } = modal
   const DAY_LABELS = ['월', '화', '수', '목', '금']
   const needsGradeClass = teacherView && !modal.grade
@@ -1412,15 +1416,20 @@ function EditCellModal({ modal, teachers, subjects, gradeConfigs, rooms, grade, 
             </div>
           )}
         </div>
-        <div className="flex justify-end gap-2">
-          <button onClick={onClose} className="h-9 px-4 border border-gray-300 rounded-sm text-[13px] hover:bg-gray-50">취소</button>
-          <button
-            onClick={() => onSave(teacherId, subjectId, (needsGradeClass || showClassSelector) ? formGrade : null, (needsGradeClass || showClassSelector) ? formClass : null, roomId || null)}
-            disabled={saving}
-            className="h-9 px-4 bg-black text-white text-[13px] font-semibold rounded-sm hover:bg-gray-800 disabled:opacity-50"
-          >
-            저장
-          </button>
+        <div className="flex items-center justify-between">
+          {modal.rowId ? (
+            <button onClick={onDelete} className="text-[13px] text-red-500 hover:text-red-600">삭제</button>
+          ) : <span />}
+          <div className="flex gap-2">
+            <button onClick={onClose} className="h-9 px-4 border border-gray-300 rounded-sm text-[13px] hover:bg-gray-50">취소</button>
+            <button
+              onClick={() => onSave(teacherId, subjectId, (needsGradeClass || showClassSelector) ? formGrade : null, (needsGradeClass || showClassSelector) ? formClass : null, roomId || null)}
+              disabled={saving}
+              className="h-9 px-4 bg-black text-white text-[13px] font-semibold rounded-sm hover:bg-gray-800 disabled:opacity-50"
+            >
+              저장
+            </button>
+          </div>
         </div>
       </div>
     </div>

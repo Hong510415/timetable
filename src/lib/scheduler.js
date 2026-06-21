@@ -353,10 +353,11 @@ export function buildSchedule(
     if (isSpecified) {
       usableDays = daysToUse // 지정 요일은 전부 사용해 그 안에서 균등 분산
     } else {
-      // 자동: 균등 분할에 필요한 최소 일수 (예 7반/5교시 → 2일 → 4-3)
-      const perDayCap = Math.max(1, ...daysToUse.map(d =>
-        Math.max(...instGrades.map(g => gradeClassSlots[g]?.[1]?.[d]?.size || 0))
-      ))
+      // 자동: 균등 분할에 필요한 최소 일수. 하루 용량은 보수적으로(학년·요일별 가용 슬롯의 최솟값)
+      // 잡아야 다 안 들어가 미배정 나는 일을 막는다.
+      const perDayCap = Math.max(1, Math.min(...daysToUse.flatMap(d =>
+        instGrades.map(g => gradeClassSlots[g]?.[1]?.[d]?.size || 0)
+      )))
       const nDays = Math.max(1, Math.min(daysToUse.length, Math.ceil(totalSize / perDayCap)))
       usableDays = daysToUse.slice(0, nDays)
     }
@@ -371,9 +372,9 @@ export function buildSchedule(
         dayLoad += task.size
         continue
       }
-      // 현재 날에 못 넣으면 다른 모든 날(앞·뒤)에 시도 — 미배정 방지 최우선
+      // 현재 날에 못 넣으면 사용 가능한 모든 요일(지정요일 전체)에 시도 — 미배정 방지 최우선
       let placed = false
-      for (const d of usableDays) {
+      for (const d of daysToUse) {
         if (d === usableDays[di]) continue
         if (placeTaskOnDay(task, d)) { placed = true; break }
       }
