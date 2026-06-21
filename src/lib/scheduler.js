@@ -308,50 +308,76 @@ export function buildSchedule(
     // 사용할 요일: 지정 시 그 요일들, 자동이면 월부터 전체
     const daysToUse = (inst.days && inst.days.length) ? [...inst.days].sort((a, b) => a - b) : [0, 1, 2, 3, 4]
 
-    // 순차 채움: 같은 학년을 한 날에 몰아서(grade 순) 꽉 채우고, 넘치면 다음 날로 (경계 날만 두 학년 혼합)
-    let ti = 0
-    for (const day of daysToUse) {
-      if (ti >= tasks.length) break
-      const instDayUsed = new Set() // 이 강사가 이 날 점유한 슬롯
-      let ptr = 0
-      while (ti < tasks.length) {
-        const task = tasks[ti]
-        const av = gradeClassSlots[task.grade]?.[task.classNum]?.[day]
-        if (!av) break
-        const roomFree = (s) => !instRoomId || (!roomOccupied[instRoomId]?.[day]?.has(s) && !roomBlockedMap[instRoomId]?.has(`${day}-${s}`))
-        let start = -1
-        for (let s = ptr; s + task.size <= totalSlots; s++) {
-          let ok = true
-          for (let k = 0; k < task.size; k++) {
-            if (!av.has(s + k) || instDayUsed.has(s + k) || !roomFree(s + k)) { ok = false; break }
-          }
-          if (ok) { start = s; break }
-        }
-        if (start === -1) break // 이 날 더 못 넣음 → 다음 날
+    // 이 강사가 각 날 점유한 슬롯 / 다음 배치 포인터 (학년 간 공유 — 강사는 한 명)
+    const instUsed = {}
+    const ptrByDay = {}
+    const roomFree = (day, s) => !instRoomId || (!roomOccupied[instRoomId]?.[day]?.has(s) && !roomBlockedMap[instRoomId]?.has(`${day}-${s}`))
+
+    function placeTaskOnDay(task, day) {
+      const av = gradeClassSlots[task.grade]?.[task.classNum]?.[day]
+      if (!av) return false
+      if (!instUsed[day]) instUsed[day] = new Set()
+      if (ptrByDay[day] == null) ptrByDay[day] = 0
+      let start = -1
+      for (let s = ptrByDay[day]; s + task.size <= totalSlots; s++) {
+        let ok = true
         for (let k = 0; k < task.size; k++) {
-          const slot = start + k
-          result[task.grade][task.classNum][day][slot] = {
-            external: true,
-            externalId: inst.id,
-            externalName: inst.name || '외부강사',
-            subjectName: inst.subjectName || '',
-            roomId: instRoomId || undefined,
-          }
-          av.delete(slot) // 전담 후보에서 제외
-          instDayUsed.add(slot)
-          if (instRoomId) roomOccupied[instRoomId][day].add(slot) // 특별실 점유 → 전담·타 강사 회피
-          // 학급 요일 균형(#14)에 외부강사도 반영 → 전담이 외부강사 있는 날을 피해 고르게 펴짐
-          const ck = `${task.grade}_${task.classNum}`
-          if (!classDayCount[ck]) classDayCount[ck] = [0, 0, 0, 0, 0]
-          classDayCount[ck][day]++
+          if (!av.has(s + k) || instUsed[day].has(s + k) || !roomFree(day, s + k)) { ok = false; break }
         }
-        ptr = start + task.size
-        ti++
+        if (ok) { start = s; break }
       }
+      if (start === -1) return false
+      for (let k = 0; k < task.size; k++) {
+        const slot = start + k
+        result[task.grade][task.classNum][day][slot] = {
+          external: true,
+          externalId: inst.id,
+          externalName: inst.name || '외부강사',
+          subjectName: inst.subjectName || '',
+          roomId: instRoomId || undefined,
+        }
+        av.delete(slot)
+        instUsed[day].add(slot)
+        if (instRoomId) roomOccupied[instRoomId][day].add(slot)
+        const ck = `${task.grade}_${task.classNum}`
+        if (!classDayCount[ck]) classDayCount[ck] = [0, 0, 0, 0, 0]
+        classDayCount[ck][day]++
+      }
+      ptrByDay[day] = start + task.size
+      return true
     }
-    // 남은 task → 미배치 경고
-    for (; ti < tasks.length; ti++) {
-      externalErrors.push({ name: inst.name, grade: tasks[ti].grade, classNum: tasks[ti].classNum })
+
+    // 학년별로 처리: 같은 학년은 모아서(그룹 유지), 한 날에 다 못 들어가면 최소 일수에 균등 분할(예 7반 → 4-3)
+    let dayCursor = 0
+    for (const g of instGrades) {
+      const gradeTasks = tasks.filter(t => t.grade === g)
+      if (!gradeTasks.length) continue
+      const gradeSize = gradeTasks.reduce((s, t) => s + t.size, 0)
+      // 하루 용량(이 학년 학급의 가용 슬롯 최대치)
+      const perDayCap = Math.max(1, ...daysToUse.map(d => gradeClassSlots[g]?.[1]?.[d]?.size || 0))
+      const nDays = Math.max(1, Math.ceil(gradeSize / perDayCap))
+      // 이 학년이 쓸 날: 커서부터 nDays개 연속 (학년 그룹 분리). 모자라면 가능한 만큼.
+      const gradeDays = []
+      for (let i = 0; i < nDays; i++) {
+        if (dayCursor < daysToUse.length) gradeDays.push(daysToUse[dayCursor++])
+        else gradeDays.push(daysToUse[daysToUse.length - 1]) // 날 부족 시 마지막 날에 몰기(혼합 허용)
+      }
+      // 균등 분배: 부하 적은 날부터 (예 7 → 4-3)
+      const buckets = gradeDays.map(() => [])
+      const load = gradeDays.map(() => 0)
+      for (const task of gradeTasks) {
+        let best = 0
+        for (let i = 1; i < gradeDays.length; i++) if (load[i] < load[best]) best = i
+        buckets[best].push(task)
+        load[best] += task.size
+      }
+      for (let i = 0; i < gradeDays.length; i++) {
+        for (const task of buckets[i]) {
+          if (!placeTaskOnDay(task, gradeDays[i])) {
+            externalErrors.push({ name: inst.name, grade: task.grade, classNum: task.classNum })
+          }
+        }
+      }
     }
   }
 

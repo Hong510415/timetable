@@ -43,17 +43,18 @@ describe('외부강사 사전 고정 배치', () => {
     hoursPerClass: 1, consecutive: false, days: [], ...over,
   })
 
-  it('7학급(hpc1, 자동, 하루5교시)을 꽉 채우고 넘치면 다음날 (5-2), gap 없이', () => {
+  it('7학급(hpc1, 자동, 하루5교시)을 연속 2일에 균등 분할(4-3), gap 없이', () => {
     const res = buildSchedule([makeGrade(3, 7)], [], [], noLunch, [], [], { externalInstructors: [ext()] })
     const rows = flatRows(res).filter(r => r.is_external)
     expect(rows.length).toBe(7)
     expect(new Set(rows.map(r => r.class_num)).size).toBe(7)
-    // 월(5) + 화(2)
+    // 연속 2일
     const days = [...new Set(rows.map(r => r.day_of_week))].sort()
     expect(days).toEqual([0, 1])
+    // 균등 4-3
     const c0 = rows.filter(r => r.day_of_week === 0).length
     const c1 = rows.filter(r => r.day_of_week === 1).length
-    expect([c0, c1]).toEqual([5, 2])
+    expect([c0, c1].sort((a, b) => a - b)).toEqual([3, 4])
     // 각 날 gap 없이(0..n-1)
     for (const d of days) {
       const slots = rows.filter(r => r.day_of_week === d).map(r => r.slot).sort((a, b) => a - b)
