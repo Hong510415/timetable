@@ -97,6 +97,17 @@ describe('외부강사 사전 고정 배치', () => {
     }
   })
 
+  it('지정 요일(화수목) 안에서 두 학년을 균등 분산하고 미배정 없이 배치(같은 날 뒤에 다른 학년)', () => {
+    const res = buildSchedule([makeGrade(5, 7), makeGrade(6, 7)], [], [], noLunch, [], [],
+      { externalInstructors: [ext({ grades: [5, 6], days: [1, 2, 3] })] })
+    const rows = flatRows(res).filter(r => r.is_external)
+    expect(rows.length).toBe(14) // 미배정 0
+    const days = [...new Set(rows.map(r => r.day_of_week))].sort()
+    expect(days).toEqual([1, 2, 3])
+    const counts = [1, 2, 3].map(d => rows.filter(r => r.day_of_week === d).length).sort((a, b) => a - b)
+    expect(counts).toEqual([4, 5, 5]) // 균등 분산
+  })
+
   it('같은 특별실을 쓰는 두 외부강사는 같은 (요일,슬롯) 방을 겹치지 않는다', () => {
     const room = { id: 'R', name: '실험실', externalInstructorIds: ['x1', 'y1'] }
     const X = ext({ id: 'x1', name: 'A', grades: [3], days: [0] })
