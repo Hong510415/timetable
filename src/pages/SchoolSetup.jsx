@@ -85,6 +85,8 @@ export default function SchoolSetup() {
         <ManualModal title="학교 설정" sections={MANUAL} />
       </div>
 
+      <p className="max-w-[720px] text-[12px] text-gray-400 -mt-3 mb-5">① 가장 먼저 학교명·학년별 학급 수·요일별 교시 수·점심 분리 여부를 입력하세요. 이후 과목 → 배정 → 특별실 → 시간표 순서로 진행합니다.</p>
+
       <div className="mb-5">
         <label className="text-[12px] font-semibold text-gray-600 block mb-1">학교명</label>
         <input

@@ -158,7 +158,7 @@ export default function SubjectSetup() {
       <div className="flex items-start justify-between mb-6 max-w-[720px]">
         <div>
           <h1 className="text-[22px] font-bold">전담 과목 설정</h1>
-          <p className="text-[12px] text-gray-400 mt-1">변경 사항은 자동으로 저장됩니다.</p>
+          <p className="text-[12px] text-gray-400 mt-1">② 전담 수업에 쓸 과목을 학년별로 등록하세요. 과목명·주당 시수·주요/일반 구분을 입력합니다. (변경 사항은 자동 저장)</p>
         </div>
         <ManualModal title="전담 과목 설정" sections={MANUAL} />
       </div>

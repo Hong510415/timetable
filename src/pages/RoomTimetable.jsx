@@ -113,6 +113,8 @@ export default function RoomTimetable() {
         </div>
       </div>
 
+      <p className="max-w-[1100px] text-[12px] text-gray-400 -mt-3 mb-5">특별실별 사용 현황을 확인하고, 빈 시간에 수업을 직접 추가할 수 있습니다. 전담 시간표와 실시간으로 연동됩니다.</p>
+
       {rooms.length === 0 ? (
         <div className="text-center py-20 text-gray-300 text-[14px]">
           특별실을 먼저 등록하세요

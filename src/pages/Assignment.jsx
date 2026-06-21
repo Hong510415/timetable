@@ -146,6 +146,8 @@ export default function Assignment() {
         </div>
       </div>
 
+      <p className="max-w-[720px] text-[12px] text-gray-400 -mt-3 mb-5">③ 어떤 교사가 어떤 과목·학년·반을 맡을지 정하세요. "자동 배정 실행" 후 표에서 직접 수정할 수 있고, "시간표에 적용"을 눌러야 시간표 생성에 반영됩니다.</p>
+
       {/* 배정 정보 */}
       <div className="max-w-[720px] bg-white border border-gray-200 rounded-sm p-4 mb-5 text-[12px] text-gray-500 flex gap-6 flex-wrap">
         <span>교사 수: <strong className="text-gray-800">{teachers.length}명</strong></span>
