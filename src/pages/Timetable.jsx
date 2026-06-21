@@ -1,9 +1,8 @@
 import { useState, useRef, useEffect } from 'react'
-import { Download, RefreshCw, ChevronDown, Printer, Upload } from 'lucide-react'
+import { Download, RefreshCw, ChevronDown } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { buildSchedule, flattenResult } from '../lib/scheduler'
 import { exportTimetableByClass, exportTimetableByTeacher } from '../lib/excelExport'
-import { importClassTimetable } from '../lib/excelIO'
 import TimetableGrid from '../components/TimetableGrid'
 import ManualModal from '../components/ManualModal'
 
@@ -39,11 +38,13 @@ const MANUAL = [
     ],
   },
   {
-    title: '셀 교환 (교사별 보기)',
+    title: '셀 교환·입력 (교사별 보기)',
     items: [
-      '셀을 클릭하면 파란 테두리로 선택됩니다.',
-      '다른 셀을 클릭하면 두 셀의 내용이 서로 바뀝니다 (빈 셀이면 이동).',
-      '같은 셀을 다시 클릭하면 선택 해제 후 편집 모달이 열립니다.',
+      '칸에 마우스를 올리면 사용법 말풍선이 나타납니다.',
+      '빈 칸을 클릭하면 바로 입력 모달이 열려 학년·반·과목·특별실을 채울 수 있습니다.',
+      '채워진 칸을 클릭하면 파란 테두리로 선택됩니다.',
+      '선택 후 다른 칸을 클릭하면 두 칸의 내용이 서로 바뀝니다 (빈 칸이면 이동).',
+      '선택한 칸을 다시 클릭하면 선택 해제 후 편집 모달이 열립니다.',
     ],
   },
   {
@@ -78,12 +79,12 @@ const MANUAL = [
     ],
   },
   {
-    title: '작년 시간표 가져오기 (엑셀)',
+    title: '작년 시간표 직접 입력 (역입력)',
     items: [
-      '"엑셀 가져오기"를 누르면 학급별 엑셀 양식의 시간표를 그대로 불러와 표를 채웁니다.',
-      '양식은 "학급별 엑셀"로 내려받은 파일과 동일합니다 (시트명 "N학년M반", 셀 형식 "과목명(교사코드)").',
-      '작년 시간표를 이 형식으로 채워 가져온 뒤, 올해 바뀐 부분만 수정해 출력할 수 있습니다.',
-      '먼저 전담 과목·교사를 등록해야 과목명·교사코드가 매칭됩니다. 매칭 안 된 칸은 건너뛰고 사유를 알려줍니다.',
+      '자동 생성을 누르지 않아도, 교사·과목을 등록하면 빈 시간표가 바로 나타나 직접 입력할 수 있습니다.',
+      '교사별 보기에서 빈 칸을 클릭하면 학년·반·과목·특별실을 골라 수업을 채울 수 있습니다.',
+      '작년 시간표를 이렇게 그대로 만들어 둔 뒤, 올해 바뀐 부분만 수정하면 다음 해에도 빠르게 활용할 수 있습니다.',
+      '먼저 학교 설정 → 전담 과목 → 전담 배정에 작년 기준 정보를 입력해 두면 칸 입력이 매끄럽습니다.',
     ],
   },
   {
@@ -105,32 +106,6 @@ export default function Timetable() {
   const [showGenerateModal, setShowGenerateModal] = useState(false)
   const [generateOptions, setGenerateOptions] = useState({ subjectSettings: {} })
   const [selectedClasses, setSelectedClasses] = useState([{ grade: 1, classNum: 1 }])
-  const ttImportRef = useRef(null)
-
-  async function handleImportTimetable(e) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    if (timetableRows.length > 0 && !confirm('현재 시간표를 가져온 파일 내용으로 덮어씁니다. 계속하시겠습니까?')) {
-      e.target.value = ''
-      return
-    }
-    try {
-      const totalSlots = lunchConfig?.split_lunch ? 7 : 6
-      const { rows, warnings } = await importClassTimetable(file, { gradeConfigs, teachers, subjects, totalSlots })
-      if (rows.length === 0) {
-        alert('가져올 수업을 찾지 못했습니다. "학급별 엑셀" 양식(시트명 "N학년M반", 셀 "과목명(교사코드)")인지, 과목·교사가 먼저 등록되어 있는지 확인하세요.')
-        e.target.value = ''
-        return
-      }
-      setTimetableSlots(rows)
-      const msg = `${rows.length}개 수업을 불러왔습니다.` +
-        (warnings.length ? `\n\n건너뛴 항목 ${warnings.length}건:\n- ${warnings.slice(0, 10).join('\n- ')}${warnings.length > 10 ? `\n외 ${warnings.length - 10}건` : ''}` : '')
-      alert(msg)
-    } catch (err) {
-      alert('파일을 읽는 중 오류가 발생했습니다: ' + err.message)
-    }
-    e.target.value = ''
-  }
 
   function toggleSelectedClass(grade, classNum) {
     setSelectedClasses(prev => {
@@ -287,7 +262,12 @@ export default function Timetable() {
 
   function handleTeacherCellClick(teacherId, day, slot, cell) {
     if (!swapCell) {
-      // 첫 클릭: 셀 선택
+      if (!cell) {
+        // 빈 칸 첫 클릭: 바로 입력 모달 (작년 시간표 직접 입력 등)
+        openEditModal(day, slot, cell, { defaultTeacherId: teacherId })
+        return
+      }
+      // 채워진 칸 첫 클릭: 교환을 위해 선택
       setSwapCell({ teacherId, day, slot, rowId: cell?.id || null })
     } else if (swapCell.teacherId === teacherId && swapCell.day === day && swapCell.slot === slot) {
       // 같은 셀 재클릭: 선택 해제 + 편집 모달
@@ -372,32 +352,11 @@ export default function Timetable() {
             <Download size={14} />교사별 엑셀
           </button>
           <button
-            title="현재 시간표를 학급 단위 엑셀 파일로 내려받습니다. 이 파일이 곧 '가져오기' 양식입니다 — 작년 시간표를 이 형식으로 채워 다시 가져올 수 있습니다."
+            title="현재 시간표를 학급 단위 엑셀 파일로 내려받습니다. (인쇄는 이 엑셀 파일로 하면 됩니다.)"
             onClick={() => exportTimetableByClass(timetableRows, gradeConfigs, teachers, subjects, gradeLunchSlot, totalSlots)}
             className="flex items-center gap-2 h-10 px-3 md:px-4 border border-gray-300 text-[13px] rounded-sm hover:bg-gray-50 whitespace-nowrap"
           >
             <Download size={14} />학급별 엑셀
-          </button>
-          <input
-            ref={ttImportRef}
-            type="file"
-            accept=".xlsx"
-            onChange={handleImportTimetable}
-            className="hidden"
-          />
-          <button
-            title="학급별 엑셀 양식(작년 시간표 등)을 불러와 표에 채웁니다. 과목·교사를 먼저 등록한 뒤 사용하세요."
-            onClick={() => ttImportRef.current?.click()}
-            className="flex items-center gap-2 h-10 px-3 md:px-4 border border-gray-300 text-[13px] rounded-sm hover:bg-gray-50 whitespace-nowrap"
-          >
-            <Upload size={14} />엑셀 가져오기
-          </button>
-          <button
-            title="현재 보고 있는 시간표를 인쇄(또는 PDF로 저장)합니다."
-            onClick={() => window.print()}
-            className="flex items-center gap-2 h-10 px-3 md:px-4 border border-gray-300 text-[13px] rounded-sm hover:bg-gray-50 whitespace-nowrap"
-          >
-            <Printer size={14} />인쇄
           </button>
           <button
             title="배정 규칙에 따라 20번 탐색해 가장 좋은 시간표를 자동으로 만듭니다. 기존 결과는 새 결과로 대체됩니다."
@@ -422,9 +381,9 @@ export default function Timetable() {
         />
       )}
 
-      {timetableRows.length === 0 ? (
+      {teachers.length === 0 && timetableRows.length === 0 ? (
         <div className="text-center py-20 text-gray-300 text-[14px]">
-          시간표를 자동 생성하거나 수동으로 입력하세요
+          먼저 전담 과목·교사를 등록하세요. 등록하면 빈 시간표가 나타나 직접 입력할 수 있습니다.
         </div>
       ) : (
         <>
@@ -456,7 +415,7 @@ export default function Timetable() {
               {selectedClasses.length === 0 ? (
                 <div className="max-w-[1100px] text-center py-12 text-gray-300 text-[13px]">학급을 선택하세요</div>
               ) : (
-                <div className="print-area max-w-[1100px] grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div className="max-w-[1100px] grid grid-cols-1 lg:grid-cols-2 gap-4">
                   {selectedClasses.map(({ grade, classNum }) => (
                     <div key={`${grade}-${classNum}`} className="flex flex-col gap-1">
                       <div className="px-1 text-[13px] font-bold text-gray-800">{grade}학년 {classNum}반</div>
@@ -481,7 +440,7 @@ export default function Timetable() {
           )}
 
           {tab === 'teacher' && (
-            <div className="print-area max-w-[1100px] grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="max-w-[1100px] grid grid-cols-1 lg:grid-cols-2 gap-4">
               {teachers.map(t => {
                 const ts = getSlotsForTeacher(t.id)
                 const scheduled = timetableRows.filter(r => r.teacher_id === t.id && !r.is_unassigned).length
@@ -813,6 +772,13 @@ function TeacherTimetableGrid({ slots, totalSlots, gradeLunchSlot, gradeConfigs,
                       <span className="hidden group-hover:block text-[12px] text-gray-300">—</span>
                     )}
                   </>
+                )}
+                {!isRed && (
+                  <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1 z-20 hidden group-hover:block bg-gray-800 text-white text-[11px] rounded px-2 py-1 w-max max-w-[190px] text-center leading-snug shadow-lg">
+                    {cell
+                      ? '클릭해 선택한 뒤 다른 칸을 클릭하면 두 수업이 서로 바뀝니다. 같은 칸을 다시 클릭하면 내용을 수정할 수 있어요.'
+                      : '클릭하면 이 시간에 수업(학년·반·과목·특별실)을 직접 입력할 수 있어요.'}
+                  </div>
                 )}
               </div>
             )
