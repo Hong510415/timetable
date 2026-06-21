@@ -863,33 +863,41 @@ function ExternalUnassignedStats({ externalInstructors, gradeConfigs, timetableR
   for (const inst of externalInstructors) {
     const hpc = Math.max(1, Math.floor(inst.hoursPerClass) || 1)
     const grades = (inst.grades || []).filter(g => gradeConfigs.some(x => x.grade === g))
-    const target = grades.reduce((s, g) => s + (gradeConfigs.find(gc => gc.grade === g)?.num_classes || 0) * hpc, 0)
-    if (target === 0) continue
-    const scheduled = timetableRows.filter(r => r.is_external && r.external_id === inst.id && !r.is_unassigned).length
-    const deficit = target - scheduled
-    if (deficit > 0) {
-      rows.push({ name: inst.name || '외부강사', subjectName: inst.subjectName || '', target, scheduled, deficit })
+    for (const g of grades) {
+      const numClasses = gradeConfigs.find(gc => gc.grade === g)?.num_classes || 0
+      for (let c = 1; c <= numClasses; c++) {
+        const scheduled = timetableRows.filter(r =>
+          r.is_external && r.external_id === inst.id && r.grade === g && r.class_num === c && !r.is_unassigned
+        ).length
+        const deficit = hpc - scheduled
+        if (deficit > 0) {
+          rows.push({ name: inst.name || '외부강사', subjectName: inst.subjectName || '', grade: g, classNum: c, target: hpc, scheduled, deficit })
+        }
+      }
     }
   }
   if (rows.length === 0) return null
 
+  const gridStyle = { gridTemplateColumns: '1fr 1fr 110px 60px 60px 60px' }
   return (
-    <div className="mb-4 max-w-[540px]">
+    <div className="mb-4 max-w-[640px]">
       <div className="bg-white border border-red-200 rounded-sm overflow-hidden">
         <div className="px-4 py-2.5 border-b border-red-200 bg-red-50 text-[12px] font-semibold text-red-700">
           외부강사 미배정 ({rows.length}건)
         </div>
-        <div className="grid bg-gray-50 border-b border-gray-200 text-[11px] font-semibold text-gray-500" style={{ gridTemplateColumns: '1fr 1fr 60px 60px 60px' }}>
+        <div className="grid bg-gray-50 border-b border-gray-200 text-[11px] font-semibold text-gray-500" style={gridStyle}>
           <div className="px-3 py-2 border-r border-gray-200">강사</div>
           <div className="px-3 py-2 border-r border-gray-200">과목</div>
+          <div className="px-3 py-2 border-r border-gray-200">학년 · 반</div>
           <div className="px-3 py-2 border-r border-gray-200 text-center">목표</div>
           <div className="px-3 py-2 border-r border-gray-200 text-center">배정</div>
           <div className="px-3 py-2 text-center">부족</div>
         </div>
         {rows.map((r, i) => (
-          <div key={i} className="grid border-b border-gray-100 last:border-b-0 text-[12px]" style={{ gridTemplateColumns: '1fr 1fr 60px 60px 60px' }}>
+          <div key={i} className="grid border-b border-gray-100 last:border-b-0 text-[12px]" style={gridStyle}>
             <div className="px-3 py-2 border-r border-gray-100 font-semibold text-indigo-700">{r.name}</div>
             <div className="px-3 py-2 border-r border-gray-100">{r.subjectName}</div>
+            <div className="px-3 py-2 border-r border-gray-100">{r.grade}학년 {r.classNum}반</div>
             <div className="px-3 py-2 border-r border-gray-100 text-center text-gray-600">{r.target}h</div>
             <div className="px-3 py-2 border-r border-gray-100 text-center text-gray-600">{r.scheduled}h</div>
             <div className="px-3 py-2 text-center font-bold text-red-600">−{r.deficit}h</div>
