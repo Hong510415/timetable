@@ -266,10 +266,35 @@ export default function Timetable() {
       daySlots[d] = {}
       const relevant = timetableRows.filter(r => r.is_external && r.external_id === instId && r.day_of_week === d)
       for (const r of relevant) {
-        daySlots[d][r.slot] = { is_external: true, subject_name: r.subject_name, external_name: r.external_name, label: `${r.grade}학년 ${r.class_num}반`, grade: r.grade, class_num: r.class_num }
+        daySlots[d][r.slot] = { id: r.id, is_external: true, subject_name: r.subject_name, external_name: r.external_name, label: `${r.grade}학년 ${r.class_num}반`, grade: r.grade, class_num: r.class_num }
       }
     }
     return daySlots
+  }
+
+  function handleExternalCellClick(instId, day, slot, cell) {
+    const ownerKey = `ext:${instId}`
+    if (!swapCell) {
+      if (!cell) return // 빈 칸에서 시작 불가 (외부강사 수업은 외부강사 관리에서 추가)
+      setSwapCell({ teacherId: ownerKey, day, slot, rowId: cell.id || null })
+    } else if (swapCell.teacherId === ownerKey && swapCell.day === day && swapCell.slot === slot) {
+      // 같은 칸 재클릭 → 삭제
+      setSwapCell(null)
+      if (cell && confirm('이 외부강사 수업을 시간표에서 삭제할까요? (외부강사 관리 등록 내용에는 영향 없음)')) {
+        setTimetableSlots(timetableRows.filter(r => r.id !== cell.id))
+      }
+    } else {
+      // 다른 칸 클릭 → 자리 교환(또는 빈 칸이면 이동)
+      const idA = swapCell.rowId, idB = cell?.id || null
+      const dayA = swapCell.day, slotA = swapCell.slot
+      const updated = timetableRows.map(r => {
+        if (idA && r.id === idA) return { ...r, day_of_week: day, slot }
+        if (idB && r.id === idB) return { ...r, day_of_week: dayA, slot: slotA }
+        return r
+      })
+      setTimetableSlots(updated)
+      setSwapCell(null)
+    }
   }
 
   function handleTeacherCellClick(teacherId, day, slot, cell) {
@@ -508,8 +533,9 @@ export default function Timetable() {
                       teachers={teachers}
                       rooms={rooms}
                       compact
-                      selectedCell={null}
-                      onCellClick={() => alert('외부강사 수업입니다. "외부강사 관리"에서 수정 후 시간표를 다시 생성하세요.')}
+                      externalGrid
+                      selectedCell={swapCell?.teacherId === `ext:${inst.id}` ? swapCell : null}
+                      onCellClick={(day, slot, cell) => handleExternalCellClick(inst.id, day, slot, cell)}
                     />
                   </div>
                 )
@@ -704,7 +730,7 @@ function UnassignedStats({ teachers, subjects, timetableRows, filterClasses, pla
   )
 }
 
-function TeacherTimetableGrid({ slots, totalSlots, gradeLunchSlot, gradeConfigs, subjects, timetableRows, teachers, rooms, compact, selectedCell, onCellClick }) {
+function TeacherTimetableGrid({ slots, totalSlots, gradeLunchSlot, gradeConfigs, subjects, timetableRows, teachers, rooms, compact, selectedCell, onCellClick, externalGrid }) {
   const DAY_LABELS = ['월', '화', '수', '목', '금']
   const DAY_FIELDS = ['periods_mon', 'periods_tue', 'periods_wed', 'periods_thu', 'periods_fri']
 
@@ -827,11 +853,15 @@ function TeacherTimetableGrid({ slots, totalSlots, gradeLunchSlot, gradeConfigs,
                     )}
                   </>
                 )}
-                {!isRed && !cell?.is_external && (
+                {!isRed && (
                   <div className={`pointer-events-none absolute z-20 hidden group-hover:block bg-gray-800/85 text-white text-[11px] rounded px-2 py-1 w-max max-w-[190px] text-center leading-snug shadow-lg break-keep ${slot === 0 ? 'top-full mt-1' : 'bottom-full mb-1'} ${day === 0 ? 'left-0' : day === 4 ? 'right-0' : 'left-1/2 -translate-x-1/2'}`}>
-                    {cell
-                      ? '클릭해 선택한 뒤 다른 칸을 클릭하면 두 수업이 서로 바뀝니다. 같은 칸을 다시 클릭하면 내용을 수정할 수 있어요.'
-                      : '클릭하면 이 시간에 수업(학년·반·과목·특별실)을 직접 입력할 수 있어요.'}
+                    {externalGrid
+                      ? (cell
+                          ? '클릭해 선택한 뒤 다른 칸을 클릭하면 자리를 바꿉니다. 같은 칸을 다시 클릭하면 이 수업을 삭제합니다.'
+                          : '선택한 외부강사 수업을 이 칸으로 옮길 수 있어요.')
+                      : (cell
+                          ? '클릭해 선택한 뒤 다른 칸을 클릭하면 두 수업이 서로 바뀝니다. 같은 칸을 다시 클릭하면 내용을 수정할 수 있어요.'
+                          : '클릭하면 이 시간에 수업(학년·반·과목·특별실)을 직접 입력할 수 있어요.')}
                   </div>
                 )}
               </div>
