@@ -106,7 +106,7 @@ export default function Timetable() {
   const [tab, setTab] = useState('teacher')
   const [showGenerateModal, setShowGenerateModal] = useState(false)
   const [generateOptions, setGenerateOptions] = useState({ subjectSettings: {} })
-  const [selectedClasses, setSelectedClasses] = useState([{ grade: 1, classNum: 1 }])
+  const [selectedClasses, setSelectedClasses] = useState([])
   const [extEdit, setExtEdit] = useState(null) // { instId, day, slot, current }
 
   function toggleSelectedClass(grade, classNum) {
@@ -440,7 +440,7 @@ export default function Timetable() {
           <ManualModal title="전담 시간표" sections={MANUAL} />
           <button
             title="현재 시간표를 교사 단위 엑셀 파일로 내려받습니다."
-            onClick={() => exportTimetableByTeacher(timetableRows, teachers, subjects, gradeConfigs, gradeLunchSlot, totalSlots)}
+            onClick={() => exportTimetableByTeacher(timetableRows, teachers, subjects, gradeConfigs, gradeLunchSlot, totalSlots, externalInstructors)}
             className="flex items-center gap-2 h-10 px-3 md:px-4 border border-gray-300 text-[13px] rounded-sm hover:bg-gray-50 whitespace-nowrap"
           >
             <Download size={14} />교사별 엑셀

@@ -65,16 +65,31 @@ export function exportFullWorkbook(state) {
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(assignRows), '전담배정')
 
   // 시트6: 특별실
-  const roomRows = [['ID', '특별실명', '사용과목', '사용교사ID']]
+  const roomRows = [['ID', '특별실명', '사용과목', '사용교사ID', '외부강사ID']]
   for (const r of state.rooms) {
     roomRows.push([
       r.id,
       r.name,
       (r.subjectNames || []).join(','),
       (r.teacherIds || []).join(','),
+      (r.externalInstructorIds || []).join(','),
     ])
   }
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(roomRows), '특별실')
+
+  // 시트6-2: 외부강사
+  const extRows = [['ID', '강사명', '담당학년', '과목명', '학급당시수', '연속수업', '요일']]
+  for (const e of (state.externalInstructors || [])) {
+    extRows.push([
+      e.id, e.name || '',
+      (e.grades || []).join(','),
+      e.subjectName || '',
+      e.hoursPerClass || 1,
+      e.consecutive ? 'Y' : 'N',
+      (e.days || []).join(','),
+    ])
+  }
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(extRows), '외부강사')
 
   // 시트7: 특별실차단
   const blockedRows = [['특별실ID', '특별실명', '요일(0=월)', '교시']]
@@ -85,17 +100,18 @@ export function exportFullWorkbook(state) {
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(blockedRows), '특별실차단')
 
   // 시트8: 시간표
-  const ttRows = [['학년', '반', '요일(0=월)', '교시', '교사ID', '교사코드', '과목ID', '과목명', '미배정', '특별실ID', '특별실명']]
+  const ttRows = [['학년', '반', '요일(0=월)', '교시', '교사ID', '교사코드', '과목ID', '과목명', '미배정', '특별실ID', '특별실명', '외부(Y/N)', '외부강사ID', '외부강사명', '표시과목명']]
   for (const slot of state.timetableSlots) {
     const teacher = state.teachers.find(t => t.id === slot.teacher_id)
     const subj = state.subjects.find(s => s.id === slot.subject_id)
     const room = slot.room_id ? state.rooms.find(r => r.id === slot.room_id) : null
     ttRows.push([
       slot.grade, slot.class_num, slot.day_of_week, slot.slot,
-      slot.teacher_id, teacher?.code || '',
-      slot.subject_id, subj?.name || '',
+      slot.teacher_id || '', teacher?.code || '',
+      slot.subject_id || '', subj?.name || '',
       slot.is_unassigned ? 'Y' : 'N',
       slot.room_id || '', room?.name || '',
+      slot.is_external ? 'Y' : 'N', slot.external_id || '', slot.external_name || '', slot.subject_name || '',
     ])
   }
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ttRows), '시간표')
@@ -230,6 +246,19 @@ export async function importFullWorkbook(file) {
     subjectNames: r[2] ? String(r[2]).split(',').filter(Boolean) : [],
     // 신규 컬럼 (구 엑셀 호환: 없으면 빈 배열로 처리 → 기본 동작)
     teacherIds: r[3] ? String(r[3]).split(',').filter(Boolean) : [],
+    externalInstructorIds: r[4] ? String(r[4]).split(',').filter(Boolean) : [],
+  }))
+
+  // 외부강사
+  const extRows = getSheet('외부강사').slice(1).filter(r => r[0])
+  state.externalInstructors = extRows.map(r => ({
+    id: String(r[0]),
+    name: String(r[1] || ''),
+    grades: r[2] ? String(r[2]).split(',').filter(Boolean).map(Number) : [],
+    subjectName: String(r[3] || ''),
+    hoursPerClass: Number(r[4]) || 1,
+    consecutive: r[5] === 'Y',
+    days: r[6] !== undefined && r[6] !== '' ? String(r[6]).split(',').filter(x => x !== '').map(Number) : [],
   }))
 
   // 특별실차단
@@ -243,17 +272,37 @@ export async function importFullWorkbook(file) {
 
   // 시간표
   const ttRows = getSheet('시간표').slice(1).filter(r => r[0] !== '')
-  state.timetableSlots = ttRows.map(r => ({
-    id: crypto.randomUUID(),
-    grade: Number(r[0]),
-    class_num: Number(r[1]),
-    day_of_week: Number(r[2]),
-    slot: Number(r[3]),
-    teacher_id: String(r[4]),
-    subject_id: String(r[6]),
-    is_unassigned: r[8] === 'Y',
-    room_id: r[9] ? String(r[9]) : null,
-  }))
+  state.timetableSlots = ttRows.map(r => {
+    const isExternal = r[11] === 'Y'
+    if (isExternal) {
+      return {
+        id: crypto.randomUUID(),
+        grade: Number(r[0]),
+        class_num: Number(r[1]),
+        day_of_week: Number(r[2]),
+        slot: Number(r[3]),
+        is_external: true,
+        external_id: r[12] ? String(r[12]) : null,
+        external_name: String(r[13] || ''),
+        subject_name: String(r[14] || ''),
+        teacher_id: null,
+        subject_id: null,
+        room_id: r[9] ? String(r[9]) : null,
+        is_unassigned: false,
+      }
+    }
+    return {
+      id: crypto.randomUUID(),
+      grade: Number(r[0]),
+      class_num: Number(r[1]),
+      day_of_week: Number(r[2]),
+      slot: Number(r[3]),
+      teacher_id: String(r[4]),
+      subject_id: String(r[6]),
+      is_unassigned: r[8] === 'Y',
+      room_id: r[9] ? String(r[9]) : null,
+    }
+  })
 
   // 특별실시간표
   const rtRows = getSheet('특별실시간표').slice(1).filter(r => r[0])
