@@ -898,12 +898,17 @@ function TeacherTimetableGrid({ slots, totalSlots, gradeLunchSlot, gradeConfigs,
               >
                 {cell?.is_external ? (
                   <>
-                    <span className={`${compact ? 'text-[12px]' : 'text-[13px]'} font-semibold text-indigo-700`}>
+                    <span className={`${compact ? 'text-[12px]' : 'text-[13px]'} font-semibold ${isRed ? 'text-red-600' : 'text-indigo-700'}`}>
                       {cell.subject_name || '외부강사'}
                     </span>
-                    <span className={`${compact ? 'text-[10px]' : 'text-[11px]'} text-indigo-400`}>
+                    <span className={`${compact ? 'text-[10px]' : 'text-[11px]'} ${isRed ? 'text-red-400' : 'text-indigo-400'}`}>
                       {cell.label}
                     </span>
+                    {isRed && (
+                      <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1 z-30 hidden group-hover:block bg-gray-900 text-white text-[11px] rounded px-2 py-1 whitespace-nowrap">
+                        {invalidSlot ? invalidTooltip : tooltipText}
+                      </div>
+                    )}
                   </>
                 ) : cell ? (
                   <>
