@@ -150,14 +150,41 @@ story.append(Paragraph("⚠ 재적용 시 기존에 생성된 시간표가 초�
 story.append(PageBreak())
 
 # ──────────────────────────────────────────────────
-# 4. 특별실 관리
-story.append(Paragraph("4. 특별실 관리 (/rooms)", h1_style))
+# 4. 외부강사 관리
+story.append(Paragraph("4. 외부강사 관리 (/external)", h1_style))
+story.append(Paragraph("학년 단위로 들어오는 외부강사(원어민·방과후 연계 등)를 등록합니다. 선택 사항이며, 없으면 비워 두세요.", body_style))
+
+story.append(Paragraph("입력 항목", h2_style))
+story.append(kv_table([
+    ("강사명", "예: 원어민영어, 리코더."),
+    ("담당 학년", "복수 선택 가능 (작은 학교의 1·2학년 묶음 수업 등)."),
+    ("과목(표시)명", "시간표에 표시될 과목명 (예: 영어회화)."),
+    ("학급당 시수", "각 학급당 주당 시수. 2시간 이상이면 ‘연속 수업’ 여부 선택 가능."),
+    ("요일", "‘자동’ 또는 특정 요일 복수 지정. 자동은 시스템이 적절한 요일을 고름."),
+]))
+
+story.append(Paragraph("배치 규칙", h2_style))
+story.append(bullet([
+    "외부강사 수업은 시간표 자동 생성 시 먼저 고정 배치되고, 전담 수업이 그 시간을 피해 배정됩니다.",
+    "외부강사는 전담교사 시수 균형 계산에 포함되지 않습니다.",
+    "선택한 학년(들)의 모든 학급을 같은 날에 몰아서(중간에 비는 시간 없이) 배치하고, 한 날에 다 못 들어가면 지정 요일 안에서 요일별 시수가 균등하도록 나눠 배치합니다 (예 7반/5교시 → 4-3).",
+    "같은 학년을 한 날에 모으고, 남는 학급은 같은 날 뒤에 다른 학년이 이어서 배치됩니다.",
+    "특별실을 쓰면 ‘특별실 관리’에서 외부강사를 사용 교사로 지정하세요 (특별실 충돌도 회피).",
+    "설정 변경 후 ‘시간표에 적용’ → ‘시간표 자동 생성’ 다시 실행. 미배정이 생기면 전담 시간표 상단에 ‘외부강사 미배정’ 표로 표시됩니다.",
+]))
+
+story.append(PageBreak())
+
+# ──────────────────────────────────────────────────
+# 5. 특별실 관리
+story.append(Paragraph("5. 특별실 관리 (/rooms)", h1_style))
 story.append(Paragraph("과학실·영어실·체육관 등 특별실을 등록하고 사용 가능 교사·과목을 지정합니다.", body_style))
 
 story.append(Paragraph("주요 항목", h2_style))
 story.append(kv_table([
     ("특별실 이름", "예: 2층 강당, 과학실, 영어실."),
     ("사용 교사", "이 특별실을 사용할 수 있는 교사 (whitelist). 비워두면 모든 교사."),
+    ("외부강사", "이 특별실을 사용하는 외부강사. 지정하면 외부강사 수업이 이 특별실로 배정되고 충돌을 회피합니다."),
     ("사용 과목", "이 특별실에서 진행할 과목 (subjectNames)."),
     ("사용 불가 시간", "해당 시간에는 이 특별실로 수업이 배정되지 않습니다 (예: 방과후·중등 이용)."),
 ]))
@@ -178,7 +205,7 @@ story.append(PageBreak())
 
 # ──────────────────────────────────────────────────
 # 5. 전담 시간표
-story.append(Paragraph("5. 전담 시간표 (/timetable)", h1_style))
+story.append(Paragraph("6. 전담 시간표 (/timetable)", h1_style))
 story.append(Paragraph("자동 생성·수동 편집·내보내기를 수행하는 핵심 페이지입니다.", body_style))
 
 story.append(Paragraph("자동 생성", h2_style))
@@ -191,9 +218,16 @@ story.append(bullet([
 
 story.append(Paragraph("미배정 시수 표", h2_style))
 story.append(bullet([
-    "제약상 자동 배정 실패한 수업이 있으면 페이지 상단에 빨간 표로 표시됩니다.",
+    "제약상 자동 배정 실패한 수업이 있으면 페이지 상단에 빨간 표로 표시됩니다 (교사·과목·학년·반 단위).",
+    "외부강사가 다 배정되지 못한 경우 ‘외부강사 미배정’ 표가 별도로 학년·반 단위로 표시됩니다.",
     "수동 편집으로 미배정 셀을 채우면 표에서 자동 제거됩니다 (실시간 동기화).",
     "미배정이 많을 때는 교사 시수, 과목별 연속 설정, 특별실 사용 가능 시간을 조정해보세요.",
+]))
+
+story.append(Paragraph("외부강사 수업 표시", h2_style))
+story.append(bullet([
+    "외부강사 수업은 남색 글씨로 표시되며, 교사별 보기에 강사별 칸으로도 나타납니다.",
+    "외부강사 칸도 전담과 동일하게 점심·교시 초과·중복 시 빨간색으로 경고합니다.",
 ]))
 
 story.append(Paragraph("보기 전환", h2_style))
@@ -209,6 +243,7 @@ story.append(bullet([
     "빈 칸을 클릭하면 바로 입력 모달이 열려 학년·반·과목·특별실을 채울 수 있습니다.",
     "채워진 칸을 클릭하면 파란 테두리로 선택되고, 다른 칸을 클릭하면 두 칸의 내용이 서로 바뀝니다 (빈 칸이면 이동).",
     "선택한 칸을 다시 클릭하면 편집 모달이 열립니다. (외부강사 칸은 외부강사 편집창)",
+    "편집 모달 왼쪽 아래의 ‘삭제’ 버튼으로 그 수업을 시간표에서 지울 수 있습니다.",
     "미배정(빨간 셀)을 클릭해 수동으로 채울 수 있으며, 수동 편집은 즉시 학급별·특별실 시간표에 반영됩니다.",
 ]))
 
@@ -221,8 +256,8 @@ story.append(bullet([
 
 story.append(Paragraph("엑셀 내보내기 / 인쇄", h2_style))
 story.append(bullet([
-    "교사별 엑셀: 교사 단위 시간표.",
-    "학급별 엑셀: 학급 단위 시간표.",
+    "교사별 엑셀: 교사 단위 시간표 (외부강사는 강사별 시트로 포함).",
+    "학급별 엑셀: 학급 단위 시간표 (외부강사 수업도 표시).",
     "인쇄가 필요하면 엑셀로 내려받아 엑셀에서 인쇄하면 됩니다.",
 ]))
 
@@ -230,7 +265,7 @@ story.append(PageBreak())
 
 # ──────────────────────────────────────────────────
 # 6. 특별실 시간표
-story.append(Paragraph("6. 특별실 시간표 (/room-timetable)", h1_style))
+story.append(Paragraph("7. 특별실 시간표 (/room-timetable)", h1_style))
 story.append(Paragraph("각 특별실 사용 현황을 한 눈에 확인하고, 빈 시간에 수업을 수동으로 추가할 수 있습니다.", body_style))
 
 story.append(Paragraph("표시 방식", h2_style))
@@ -254,7 +289,7 @@ story.append(PageBreak())
 
 # ──────────────────────────────────────────────────
 # 7. 알고리즘 개요
-story.append(Paragraph("7. 자동 생성 알고리즘 개요 (참고)", h1_style))
+story.append(Paragraph("8. 자동 생성 알고리즘 개요 (참고)", h1_style))
 story.append(Paragraph("시간표 자동 생성에서 알고리즘이 어떤 규칙을 따르는지 요약합니다.", body_style))
 
 story.append(Paragraph("하드 제약 (절대 위반 불가)", h2_style))
@@ -291,7 +326,7 @@ story.append(PageBreak())
 
 # ──────────────────────────────────────────────────
 # 8. FAQ
-story.append(Paragraph("8. 자주 묻는 질문", h1_style))
+story.append(Paragraph("9. 자주 묻는 질문", h1_style))
 
 story.append(Paragraph("Q. 미배정이 발생합니다. 어떻게 해야 하나요?", h3_style))
 story.append(bullet([
