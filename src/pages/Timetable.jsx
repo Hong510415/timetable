@@ -774,7 +774,7 @@ function TeacherTimetableGrid({ slots, totalSlots, gradeLunchSlot, gradeConfigs,
                   </>
                 )}
                 {!isRed && (
-                  <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1 z-20 hidden group-hover:block bg-gray-800 text-white text-[11px] rounded px-2 py-1 w-max max-w-[190px] text-center leading-snug shadow-lg">
+                  <div className={`pointer-events-none absolute left-1/2 -translate-x-1/2 z-20 hidden group-hover:block bg-gray-800/85 text-white text-[11px] rounded px-2 py-1 w-max max-w-[190px] text-center leading-snug shadow-lg break-keep ${slot === 0 ? 'top-full mt-1' : 'bottom-full mb-1'}`}>
                     {cell
                       ? '클릭해 선택한 뒤 다른 칸을 클릭하면 두 수업이 서로 바뀝니다. 같은 칸을 다시 클릭하면 내용을 수정할 수 있어요.'
                       : '클릭하면 이 시간에 수업(학년·반·과목·특별실)을 직접 입력할 수 있어요.'}
