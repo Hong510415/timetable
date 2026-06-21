@@ -173,6 +173,9 @@ function RoomGrid({ room, totalSlots, timetableSlots, roomBlockedSlots, teachers
         class_num: r.class_num,
         teacher_id: r.teacher_id,
         subject_id: r.subject_id,
+        is_external: r.is_external,
+        subject_name: r.subject_name,
+        external_name: r.external_name,
       }
     }
   }
@@ -200,12 +203,21 @@ function RoomGrid({ room, totalSlots, timetableSlots, roomBlockedSlots, teachers
               return (
                 <div
                   key={day}
-                  onClick={() => !isDayBlocked && onCellClick(room.id, day, slot, cell)}
+                  onClick={() => {
+                    if (isDayBlocked) return
+                    if (cell?.is_external) { alert('외부강사 수업입니다. "외부강사 관리" 또는 전담 시간표에서 수정하세요.'); return }
+                    onCellClick(room.id, day, slot, cell)
+                  }}
                   className={`flex-1 border-r border-gray-100 last:border-r-0 flex flex-col items-center justify-center gap-0 transition-colors
                     ${isDayBlocked ? 'bg-gray-100 cursor-not-allowed' : 'hover:bg-gray-50 cursor-pointer'}`}
                 >
                   {isDayBlocked ? (
                     <span className="text-[10px] text-gray-300">사용불가</span>
+                  ) : cell?.is_external ? (
+                    <>
+                      <span className="text-[12px] font-semibold text-indigo-700">{cell.grade}-{cell.class_num}</span>
+                      <span className="text-[9px] text-indigo-400">{cell.subject_name || ''}{cell.external_name ? ` · ${cell.external_name}` : ''}</span>
+                    </>
                   ) : cell ? (
                     <>
                       <span className="text-[12px] font-semibold text-gray-900">{cell.grade}-{cell.class_num}</span>

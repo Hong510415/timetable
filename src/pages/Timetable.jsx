@@ -267,7 +267,7 @@ export default function Timetable() {
       daySlots[d] = {}
       const relevant = timetableRows.filter(r => r.is_external && r.external_id === instId && r.day_of_week === d)
       for (const r of relevant) {
-        daySlots[d][r.slot] = { id: r.id, is_external: true, subject_name: r.subject_name, external_name: r.external_name, label: `${r.grade}학년 ${r.class_num}반`, grade: r.grade, class_num: r.class_num }
+        daySlots[d][r.slot] = { id: r.id, is_external: true, subject_name: r.subject_name, external_name: r.external_name, label: `${r.grade}학년 ${r.class_num}반`, grade: r.grade, class_num: r.class_num, room_id: r.room_id }
       }
     }
     return daySlots
@@ -904,6 +904,7 @@ function TeacherTimetableGrid({ slots, totalSlots, gradeLunchSlot, gradeConfigs,
                     <span className={`${compact ? 'text-[10px]' : 'text-[11px]'} ${isRed ? 'text-red-400' : 'text-indigo-400'}`}>
                       {cell.label}
                     </span>
+                    {room && <span className={`text-[10px] ${isRed ? 'text-red-400' : 'text-indigo-400'}`}>{room.name}</span>}
                     {isRed && (
                       <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1 z-30 hidden group-hover:block bg-gray-900 text-white text-[11px] rounded px-2 py-1 whitespace-nowrap">
                         {invalidSlot ? invalidTooltip : tooltipText}

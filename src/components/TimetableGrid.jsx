@@ -72,6 +72,7 @@ export default function TimetableGrid({ slots, totalSlots, gradeLunchSlot, teach
                     <>
                       <span className={`${compact ? 'text-[12px]' : 'text-[13px]'} font-semibold text-indigo-700`}>{cell.subject_name || '외부강사'}</span>
                       <span className="text-[10px] text-indigo-400">{cell.external_name || '외부강사'}</span>
+                      {room && <span className="text-[10px] text-indigo-400">{room.name}</span>}
                     </>
                   ) : teacher && subject ? (
                     <>

@@ -35,7 +35,7 @@ const DAY_LABELS = ['월', '화', '수', '목', '금']
 
 export default function RoomManagement() {
   const { state, setRooms, setRoomBlockedSlots, setTimetableSlots } = useApp()
-  const { rooms, lunchConfig, roomBlockedSlots, subjects, teachers, timetableSlots } = state
+  const { rooms, lunchConfig, roomBlockedSlots, subjects, teachers, timetableSlots, externalInstructors } = state
 
   function handleApply() {
     if (!rooms.length) return alert('먼저 특별실을 추가하세요.')
@@ -96,6 +96,15 @@ export default function RoomManagement() {
       }
       const newSubjectNames = (r.subjectNames || []).filter(n => stillAvailable.has(n))
       return { ...r, teacherIds: newIds, subjectNames: newSubjectNames }
+    }))
+  }
+
+  function toggleRoomExternal(roomId, instId) {
+    setRooms(rooms.map(r => {
+      if (r.id !== roomId) return r
+      const cur = r.externalInstructorIds || []
+      const next = cur.includes(instId) ? cur.filter(id => id !== instId) : [...cur, instId]
+      return { ...r, externalInstructorIds: next }
     }))
   }
 
@@ -232,6 +241,25 @@ export default function RoomManagement() {
                           ${active ? 'bg-black text-white border-black' : 'bg-white text-gray-500 border-gray-300 hover:bg-gray-50'}`}
                       >
                         {t.code}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+
+              {externalInstructors.length > 0 && (
+                <div className="flex items-center gap-2 flex-wrap mb-3">
+                  <span className="text-[12px] text-gray-500 font-semibold w-[56px] flex-shrink-0">외부강사</span>
+                  {externalInstructors.map(inst => {
+                    const active = (room.externalInstructorIds || []).includes(inst.id)
+                    return (
+                      <button
+                        key={inst.id}
+                        onClick={() => toggleRoomExternal(room.id, inst.id)}
+                        className={`h-7 px-3 rounded-sm text-[12px] font-semibold border transition-colors
+                          ${active ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-500 border-gray-300 hover:bg-gray-50'}`}
+                      >
+                        {inst.name || '외부강사'}
                       </button>
                     )
                   })}

@@ -302,6 +302,9 @@ export function buildSchedule(
     }
     if (!tasks.length) continue
 
+    // 이 외부강사가 사용하는 특별실 (특별실 관리에서 지정) — 있으면 그 방도 점유·충돌 회피
+    const instRoomId = rooms.find(r => (r.externalInstructorIds || []).includes(inst.id))?.id || null
+
     // 사용할 요일: 지정 시 그 요일들, 자동이면 월부터 전체
     const daysToUse = (inst.days && inst.days.length) ? [...inst.days].sort((a, b) => a - b) : [0, 1, 2, 3, 4]
 
@@ -315,11 +318,12 @@ export function buildSchedule(
         const task = tasks[ti]
         const av = gradeClassSlots[task.grade]?.[task.classNum]?.[day]
         if (!av) break
+        const roomFree = (s) => !instRoomId || (!roomOccupied[instRoomId]?.[day]?.has(s) && !roomBlockedMap[instRoomId]?.has(`${day}-${s}`))
         let start = -1
         for (let s = ptr; s + task.size <= totalSlots; s++) {
           let ok = true
           for (let k = 0; k < task.size; k++) {
-            if (!av.has(s + k) || instDayUsed.has(s + k)) { ok = false; break }
+            if (!av.has(s + k) || instDayUsed.has(s + k) || !roomFree(s + k)) { ok = false; break }
           }
           if (ok) { start = s; break }
         }
@@ -331,9 +335,11 @@ export function buildSchedule(
             externalId: inst.id,
             externalName: inst.name || '외부강사',
             subjectName: inst.subjectName || '',
+            roomId: instRoomId || undefined,
           }
           av.delete(slot) // 전담 후보에서 제외
           instDayUsed.add(slot)
+          if (instRoomId) roomOccupied[instRoomId][day].add(slot) // 특별실 점유 → 전담·타 강사 회피
         }
         ptr = start + task.size
         ti++
@@ -946,7 +952,7 @@ export function flattenResult(result, gradeLunchSlot, totalSlots) {
               subject_name: cell.subjectName || '',
               teacher_id: null,
               subject_id: null,
-              room_id: null,
+              room_id: cell.roomId || null,
               is_unassigned: false,
             })
             continue

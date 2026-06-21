@@ -96,6 +96,19 @@ describe('외부강사 사전 고정 배치', () => {
     }
   })
 
+  it('같은 특별실을 쓰는 두 외부강사는 같은 (요일,슬롯) 방을 겹치지 않는다', () => {
+    const room = { id: 'R', name: '실험실', externalInstructorIds: ['x1', 'y1'] }
+    const X = ext({ id: 'x1', name: 'A', grades: [3], days: [0] })
+    const Y = ext({ id: 'y1', name: 'B', grades: [4], days: [0] })
+    const res = buildSchedule([makeGrade(3, 1), makeGrade(4, 1)], [], [], noLunch, [room], [], { externalInstructors: [X, Y] })
+    const rows = flatRows(res).filter(r => r.is_external)
+    expect(rows.length).toBe(2)
+    expect(rows.every(r => r.room_id === 'R')).toBe(true)
+    // 같은 방·요일·슬롯 중복 없음
+    const keys = rows.map(r => `${r.room_id}_${r.day_of_week}_${r.slot}`)
+    expect(new Set(keys).size).toBe(2)
+  })
+
   it('외부강사가 점유한 슬롯에는 전담이 배정되지 않는다', () => {
     const s = makeSubject('s1', '미술', 1)
     const t = makeTeacher('t1', '미술', [{ subject_id: 's1', grade: 3, class_num: 1, weekly_hours: 1 }])
