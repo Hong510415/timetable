@@ -340,6 +340,10 @@ export function buildSchedule(
           av.delete(slot) // 전담 후보에서 제외
           instDayUsed.add(slot)
           if (instRoomId) roomOccupied[instRoomId][day].add(slot) // 특별실 점유 → 전담·타 강사 회피
+          // 학급 요일 균형(#14)에 외부강사도 반영 → 전담이 외부강사 있는 날을 피해 고르게 펴짐
+          const ck = `${task.grade}_${task.classNum}`
+          if (!classDayCount[ck]) classDayCount[ck] = [0, 0, 0, 0, 0]
+          classDayCount[ck][day]++
         }
         ptr = start + task.size
         ti++

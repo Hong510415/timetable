@@ -38,13 +38,14 @@ const MANUAL = [
     ],
   },
   {
-    title: '셀 교환·입력 (교사별 보기)',
+    title: '셀 교환·입력 (교사별·학급별 보기 동일)',
     items: [
+      '교사별 보기와 학급별 보기 모두 같은 방식으로 칸을 눌러 수정합니다.',
       '칸에 마우스를 올리면 사용법 말풍선이 나타납니다.',
       '빈 칸을 클릭하면 바로 입력 모달이 열려 학년·반·과목·특별실을 채울 수 있습니다.',
       '채워진 칸을 클릭하면 파란 테두리로 선택됩니다.',
       '선택 후 다른 칸을 클릭하면 두 칸의 내용이 서로 바뀝니다 (빈 칸이면 이동).',
-      '선택한 칸을 다시 클릭하면 선택 해제 후 편집 모달이 열립니다.',
+      '선택한 칸을 다시 클릭하면 편집 모달이 열립니다. (외부강사 칸은 외부강사 편집창)',
     ],
   },
   {
@@ -243,7 +244,7 @@ export default function Timetable() {
       daySlots[d] = {}
       const relevant = timetableRows.filter(r => r.grade === grade && r.class_num === classNum && r.day_of_week === d)
       for (const r of relevant) {
-        daySlots[d][r.slot] = { teacher_id: r.teacher_id, subject_id: r.subject_id, is_unassigned: r.is_unassigned, room_id: r.room_id, id: r.id, is_external: r.is_external, external_name: r.external_name, subject_name: r.subject_name }
+        daySlots[d][r.slot] = { teacher_id: r.teacher_id, subject_id: r.subject_id, is_unassigned: r.is_unassigned, room_id: r.room_id, id: r.id, is_external: r.is_external, external_id: r.external_id, external_name: r.external_name, subject_name: r.subject_name }
       }
     }
     return daySlots
@@ -271,6 +272,37 @@ export default function Timetable() {
       }
     }
     return daySlots
+  }
+
+  function handleClassCellClick(grade, classNum, day, slot, cell) {
+    const ownerKey = `cls:${grade}_${classNum}`
+    if (!swapCell) {
+      if (!cell) {
+        // 빈 칸 → 입력 모달 (전담)
+        openEditModal(day, slot, cell, { grade, classNum })
+        return
+      }
+      setSwapCell({ classKey: ownerKey, day, slot, rowId: cell.id || null })
+    } else if (swapCell.classKey === ownerKey && swapCell.day === day && swapCell.slot === slot) {
+      // 같은 칸 재클릭 → 수정
+      setSwapCell(null)
+      if (cell?.is_external) {
+        setExtEdit({ instId: cell.external_id, day, slot, current: { id: cell.id, grade, class_num: classNum, subject_name: cell.subject_name } })
+      } else {
+        openEditModal(day, slot, cell, { grade, classNum })
+      }
+    } else {
+      // 다른 칸 클릭 → 자리 교환(또는 빈 칸이면 이동)
+      const idA = swapCell.rowId, idB = cell?.id || null
+      const dayA = swapCell.day, slotA = swapCell.slot
+      const updated = timetableRows.map(r => {
+        if (idA && r.id === idA) return { ...r, day_of_week: day, slot }
+        if (idB && r.id === idB) return { ...r, day_of_week: dayA, slot: slotA }
+        return r
+      })
+      setTimetableSlots(updated)
+      setSwapCell(null)
+    }
   }
 
   function handleExternalCellClick(instId, day, slot, cell) {
@@ -432,7 +464,7 @@ export default function Timetable() {
         </div>
       </div>
 
-      <p className="max-w-[1100px] text-[12px] text-gray-400 -mt-3 mb-5 break-keep">⑥ "시간표 자동 생성"으로 만들거나, 교사별 보기에서 빈 칸을 클릭해 직접 입력하세요. 칸을 클릭해 수정·교환할 수 있습니다.</p>
+      <p className="max-w-[1100px] text-[12px] text-gray-400 -mt-3 mb-5 break-keep">⑥ "시간표 자동 생성"으로 만들거나, 교사별·학급별 보기에서 빈 칸을 클릭해 직접 입력하세요. 칸을 클릭해 수정·교환할 수 있습니다.</p>
 
       {/* 미배정 시수 표 — 수동 편집과 실시간 동기화 위해 상단으로 이동 (이전 빨간 경고 블록은 초기 생성 결과만 보여줘서 제거) */}
       {timetableRows.length > 0 && (
@@ -463,7 +495,7 @@ export default function Timetable() {
             {[{ key: 'teacher', label: '교사별 보기' }, { key: 'class', label: '학급별 보기' }].map(t => (
               <button
                 key={t.key}
-                onClick={() => setTab(t.key)}
+                onClick={() => { setTab(t.key); setSwapCell(null) }}
                 className={`px-5 h-[42px] text-[13px] transition-colors ${tab === t.key ? 'bg-black text-white font-semibold' : 'text-gray-400 hover:bg-gray-50'}`}
               >
                 {t.label}
@@ -499,7 +531,8 @@ export default function Timetable() {
                         subjects={subjects}
                         rooms={rooms}
                         timetableRows={timetableRows}
-                        onCellClick={(day, slot, cell) => openEditModal(day, slot, cell, { grade, classNum })}
+                        selectedCell={swapCell?.classKey === `cls:${grade}_${classNum}` ? swapCell : null}
+                        onCellClick={(day, slot, cell) => handleClassCellClick(grade, classNum, day, slot, cell)}
                         grade={grade}
                         classNum={classNum}
                         compact

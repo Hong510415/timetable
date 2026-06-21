@@ -1,6 +1,6 @@
 const DAY_LABELS = ['월', '화', '수', '목', '금']
 
-export default function TimetableGrid({ slots, totalSlots, gradeLunchSlot, teachers, subjects, rooms, timetableRows, onCellClick, grade, classNum, compact }) {
+export default function TimetableGrid({ slots, totalSlots, gradeLunchSlot, teachers, subjects, rooms, timetableRows, onCellClick, grade, classNum, compact, selectedCell }) {
   // 해당 학년의 점심 슬롯 (없으면 -1)
   const lunchSlot = (gradeLunchSlot && grade) ? (gradeLunchSlot[grade] ?? -1) : -1
 
@@ -60,13 +60,14 @@ export default function TimetableGrid({ slots, totalSlots, gradeLunchSlot, teach
               const tooltipText = hasConflict
                 ? conflicts.map(c => `${c.grade}학년 ${c.class_num}반`).join(', ') + '에서도 같은 교사가 수업 중'
                 : ''
+              const isSelected = selectedCell?.day === day && selectedCell?.slot === slot
 
               return (
                 <div
                   key={day}
                   onClick={() => onCellClick?.(day, slot, cell)}
                   className={`relative group flex-1 border-r border-gray-100 last:border-r-0 flex flex-col items-center justify-center gap-0 transition-colors
-                    ${unassigned ? 'bg-red-500 cursor-pointer' : onCellClick ? 'hover:bg-gray-50 cursor-pointer' : ''}`}
+                    ${isSelected ? 'bg-blue-100 ring-2 ring-inset ring-blue-400' : unassigned ? 'bg-red-500 cursor-pointer' : onCellClick ? 'hover:bg-blue-50 cursor-pointer' : ''}`}
                 >
                   {cell?.is_external ? (
                     <>
@@ -89,6 +90,13 @@ export default function TimetableGrid({ slots, totalSlots, gradeLunchSlot, teach
                     <span className="text-[11px] font-semibold text-white">미배정</span>
                   ) : (
                     <span className="text-[12px] text-gray-200">—</span>
+                  )}
+                  {onCellClick && !hasConflict && !unassigned && (
+                    <div className={`pointer-events-none absolute z-20 hidden group-hover:block bg-gray-800/85 text-white text-[11px] rounded px-2 py-1 w-max max-w-[190px] text-center leading-snug shadow-lg break-keep ${slot === 0 ? 'top-full mt-1' : 'bottom-full mb-1'} ${day === 0 ? 'left-0' : day === 4 ? 'right-0' : 'left-1/2 -translate-x-1/2'}`}>
+                      {cell
+                        ? '클릭해 선택한 뒤 다른 칸을 클릭하면 두 수업이 서로 바뀝니다. 같은 칸을 다시 클릭하면 내용을 수정할 수 있어요.'
+                        : '클릭하면 이 시간에 수업을 직접 입력할 수 있어요.'}
+                    </div>
                   )}
                 </div>
               )
