@@ -106,6 +106,7 @@ export default function Timetable() {
   const [showGenerateModal, setShowGenerateModal] = useState(false)
   const [generateOptions, setGenerateOptions] = useState({ subjectSettings: {} })
   const [selectedClasses, setSelectedClasses] = useState([{ grade: 1, classNum: 1 }])
+  const [extEdit, setExtEdit] = useState(null) // { instId, day, slot, current }
 
   function toggleSelectedClass(grade, classNum) {
     setSelectedClasses(prev => {
@@ -275,14 +276,16 @@ export default function Timetable() {
   function handleExternalCellClick(instId, day, slot, cell) {
     const ownerKey = `ext:${instId}`
     if (!swapCell) {
-      if (!cell) return // 빈 칸에서 시작 불가 (외부강사 수업은 외부강사 관리에서 추가)
+      if (!cell) {
+        // 빈 칸 클릭 → 입력 모달 (전담과 동일)
+        setExtEdit({ instId, day, slot, current: null })
+        return
+      }
       setSwapCell({ teacherId: ownerKey, day, slot, rowId: cell.id || null })
     } else if (swapCell.teacherId === ownerKey && swapCell.day === day && swapCell.slot === slot) {
-      // 같은 칸 재클릭 → 삭제
+      // 같은 칸 재클릭 → 수정 모달 (전담과 동일)
       setSwapCell(null)
-      if (cell && confirm('이 외부강사 수업을 시간표에서 삭제할까요? (외부강사 관리 등록 내용에는 영향 없음)')) {
-        setTimetableSlots(timetableRows.filter(r => r.id !== cell.id))
-      }
+      setExtEdit({ instId, day, slot, current: cell })
     } else {
       // 다른 칸 클릭 → 자리 교환(또는 빈 칸이면 이동)
       const idA = swapCell.rowId, idB = cell?.id || null
@@ -295,6 +298,24 @@ export default function Timetable() {
       setTimetableSlots(updated)
       setSwapCell(null)
     }
+  }
+
+  function handleExtEditSave(instId, day, slot, current, { grade, classNum, subjectName }) {
+    const inst = externalInstructors.find(e => e.id === instId)
+    const row = {
+      id: current?.id || crypto.randomUUID(),
+      grade, class_num: classNum, day_of_week: day, slot,
+      is_external: true, external_id: instId,
+      external_name: inst?.name || '외부강사',
+      subject_name: subjectName,
+      teacher_id: null, subject_id: null, room_id: null, is_unassigned: false,
+    }
+    setTimetableSlots(
+      current
+        ? timetableRows.map(r => r.id === current.id ? row : r)
+        : [...timetableRows, row]
+    )
+    setExtEdit(null)
   }
 
   function handleTeacherCellClick(teacherId, day, slot, cell) {
@@ -570,6 +591,72 @@ export default function Timetable() {
           onClose={() => setShowGenerateModal(false)}
         />
       )}
+
+      {extEdit && (
+        <ExternalEditModal
+          modal={extEdit}
+          instructor={externalInstructors.find(e => e.id === extEdit.instId)}
+          gradeConfigs={gradeConfigs}
+          onSave={(payload) => handleExtEditSave(extEdit.instId, extEdit.day, extEdit.slot, extEdit.current, payload)}
+          onDelete={() => { if (extEdit.current) setTimetableSlots(timetableRows.filter(r => r.id !== extEdit.current.id)); setExtEdit(null) }}
+          onClose={() => setExtEdit(null)}
+        />
+      )}
+    </div>
+  )
+}
+
+function ExternalEditModal({ modal, instructor, gradeConfigs, onSave, onDelete, onClose }) {
+  const DAY_LABELS = ['월', '화', '수', '목', '금']
+  const instGrades = (instructor?.grades || []).filter(g => gradeConfigs.some(x => x.grade === g))
+  const gradeOptions = instGrades.length ? instGrades : gradeConfigs.map(g => g.grade)
+  const cur = modal.current
+  const [grade, setGrade] = useState(cur?.grade ?? gradeOptions[0] ?? 1)
+  const [classNum, setClassNum] = useState(cur?.class_num ?? 1)
+  const [subjectName, setSubjectName] = useState(cur?.subject_name ?? instructor?.subjectName ?? '')
+  const numClasses = gradeConfigs.find(g => g.grade === grade)?.num_classes || 1
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-white w-full max-w-[360px] rounded-sm border border-gray-200" onClick={e => e.stopPropagation()}>
+        <div className="px-5 py-4 border-b border-gray-100">
+          <h2 className="text-[15px] font-bold">{instructor?.name || '외부강사'} 수업 {cur ? '수정' : '입력'}</h2>
+          <p className="text-[12px] text-gray-400 mt-0.5">{DAY_LABELS[modal.day]}요일 {modal.slot + 1}교시</p>
+        </div>
+        <div className="px-5 py-4 flex flex-col gap-3">
+          <div className="flex gap-2">
+            <label className="flex-1">
+              <span className="text-[11px] font-semibold text-gray-500 block mb-1">학년</span>
+              <select value={grade} onChange={e => { setGrade(Number(e.target.value)); setClassNum(1) }}
+                className="w-full h-9 px-2 border border-gray-300 rounded-sm text-[13px] outline-none focus:border-black bg-white">
+                {gradeOptions.map(g => <option key={g} value={g}>{g}학년</option>)}
+              </select>
+            </label>
+            <label className="flex-1">
+              <span className="text-[11px] font-semibold text-gray-500 block mb-1">반</span>
+              <select value={classNum} onChange={e => setClassNum(Number(e.target.value))}
+                className="w-full h-9 px-2 border border-gray-300 rounded-sm text-[13px] outline-none focus:border-black bg-white">
+                {Array.from({ length: numClasses }, (_, i) => i + 1).map(c => <option key={c} value={c}>{c}반</option>)}
+              </select>
+            </label>
+          </div>
+          <label>
+            <span className="text-[11px] font-semibold text-gray-500 block mb-1">과목(표시)명</span>
+            <input value={subjectName} onChange={e => setSubjectName(e.target.value)}
+              className="w-full h-9 px-2 border border-gray-300 rounded-sm text-[13px] outline-none focus:border-black" />
+          </label>
+        </div>
+        <div className="px-5 py-4 border-t border-gray-100 flex items-center justify-between">
+          {cur ? (
+            <button onClick={onDelete} className="text-[13px] text-red-500 hover:text-red-600">삭제</button>
+          ) : <span />}
+          <div className="flex gap-2">
+            <button onClick={onClose} className="h-9 px-4 border border-gray-300 rounded-sm text-[13px] hover:bg-gray-50">취소</button>
+            <button onClick={() => onSave({ grade, classNum, subjectName })}
+              className="h-9 px-4 bg-black text-white text-[13px] font-semibold rounded-sm hover:bg-gray-800">저장</button>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
@@ -752,15 +839,15 @@ function TeacherTimetableGrid({ slots, totalSlots, gradeLunchSlot, gradeConfigs,
 
   function getConflicts(cell, day, slot) {
     if (!cell || !timetableRows) return []
+    // 같은 (학년·반·요일·교시)에 다른 수업(전담 또는 외부강사)이 있으면 충돌
     return timetableRows.filter(r =>
-      r.teacher_id &&
-      r.subject_id &&
       !r.is_unassigned &&
+      (r.teacher_id || r.is_external) &&
       r.grade === cell.grade &&
       r.class_num === cell.class_num &&
       r.day_of_week === day &&
       r.slot === slot &&
-      r.teacher_id !== cell.teacher_id
+      r.id !== cell.id
     )
   }
 
@@ -784,6 +871,7 @@ function TeacherTimetableGrid({ slots, totalSlots, gradeLunchSlot, gradeConfigs,
             const conflicts = getConflicts(cell, day, slot)
             const hasConflict = conflicts.length > 0
             const tooltipText = conflicts.map(c => {
+              if (c.is_external) return `${c.subject_name || '외부강사'}(${c.external_name || '외부강사'})`
               const cs = subjects?.find(s => s.id === c.subject_id)
               const ct = teachers?.find(t => t.id === c.teacher_id)
               return `${cs?.name ?? '?'} (${ct?.code ?? '?'})`
@@ -855,13 +943,9 @@ function TeacherTimetableGrid({ slots, totalSlots, gradeLunchSlot, gradeConfigs,
                 )}
                 {!isRed && (
                   <div className={`pointer-events-none absolute z-20 hidden group-hover:block bg-gray-800/85 text-white text-[11px] rounded px-2 py-1 w-max max-w-[190px] text-center leading-snug shadow-lg break-keep ${slot === 0 ? 'top-full mt-1' : 'bottom-full mb-1'} ${day === 0 ? 'left-0' : day === 4 ? 'right-0' : 'left-1/2 -translate-x-1/2'}`}>
-                    {externalGrid
-                      ? (cell
-                          ? '클릭해 선택한 뒤 다른 칸을 클릭하면 자리를 바꿉니다. 같은 칸을 다시 클릭하면 이 수업을 삭제합니다.'
-                          : '선택한 외부강사 수업을 이 칸으로 옮길 수 있어요.')
-                      : (cell
-                          ? '클릭해 선택한 뒤 다른 칸을 클릭하면 두 수업이 서로 바뀝니다. 같은 칸을 다시 클릭하면 내용을 수정할 수 있어요.'
-                          : '클릭하면 이 시간에 수업(학년·반·과목·특별실)을 직접 입력할 수 있어요.')}
+                    {cell
+                      ? '클릭해 선택한 뒤 다른 칸을 클릭하면 두 수업이 서로 바뀝니다. 같은 칸을 다시 클릭하면 내용을 수정할 수 있어요.'
+                      : '클릭하면 이 시간에 수업을 직접 입력할 수 있어요.'}
                   </div>
                 )}
               </div>
