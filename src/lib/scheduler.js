@@ -301,44 +301,20 @@ export function buildSchedule(
       }
     }
     if (!tasks.length) continue
-    const totalSize = tasks.reduce((s, t) => s + t.size, 0)
 
-    const availLen = (grade, classNum, day) => (gradeClassSlots[grade]?.[classNum]?.[day]?.size || 0)
+    // 사용할 요일: 지정 시 그 요일들, 자동이면 월부터 전체
+    const daysToUse = (inst.days && inst.days.length) ? [...inst.days].sort((a, b) => a - b) : [0, 1, 2, 3, 4]
 
-    // 사용할 요일 결정
-    let daysToUse
-    if (inst.days && inst.days.length) {
-      daysToUse = [...inst.days].sort((a, b) => a - b)
-    } else {
-      // 자동: 하루 용량(관련 학년 가용 슬롯 최대치) 기준 최소 연속 일수, 월부터
-      const dayCap = Math.max(1, ...instGrades.flatMap(g => [0, 1, 2, 3, 4].map(d => availLen(g, 1, d))))
-      const nDays = Math.max(1, Math.min(5, Math.ceil(totalSize / dayCap)))
-      daysToUse = []
-      for (let d = 0; d < nDays; d++) daysToUse.push(d)
-    }
-
-    // 균등 분배: 각 task를 용량 내에서 부하가 가장 적은 날에 배정
-    const buckets = daysToUse.map(() => [])
-    const load = daysToUse.map(() => 0)
-    for (const task of tasks) {
-      let best = -1
-      for (let i = 0; i < daysToUse.length; i++) {
-        const cap = availLen(task.grade, task.classNum, daysToUse[i])
-        if (load[i] + task.size <= cap && (best === -1 || load[i] < load[best])) best = i
-      }
-      if (best === -1) { externalErrors.push({ name: inst.name, grade: task.grade, classNum: task.classNum }); continue }
-      buckets[best].push(task)
-      load[best] += task.size
-    }
-
-    // 각 날에 gap 없이(연속) 배치
-    for (let i = 0; i < daysToUse.length; i++) {
-      const day = daysToUse[i]
+    // 순차 채움: 같은 학년을 한 날에 몰아서(grade 순) 꽉 채우고, 넘치면 다음 날로 (경계 날만 두 학년 혼합)
+    let ti = 0
+    for (const day of daysToUse) {
+      if (ti >= tasks.length) break
       const instDayUsed = new Set() // 이 강사가 이 날 점유한 슬롯
       let ptr = 0
-      for (const task of buckets[i]) {
+      while (ti < tasks.length) {
+        const task = tasks[ti]
         const av = gradeClassSlots[task.grade]?.[task.classNum]?.[day]
-        if (!av) { externalErrors.push({ name: inst.name, grade: task.grade, classNum: task.classNum }); continue }
+        if (!av) break
         let start = -1
         for (let s = ptr; s + task.size <= totalSlots; s++) {
           let ok = true
@@ -347,7 +323,7 @@ export function buildSchedule(
           }
           if (ok) { start = s; break }
         }
-        if (start === -1) { externalErrors.push({ name: inst.name, grade: task.grade, classNum: task.classNum }); continue }
+        if (start === -1) break // 이 날 더 못 넣음 → 다음 날
         for (let k = 0; k < task.size; k++) {
           const slot = start + k
           result[task.grade][task.classNum][day][slot] = {
@@ -360,7 +336,12 @@ export function buildSchedule(
           instDayUsed.add(slot)
         }
         ptr = start + task.size
+        ti++
       }
+    }
+    // 남은 task → 미배치 경고
+    for (; ti < tasks.length; ti++) {
+      externalErrors.push({ name: inst.name, grade: tasks[ti].grade, classNum: tasks[ti].classNum })
     }
   }
 

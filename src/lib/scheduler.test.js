@@ -43,27 +43,37 @@ describe('외부강사 사전 고정 배치', () => {
     hoursPerClass: 1, consecutive: false, days: [], ...over,
   })
 
-  it('7학급(hpc1, 자동)을 연속 2일에 4-3 균등, gap 없이 배치', () => {
+  it('7학급(hpc1, 자동, 하루5교시)을 꽉 채우고 넘치면 다음날 (5-2), gap 없이', () => {
     const res = buildSchedule([makeGrade(3, 7)], [], [], noLunch, [], [], { externalInstructors: [ext()] })
     const rows = flatRows(res).filter(r => r.is_external)
     expect(rows.length).toBe(7)
-    // 각 학급 1회씩
     expect(new Set(rows.map(r => r.class_num)).size).toBe(7)
-    // 사용 요일 = 2개(연속: 0,1)
+    // 월(5) + 화(2)
     const days = [...new Set(rows.map(r => r.day_of_week))].sort()
     expect(days).toEqual([0, 1])
-    // 균등 4-3
     const c0 = rows.filter(r => r.day_of_week === 0).length
     const c1 = rows.filter(r => r.day_of_week === 1).length
-    expect([c0, c1].sort()).toEqual([3, 4])
+    expect([c0, c1]).toEqual([5, 2])
     // 각 날 gap 없이(0..n-1)
     for (const d of days) {
       const slots = rows.filter(r => r.day_of_week === d).map(r => r.slot).sort((a, b) => a - b)
       expect(slots).toEqual(slots.map((_, i) => i))
     }
-    // 표시 내용
     expect(rows[0].external_name).toBe('리코더')
     expect(rows[0].subject_name).toBe('리코더')
+  })
+
+  it('두 학년(각 7반)은 같은 학년을 한 날에 몰고 경계 날만 혼합', () => {
+    // 3·4학년 각 7반, 하루 5교시 → 월:3학년5, 화:3학년2+4학년3, 수:4학년4
+    const res = buildSchedule([makeGrade(3, 7), makeGrade(4, 7)], [], [], noLunch, [], [],
+      { externalInstructors: [ext({ grades: [3, 4] })] })
+    const rows = flatRows(res).filter(r => r.is_external)
+    expect(rows.length).toBe(14)
+    // 한 날에 들어간 학년 수가 2개인 날은 최대 1개(경계)뿐
+    const gradesByDay = {}
+    for (const r of rows) (gradesByDay[r.day_of_week] ||= new Set()).add(r.grade)
+    const mixedDays = Object.values(gradesByDay).filter(s => s.size > 1).length
+    expect(mixedDays).toBeLessThanOrEqual(1)
   })
 
   it('지정 요일 1개(화)에 다 들어가면 그 날에 몰아서 배치', () => {
