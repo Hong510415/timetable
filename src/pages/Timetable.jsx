@@ -260,6 +260,18 @@ export default function Timetable() {
     return daySlots
   }
 
+  function getSlotsForExternal(instId) {
+    const daySlots = {}
+    for (let d = 0; d < 5; d++) {
+      daySlots[d] = {}
+      const relevant = timetableRows.filter(r => r.is_external && r.external_id === instId && r.day_of_week === d)
+      for (const r of relevant) {
+        daySlots[d][r.slot] = { is_external: true, subject_name: r.subject_name, external_name: r.external_name, label: `${r.grade}학년 ${r.class_num}반`, grade: r.grade, class_num: r.class_num }
+      }
+    }
+    return daySlots
+  }
+
   function handleTeacherCellClick(teacherId, day, slot, cell) {
     if (!swapCell) {
       if (!cell) {
@@ -471,6 +483,33 @@ export default function Timetable() {
                       compact
                       selectedCell={swapCell?.teacherId === t.id ? swapCell : null}
                       onCellClick={(day, slot, cell) => handleTeacherCellClick(t.id, day, slot, cell)}
+                    />
+                  </div>
+                )
+              })}
+
+              {externalInstructors.map(inst => {
+                const count = timetableRows.filter(r => r.is_external && r.external_id === inst.id).length
+                if (count === 0) return null
+                return (
+                  <div key={`ext-${inst.id}`} className="flex flex-col gap-1">
+                    <div className="flex items-baseline gap-2 px-1">
+                      <span className="text-[13px] font-bold text-indigo-700">{inst.name || '외부강사'}</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-500">외부강사</span>
+                      <span className="text-[11px] text-gray-400">{count}h</span>
+                    </div>
+                    <TeacherTimetableGrid
+                      slots={getSlotsForExternal(inst.id)}
+                      totalSlots={totalSlots}
+                      gradeLunchSlot={gradeLunchSlot}
+                      gradeConfigs={gradeConfigs}
+                      subjects={subjects}
+                      timetableRows={timetableRows}
+                      teachers={teachers}
+                      rooms={rooms}
+                      compact
+                      selectedCell={null}
+                      onCellClick={() => alert('외부강사 수업입니다. "외부강사 관리"에서 수정 후 시간표를 다시 생성하세요.')}
                     />
                   </div>
                 )
@@ -743,7 +782,16 @@ function TeacherTimetableGrid({ slots, totalSlots, gradeLunchSlot, gradeConfigs,
                 className={`relative group flex-1 border-r border-gray-100 last:border-r-0 flex flex-col items-center justify-center gap-0 cursor-pointer transition-colors
                   ${isSelected ? 'bg-blue-100 ring-2 ring-inset ring-blue-400' : 'hover:bg-blue-50'}`}
               >
-                {cell ? (
+                {cell?.is_external ? (
+                  <>
+                    <span className={`${compact ? 'text-[12px]' : 'text-[13px]'} font-semibold text-indigo-700`}>
+                      {cell.subject_name || '외부강사'}
+                    </span>
+                    <span className={`${compact ? 'text-[10px]' : 'text-[11px]'} text-indigo-400`}>
+                      {cell.label}
+                    </span>
+                  </>
+                ) : cell ? (
                   <>
                     <span className={`${compact ? 'text-[12px]' : 'text-[13px]'} font-semibold ${isRed ? 'text-red-600' : 'text-gray-900'}`}>
                       {subject?.name ?? '—'}
@@ -779,7 +827,7 @@ function TeacherTimetableGrid({ slots, totalSlots, gradeLunchSlot, gradeConfigs,
                     )}
                   </>
                 )}
-                {!isRed && (
+                {!isRed && !cell?.is_external && (
                   <div className={`pointer-events-none absolute z-20 hidden group-hover:block bg-gray-800/85 text-white text-[11px] rounded px-2 py-1 w-max max-w-[190px] text-center leading-snug shadow-lg break-keep ${slot === 0 ? 'top-full mt-1' : 'bottom-full mb-1'} ${day === 0 ? 'left-0' : day === 4 ? 'right-0' : 'left-1/2 -translate-x-1/2'}`}>
                     {cell
                       ? '클릭해 선택한 뒤 다른 칸을 클릭하면 두 수업이 서로 바뀝니다. 같은 칸을 다시 클릭하면 내용을 수정할 수 있어요.'

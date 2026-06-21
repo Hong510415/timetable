@@ -352,6 +352,7 @@ export function buildSchedule(
           const slot = start + k
           result[task.grade][task.classNum][day][slot] = {
             external: true,
+            externalId: inst.id,
             externalName: inst.name || '외부강사',
             subjectName: inst.subjectName || '',
           }
@@ -959,6 +960,7 @@ export function flattenResult(result, gradeLunchSlot, totalSlots) {
               day_of_week: day,
               slot,
               is_external: true,
+              external_id: cell.externalId || null,
               external_name: cell.externalName || '외부강사',
               subject_name: cell.subjectName || '',
               teacher_id: null,

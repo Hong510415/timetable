@@ -43,7 +43,7 @@ export default function ExternalInstructors() {
       {
         id: crypto.randomUUID(),
         name: '',
-        grades: grades.length ? [grades[0]] : [1],
+        grades: [],
         subjectName: '',
         hoursPerClass: 1,
         consecutive: false,
