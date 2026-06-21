@@ -32,10 +32,18 @@ const MANUAL = [
 ]
 
 export default function ExternalInstructors() {
-  const { state, setExternalInstructors } = useApp()
-  const { externalInstructors, gradeConfigs } = state
+  const { state, setExternalInstructors, setTimetableSlots } = useApp()
+  const { externalInstructors, gradeConfigs, timetableSlots } = state
 
   const grades = gradeConfigs.map(g => g.grade)
+
+  function handleApply() {
+    if (timetableSlots.length > 0) {
+      if (!confirm('기존 시간표가 초기화됩니다. 적용하시겠습니까?')) return
+      setTimetableSlots([])
+    }
+    alert('적용되었습니다. 시간표 자동 생성을 다시 실행하세요.')
+  }
 
   function addInstructor() {
     setExternalInstructors([
@@ -67,6 +75,12 @@ export default function ExternalInstructors() {
         <h1 className="text-[22px] font-bold">외부강사 관리</h1>
         <div className="flex flex-wrap gap-2">
           <ManualModal title="외부강사 관리" sections={MANUAL} />
+          <button
+            onClick={handleApply}
+            className="h-10 px-3 md:px-4 border border-gray-300 text-[13px] rounded-sm hover:bg-gray-50 whitespace-nowrap"
+          >
+            시간표에 적용
+          </button>
           <button
             onClick={addInstructor}
             className="flex items-center gap-2 h-10 px-3 md:px-4 bg-black text-white text-[13px] font-semibold rounded-sm hover:bg-gray-800 whitespace-nowrap"
