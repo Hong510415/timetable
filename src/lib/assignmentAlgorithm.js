@@ -40,6 +40,8 @@ export function runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assig
     hours: 0,
     majorSubjectNames: new Set(),
     assignments: [], // { subjectId, subjectName, grade, classNums, hoursPerClass, is_major }
+    // 최대 수업가능시수 (미설정이면 Infinity → 기존 동작과 완전히 동일)
+    maxHours: (t.max_hours && t.max_hours > 0) ? t.max_hours : Infinity,
   }))
 
   function addClasses(teacher, unit, classNums) {
@@ -76,6 +78,15 @@ export function runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assig
 
   const warnings = []
 
+  // 최대시수 합이 전체 전담시수보다 적으면 일부 미배정 가능 — 미리 안내
+  const totalCap = ts.reduce((s, t) => s + t.maxHours, 0)
+  if (totalCap < totalDedicated) {
+    warnings.push({
+      type: 'warning',
+      message: `교사 최대시수 합(${totalCap}h)이 전체 전담시수(${totalDedicated}h)보다 적습니다. 최대시수를 늘리거나 교사를 추가하세요.`,
+    })
+  }
+
   // ── Step C: 주요과목 배정 ──────────────────────────────────────────
   // 과목명 그룹별로, 각 그룹 내에서 학년별 시수 큰 순으로 정렬
   // 한 교사가 목표시수 채울 때까지 학년을 순서대로 통째로 배정
@@ -95,11 +106,19 @@ export function runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assig
     let currentTeacher = null
 
     while (rem.some(r => r.classNums.length > 0)) {
-      // 새 교사 선택
+      // 새 교사 선택 (최대시수 여유가 남은 교사만)
       if (currentTeacher === null) {
-        const eligible = ts.filter(t => t.majorSubjectNames.size < maxMajor)
+        const withRoom = ts.filter(t => t.hours < t.maxHours)
+        if (withRoom.length === 0) {
+          warnings.push({
+            type: 'warning',
+            message: `최대시수 제한으로 ${name}의 일부 학급을 배정하지 못했습니다. 최대시수를 늘리거나 교사를 추가하세요.`,
+          })
+          break
+        }
+        const eligible = withRoom.filter(t => t.majorSubjectNames.size < maxMajor)
         if (eligible.length === 0) {
-          currentTeacher = ts.slice().sort((a, b) => a.hours - b.hours)[0]
+          currentTeacher = withRoom.slice().sort((a, b) => a.hours - b.hours)[0]
           warnings.push({
             type: 'warning',
             message: `교사 수 부족으로 ${name}이(가) 주요과목 제한을 초과해 배정되었습니다. 교사 수를 늘리거나 제한을 해제하세요.`,
@@ -109,7 +128,9 @@ export function runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assig
         }
       }
 
-      const roomLeft = targetHours - currentTeacher.hours
+      // 효과 목표 = min(균형 목표, 최대시수). maxHours 미설정 시 targetHours와 동일.
+      const effTarget = Math.min(targetHours, currentTeacher.maxHours)
+      const roomLeft = effTarget - currentTeacher.hours
       if (roomLeft <= 0) {
         currentTeacher = null
         continue
@@ -119,11 +140,11 @@ export function runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assig
       let filled = false
       for (const r of rem) {
         if (r.classNums.length === 0) continue
-        const canTake = Math.max(1, Math.floor((targetHours - currentTeacher.hours) / r.unit.hoursPerClass))
+        const canTake = Math.max(1, Math.floor((effTarget - currentTeacher.hours) / r.unit.hoursPerClass))
         const toAssign = r.classNums.splice(0, canTake)
         addClasses(currentTeacher, r.unit, toAssign)
         filled = true
-        if (currentTeacher.hours >= targetHours) {
+        if (currentTeacher.hours >= effTarget) {
           currentTeacher = null
           break
         }
@@ -155,8 +176,8 @@ export function runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assig
         const other = holders[i]
         const classesToMove = [...other.a.classNums]
         const newHours = main.t.hours + unit.hoursPerClass * classesToMove.length
-        // 합쳤을 때 목표시수 + 여유(hoursPerClass-1)를 넘지 않으면 합침
-        if (newHours <= targetHours + unit.hoursPerClass - 1) {
+        // 합쳤을 때 목표시수 + 여유(hoursPerClass-1)를 넘지 않고, 최대시수 이내면 합침
+        if (newHours <= targetHours + unit.hoursPerClass - 1 && newHours <= main.t.maxHours) {
           removeClasses(other.t, unit, classesToMove)
           addClasses(main.t, unit, classesToMove)
         }
@@ -181,6 +202,7 @@ export function runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assig
       const classToMove = fromAssign.classNums[fromAssign.classNums.length - 1]
       const unit = group.find(u => u.subjectId === fromAssign.subjectId && u.grade === fromAssign.grade)
       if (!unit) break
+      if (least.hours + unit.hoursPerClass > least.maxHours) break // 최대시수 초과 방지
 
       removeClasses(most, unit, [classToMove])
       addClasses(least, unit, [classToMove])
@@ -217,6 +239,7 @@ export function runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assig
           const unit = group.find(u => u.subjectId === assign.subjectId && u.grade === assign.grade)
           if (!unit) continue
           if (to.hours + unit.hoursPerClass > targetHours) continue
+          if (to.hours + unit.hoursPerClass > to.maxHours) continue // 최대시수 초과 방지
           const classToMove = assign.classNums[assign.classNums.length - 1]
           removeClasses(from, unit, [classToMove])
           addClasses(to, unit, [classToMove])
@@ -263,8 +286,10 @@ export function runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assig
     let remaining = [...unit.classNums]
     while (remaining.length > 0) {
       // 일반과목은 targetHours + hoursPerClass 이내까지 허용 (minor 분산 우선)
-      const available = ts.filter(t => t.hours < targetHours + unit.hoursPerClass)
-      const pool = available.length > 0 ? available : ts.slice()
+      // 단, 최대시수 여유가 남은 교사만 (미설정 시 maxHours=Infinity → 동일 동작)
+      const underCap = ts.filter(t => t.hours < t.maxHours)
+      const available = underCap.filter(t => t.hours < targetHours + unit.hoursPerClass)
+      const pool = available.length > 0 ? available : (underCap.length > 0 ? underCap : ts.slice())
       // 1반씩 배정해서 매 루프마다 재선택 → 골고루 분산
       const teacher = pickMinorTeacher(pool, unit)
       addClasses(teacher, unit, remaining.splice(0, 1))
@@ -300,6 +325,7 @@ export function runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assig
       // 이동 후 역전되거나 범위 초과하면 중단
       if (newHighHours < newLowHours - unit.hoursPerClass) break
       if (newLowHours > targetHours + unit.hoursPerClass) break
+      if (newLowHours > low.t.maxHours) break
 
       removeClasses(high.t, unit, [classToMove])
       addClasses(low.t, unit, [classToMove])
@@ -342,6 +368,7 @@ export function runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assig
     const newMostHours = most.hours - unit.hoursPerClass
     // 이동 후 least가 most보다 2단위 이상 역전되면 중단
     if (newLeastHours > newMostHours + unit.hoursPerClass) break
+    if (newLeastHours > least.maxHours) break // 최대시수 초과 방지
 
     removeClasses(most, unit, [classToMove])
     addClasses(least, unit, [classToMove])
@@ -364,6 +391,7 @@ export function runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assig
       const unit = units.find(u => u.subjectId === fromAssign.subjectId && u.grade === fromAssign.grade)
       if (!unit) continue
       if (unit.hoursPerClass > most.hours - least.hours) continue // 이동 시 역전
+      if (least.hours + unit.hoursPerClass > least.maxHours) continue // 최대시수 초과 방지
       const classToMove = fromAssign.classNums[fromAssign.classNums.length - 1]
       removeClasses(most, unit, [classToMove])
       addClasses(least, unit, [classToMove])
@@ -488,7 +516,7 @@ export function runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assig
 
     // 시수 여유 큰 순 (best-fit decreasing)
     const sorted = ts.slice()
-      .map(t => ({ t, capacity: targetHours - t.hours }))
+      .map(t => ({ t, capacity: Math.min(targetHours, t.maxHours) - t.hours }))
       .filter(x => x.capacity > 0)
       .sort((a, b) => b.capacity - a.capacity)
 
@@ -523,7 +551,7 @@ export function runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assig
       while (remaining.length > 0) {
         const eligible = ts.filter(t =>
           teacherGrade.get(t.id) === u.grade &&
-          t.hours + u.hoursPerClass <= targetHours
+          t.hours + u.hoursPerClass <= Math.min(targetHours, t.maxHours)
         )
         let teacher
         if (eligible.length > 0) {

@@ -11,6 +11,7 @@ const MANUAL = [
       '"자동 배정 실행" 버튼을 누르면 과목·학년·반과 교사 수 정보를 바탕으로 교사별 담당이 자동 분배됩니다.',
       '주요 과목(전담 과목 설정에서 체크) 1인 제한 옵션을 켜면, 한 교사에게 주요 과목이 1개만 배정됩니다.',
       '학년·반별 시수 합계, 교사별 목표 시수를 자동 계산해서 균등 분배를 시도합니다.',
+      '"교사별 최대 수업가능시수"에 값을 넣으면 자동 배정이 그 시수를 넘지 않도록 분배합니다 (비우면 제한 없음). 최대시수 합이 전체 전담시수보다 적으면 경고가 표시됩니다.',
     ],
   },
   {
@@ -61,6 +62,11 @@ export default function Assignment() {
       teacher_assignments: map[t.id] || [],
     })))
     alert('적용되었습니다.')
+  }
+
+  function setMaxHours(teacherId, val) {
+    const n = val === '' ? undefined : Math.max(0, Math.floor(Number(val)) || 0)
+    setTeachers(teachers.map(t => t.id === teacherId ? { ...t, max_hours: n } : t))
   }
 
   function addAssignment(teacherId, teacherCode, subjectId, subjectName, grade, classNums, hoursPerClass, isMajor) {
@@ -155,6 +161,29 @@ export default function Assignment() {
         <span>교사 목표 시수: <strong className="text-gray-800">{targetHours}h</strong></span>
         <span>주요 과목 1개 제한: <strong className="text-gray-800">{assignmentSettings.maxMajorSubjectsPerTeacher === 1 ? '적용' : '미적용'}</strong></span>
       </div>
+
+      {teachers.length > 0 && (
+        <div className="max-w-[720px] bg-white border border-gray-200 rounded-sm p-4 mb-5">
+          <p className="text-[13px] font-semibold text-gray-700 mb-1">교사별 최대 수업가능시수 (선택)</p>
+          <p className="text-[12px] text-gray-400 mb-3 break-keep">비워 두면 제한이 없습니다. 값을 입력하면 "자동 배정 실행" 시 해당 교사가 그 시수를 넘지 않도록 분배합니다.</p>
+          <div className="flex flex-wrap gap-2">
+            {teachers.map(t => (
+              <div key={t.id} className="flex items-center gap-1.5 border border-gray-200 rounded-sm px-2 py-1">
+                <span className="text-[12px] text-gray-600">{t.code}</span>
+                <input
+                  type="number" min={0}
+                  value={t.max_hours ?? ''}
+                  placeholder="제한없음"
+                  onClick={e => e.target.select()}
+                  onChange={e => setMaxHours(t.id, e.target.value)}
+                  className="w-20 h-7 text-center text-[12px] border border-gray-200 rounded-sm outline-none focus:border-black"
+                />
+                <span className="text-[11px] text-gray-400">h</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* 경고 */}
       {warnings.length > 0 && (

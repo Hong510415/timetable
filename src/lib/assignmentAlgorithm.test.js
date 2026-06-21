@@ -120,3 +120,41 @@ describe('assignment algorithm — minor subject grade splitting', () => {
     expect(result.assignments.length).toBeGreaterThan(0)
   })
 })
+
+describe('assignment algorithm — 교사별 최대시수 (max_hours)', () => {
+  function totalHoursByTeacher(result, teacherList) {
+    const map = {}
+    for (const t of teacherList) {
+      map[t.id] = result.assignments
+        .filter(a => a.teacherId === t.id)
+        .reduce((s, a) => s + a.weeklyHours, 0)
+    }
+    return map
+  }
+
+  it('max_hours 미설정이면 기존 동작과 동일하다', () => {
+    const a = runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assignmentSettings })
+    const b = runAssignmentAlgorithm({
+      gradeConfigs, subjects,
+      teachers: teachers.map(t => ({ ...t, max_hours: undefined })),
+      assignmentSettings,
+    })
+    expect(JSON.stringify(a.assignments)).toBe(JSON.stringify(b.assignments))
+  })
+
+  it('실현 가능한 범위에서 한 교사의 최대시수를 (페어 단위 오차 내에서) 넘지 않는다', () => {
+    // 총 168h, 7명(평균 24h). 교사1만 8h로 제한 → 나머지가 흡수 가능(실현 가능).
+    const cap = 8
+    const capped = teachers.map((t, i) => i === 0 ? { ...t, max_hours: cap } : t)
+    const result = runAssignmentAlgorithm({ gradeConfigs, subjects, teachers: capped, assignmentSettings })
+    const totals = totalHoursByTeacher(result, capped)
+    const maxHpc = Math.max(...subjects.map(s => s.weekly_hours)) // 최대 페어 단위
+    expect(totals['t1']).toBeLessThanOrEqual(cap + maxHpc - 1)
+  })
+
+  it('최대시수 합이 전체 전담시수보다 작으면 경고를 낸다', () => {
+    const capped = teachers.map(t => ({ ...t, max_hours: 1 }))
+    const result = runAssignmentAlgorithm({ gradeConfigs, subjects, teachers: capped, assignmentSettings })
+    expect(result.warnings.some(w => w.message.includes('최대시수'))).toBe(true)
+  })
+})
