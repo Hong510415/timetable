@@ -19,13 +19,13 @@ const MANUAL = [
       '선택한 학년(들)의 모든 학급을 같은 날에 몰아서(중간에 비는 시간 없이) 배치합니다.',
       '학급이 많아 하루에 다 못 들어가면 연속된 날(예: 월·화)에 균등하게 나눠 배치합니다.',
       '학급당 시수가 2시간 이상이면 "연속 수업" 여부를 선택할 수 있습니다.',
-      '특별실을 지정하면 다른 특별실 사용과 겹치지 않게 배치됩니다.',
+      '특별실을 쓰는 경우 "특별실 관리"에서 외부강사를 사용 교사로 지정하면 특별실 충돌도 피해 배치됩니다.',
     ],
   },
   {
     title: '입력 항목',
     items: [
-      '강사명 · 담당 학년 · 과목(표시)명 · 학급당 주 시수 · 요일(자동/지정) · 특별실(선택)',
+      '강사명 · 담당 학년(복수) · 과목(표시)명 · 학급당 주 시수 · 요일(자동/지정)',
       '요일을 "자동"으로 두면 시스템이 비어 있는 적절한 요일을 선택합니다.',
     ],
   },
@@ -33,7 +33,7 @@ const MANUAL = [
 
 export default function ExternalInstructors() {
   const { state, setExternalInstructors } = useApp()
-  const { externalInstructors, gradeConfigs, rooms } = state
+  const { externalInstructors, gradeConfigs } = state
 
   const grades = gradeConfigs.map(g => g.grade)
 
@@ -48,7 +48,6 @@ export default function ExternalInstructors() {
         hoursPerClass: 1,
         consecutive: false,
         day: 'auto',
-        roomId: '',
       },
     ])
   }
@@ -77,7 +76,7 @@ export default function ExternalInstructors() {
         </div>
       </div>
 
-      <p className="max-w-[900px] text-[12px] text-gray-400 -mt-3 mb-5 break-keep">⑤ (선택) 학년 단위로 들어오는 외부강사를 등록하세요. 여러 학년을 묶어 맡으면 담당 학년을 복수 선택하세요. 시간표 자동 생성 시 먼저 고정 배치되고 전담 수업이 그 시간을 피하며, 전담교사 시수 균형에는 포함되지 않습니다.</p>
+      <p className="max-w-[900px] text-[12px] text-gray-400 -mt-3 mb-5 break-keep">④ (선택) 학년 단위로 들어오는 외부강사를 등록하세요. 여러 학년을 묶어 맡으면 담당 학년을 복수 선택하세요. 특별실을 쓰면 다음 "특별실 관리"에서 외부강사를 사용 교사로 지정하세요. 시간표 자동 생성 시 먼저 고정 배치되고 전담 수업이 그 시간을 피하며, 전담교사 시수 균형에는 포함되지 않습니다.</p>
 
       {externalInstructors.length === 0 ? (
         <div className="text-center py-20 text-gray-300 text-[14px]">
@@ -158,17 +157,6 @@ export default function ExternalInstructors() {
                 >
                   <option value="auto">자동</option>
                   {DAY_LABELS.map((d, i) => <option key={i} value={i}>{d}요일</option>)}
-                </select>
-              </Field>
-
-              <Field label="특별실(선택)">
-                <select
-                  value={e.roomId}
-                  onChange={ev => update(e.id, { roomId: ev.target.value })}
-                  className="w-28 h-9 px-2 border border-gray-300 rounded-sm text-[13px] outline-none focus:border-black bg-white"
-                >
-                  <option value="">없음</option>
-                  {rooms.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
                 </select>
               </Field>
 

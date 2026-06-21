@@ -184,7 +184,7 @@ export default function RoomManagement() {
         </div>
       </div>
 
-      <p className="max-w-[1100px] text-[12px] text-gray-400 -mt-3 mb-5 break-keep">④ 과학실·체육관 등 특별실과 사용 과목을 등록하세요. 사용 불가 시간(방과후 등)도 지정할 수 있으며, 등록한 특별실은 시간표 자동 생성 시 자동 배정됩니다.</p>
+      <p className="max-w-[1100px] text-[12px] text-gray-400 -mt-3 mb-5 break-keep">⑤ 과학실·체육관 등 특별실과 사용 과목을 등록하세요. 사용 불가 시간(방과후 등)도 지정할 수 있으며, 등록한 특별실은 시간표 자동 생성 시 자동 배정됩니다.</p>
 
       <div className="max-w-[1100px] flex items-center gap-2 p-3 bg-gray-100 rounded-sm mb-5 text-[12px] text-gray-500">
         💡 사용 불가 시간대를 체크하면 해당 시간에 특별실 배정이 제외됩니다. (예: 방과후 수업 등)
