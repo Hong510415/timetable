@@ -6,6 +6,7 @@ import SubjectSetup from './pages/SubjectSetup'
 import Timetable from './pages/Timetable'
 import RoomManagement from './pages/RoomManagement'
 import Assignment from './pages/Assignment'
+import ExternalInstructors from './pages/ExternalInstructors'
 import RoomTimetable from './pages/RoomTimetable'
 import SchedulerDebug from './pages/SchedulerDebug'
 
@@ -26,6 +27,7 @@ export default function App() {
           <Route path="/assignment" element={<Layout><Assignment /></Layout>} />
           <Route path="/timetable" element={<Layout><Timetable /></Layout>} />
           <Route path="/rooms" element={<Layout><RoomManagement /></Layout>} />
+          <Route path="/external" element={<Layout><ExternalInstructors /></Layout>} />
           <Route path="/room-timetable" element={<Layout><RoomTimetable /></Layout>} />
           <Route path="/scheduler-debug" element={<SchedulerDebug />} />
           <Route path="*" element={<Navigate to="/setup" />} />

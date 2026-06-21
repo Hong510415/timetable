@@ -20,6 +20,7 @@ export const initialState = {
   teachers: [],
   rooms: [],
   roomBlockedSlots: [],
+  externalInstructors: [],
   timetableSlots: [],
   roomTimetableSlots: [],
   assignmentSettings: { maxMajorSubjectsPerTeacher: 1 },

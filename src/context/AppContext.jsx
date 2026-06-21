@@ -20,6 +20,7 @@ export function AppProvider({ children }) {
     setTeachers: (v) => dispatch({ type: 'SET_TEACHERS', payload: v }),
     setRooms: (v) => dispatch({ type: 'SET_ROOMS', payload: v }),
     setRoomBlockedSlots: (v) => dispatch({ type: 'SET_ROOM_BLOCKED_SLOTS', payload: v }),
+    setExternalInstructors: (v) => dispatch({ type: 'SET_EXTERNAL_INSTRUCTORS', payload: v }),
     setTimetableSlots: (v) => dispatch({ type: 'SET_TIMETABLE_SLOTS', payload: v }),
     setRoomTimetableSlots: (v) => dispatch({ type: 'SET_ROOM_TIMETABLE_SLOTS', payload: v }),
     setAssignmentSettings: (v) => dispatch({ type: 'SET_ASSIGNMENT_SETTINGS', payload: v }),

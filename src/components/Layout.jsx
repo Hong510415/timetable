@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { Settings, Calendar, DoorOpen, CalendarCheck, Download, Upload, ClipboardList, BookOpen, Menu, X, RotateCcw, FileText } from 'lucide-react'
+import { Settings, Calendar, DoorOpen, CalendarCheck, Download, Upload, ClipboardList, BookOpen, Menu, X, RotateCcw, FileText, UserPlus } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { exportFullWorkbook, importFullWorkbook } from '../lib/excelIO'
 
@@ -9,6 +9,7 @@ const navItems = [
   { path: '/subjects', label: '전담 과목 설정', icon: BookOpen },
   { path: '/assignment', label: '전담 배정', icon: ClipboardList },
   { path: '/rooms', label: '특별실 관리', icon: DoorOpen },
+  { path: '/external', label: '외부강사', icon: UserPlus },
   { path: '/timetable', label: '전담 시간표', icon: Calendar },
   { path: '/room-timetable', label: '특별실 시간표', icon: CalendarCheck },
 ]

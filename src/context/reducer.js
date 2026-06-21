@@ -55,6 +55,7 @@ function rawReducer(state, action) {
     case 'SET_TEACHERS': return { ...state, teachers: action.payload }
     case 'SET_ROOMS': return { ...state, rooms: action.payload }
     case 'SET_ROOM_BLOCKED_SLOTS': return { ...state, roomBlockedSlots: action.payload }
+    case 'SET_EXTERNAL_INSTRUCTORS': return { ...state, externalInstructors: action.payload }
     case 'SET_TIMETABLE_SLOTS': return { ...state, timetableSlots: action.payload }
     case 'SET_ROOM_TIMETABLE_SLOTS': return { ...state, roomTimetableSlots: action.payload }
     case 'SET_ASSIGNMENT_SETTINGS': return { ...state, assignmentSettings: action.payload }
