@@ -25,8 +25,8 @@ const MANUAL = [
   {
     title: '입력 항목',
     items: [
-      '강사명 · 담당 학년(복수) · 과목(표시)명 · 학급당 주 시수 · 요일(자동/지정)',
-      '요일을 "자동"으로 두면 시스템이 비어 있는 적절한 요일을 선택합니다.',
+      '강사명 · 담당 학년(복수) · 과목(표시)명 · 학급당 주 시수 · 요일(자동/복수 지정)',
+      '요일을 "자동"으로 두면 시스템이 비어 있는 적절한 요일을 선택하고, 특정 요일을 복수로 지정하면 그 요일들에만 배치합니다.',
     ],
   },
 ]
@@ -47,7 +47,7 @@ export default function ExternalInstructors() {
         subjectName: '',
         hoursPerClass: 1,
         consecutive: false,
-        day: 'auto',
+        days: [], // 빈 배열 = 자동
       },
     ])
   }
@@ -149,15 +149,33 @@ export default function ExternalInstructors() {
                 </Field>
               )}
 
-              <Field label="요일">
-                <select
-                  value={e.day}
-                  onChange={ev => update(e.id, { day: ev.target.value === 'auto' ? 'auto' : Number(ev.target.value) })}
-                  className="w-24 h-9 px-2 border border-gray-300 rounded-sm text-[13px] outline-none focus:border-black bg-white"
-                >
-                  <option value="auto">자동</option>
-                  {DAY_LABELS.map((d, i) => <option key={i} value={i}>{d}요일</option>)}
-                </select>
+              <Field label="요일 (자동/복수 선택)">
+                <div className="h-9 flex items-center gap-1.5 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => update(e.id, { days: [] })}
+                    className={`px-2 h-7 rounded-sm text-[12px] border transition-colors ${(e.days || []).length === 0 ? 'bg-black text-white border-black font-semibold' : 'bg-white text-gray-500 border-gray-300 hover:bg-gray-50'}`}
+                  >
+                    자동
+                  </button>
+                  {DAY_LABELS.map((d, i) => {
+                    const on = (e.days || []).includes(i)
+                    return (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => {
+                          const cur = e.days || []
+                          const next = on ? cur.filter(x => x !== i) : [...cur, i].sort((a, b) => a - b)
+                          update(e.id, { days: next })
+                        }}
+                        className={`px-2 h-7 rounded-sm text-[12px] border transition-colors ${on ? 'bg-black text-white border-black font-semibold' : 'bg-white text-gray-500 border-gray-300 hover:bg-gray-50'}`}
+                      >
+                        {d}
+                      </button>
+                    )
+                  })}
+                </div>
               </Field>
 
               <button
