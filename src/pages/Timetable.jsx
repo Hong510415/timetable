@@ -1335,7 +1335,7 @@ function EditCellModal({ modal, teachers, subjects, gradeConfigs, rooms, grade, 
               onChange={e => handleSubjectChange(e.target.value)}
               className="w-full h-9 px-2 border border-gray-300 rounded-sm text-[13px] outline-none bg-white"
             >
-              <option value="">없음</option>
+              <option value="" disabled>과목 선택</option>
               {allowedSubjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
           </div>
