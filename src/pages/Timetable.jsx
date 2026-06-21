@@ -97,7 +97,7 @@ const GRADES = [1, 2, 3, 4, 5, 6]
 
 export default function Timetable() {
   const { state, setTimetableSlots } = useApp()
-  const { gradeConfigs, subjects, teachers, lunchConfig, timetableSlots: timetableRows, rooms, roomBlockedSlots } = state
+  const { gradeConfigs, subjects, teachers, lunchConfig, timetableSlots: timetableRows, rooms, roomBlockedSlots, externalInstructors } = state
 
   const [generating, setGenerating] = useState(false)
   const [swapCell, setSwapCell] = useState(null) // { teacherId, day, slot, rowId }
@@ -178,7 +178,7 @@ export default function Timetable() {
         // 각 반복이 UI를 블로킹하지 않도록 5회마다 yield
         if (i % 5 === 0) await new Promise(r => setTimeout(r, 0))
 
-        const result = buildSchedule(gradeConfigs, subjects, teachers, lunchCfg, rooms, roomBlockedSlots, generateOptions)
+        const result = buildSchedule(gradeConfigs, subjects, teachers, lunchCfg, rooms, roomBlockedSlots, { ...generateOptions, externalInstructors })
         const { rows } = flattenResult(result.result, result.gradeLunchSlot, result.totalSlots)
 
         // 점수 계산: 미배정 적을수록 좋고, 같은 학년+과목이 같은 날에 묶일수록 좋음
@@ -187,7 +187,7 @@ export default function Timetable() {
         // 클러스터링 점수: (teacher, grade, subject) 그룹별로 같은 날에 묶인 반 쌍 수
         const groupDays = {}
         for (const row of rows) {
-          if (row.is_unassigned) continue
+          if (row.is_unassigned || row.is_external) continue
           const key = `${row.teacher_id}__${row.grade}__${row.subject_id}`
           if (!groupDays[key]) groupDays[key] = {}
           if (!groupDays[key][row.class_num]) groupDays[key][row.class_num] = new Set()
@@ -242,7 +242,7 @@ export default function Timetable() {
       daySlots[d] = {}
       const relevant = timetableRows.filter(r => r.grade === grade && r.class_num === classNum && r.day_of_week === d)
       for (const r of relevant) {
-        daySlots[d][r.slot] = { teacher_id: r.teacher_id, subject_id: r.subject_id, is_unassigned: r.is_unassigned, room_id: r.room_id, id: r.id }
+        daySlots[d][r.slot] = { teacher_id: r.teacher_id, subject_id: r.subject_id, is_unassigned: r.is_unassigned, room_id: r.room_id, id: r.id, is_external: r.is_external, external_name: r.external_name, subject_name: r.subject_name }
       }
     }
     return daySlots
@@ -293,6 +293,10 @@ export default function Timetable() {
   }
 
   function openEditModal(day, slot, cell, ctx = {}) {
+    if (cell?.is_external) {
+      alert('외부강사 수업입니다. 변경하려면 "외부강사 관리"에서 수정 후 시간표를 다시 생성하세요.')
+      return
+    }
     if (tab === 'class') {
       setEditModal({ day, slot, grade: ctx.grade, classNum: ctx.classNum, current: cell, rowId: cell?.id || null })
     } else if (tab === 'teacher') {

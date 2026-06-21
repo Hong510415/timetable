@@ -35,6 +35,71 @@ function findCell(rows, grade, classNum, day, slot) {
   return rows.find(r => r.grade === grade && r.class_num === classNum && r.day_of_week === day && r.slot === slot)
 }
 
+// --- 외부강사 배치 ---
+
+describe('외부강사 사전 고정 배치', () => {
+  const ext = (over = {}) => ({
+    id: 'x1', name: '리코더', grades: [3], subjectName: '리코더',
+    hoursPerClass: 1, consecutive: false, days: [], ...over,
+  })
+
+  it('7학급(hpc1, 자동)을 연속 2일에 4-3 균등, gap 없이 배치', () => {
+    const res = buildSchedule([makeGrade(3, 7)], [], [], noLunch, [], [], { externalInstructors: [ext()] })
+    const rows = flatRows(res).filter(r => r.is_external)
+    expect(rows.length).toBe(7)
+    // 각 학급 1회씩
+    expect(new Set(rows.map(r => r.class_num)).size).toBe(7)
+    // 사용 요일 = 2개(연속: 0,1)
+    const days = [...new Set(rows.map(r => r.day_of_week))].sort()
+    expect(days).toEqual([0, 1])
+    // 균등 4-3
+    const c0 = rows.filter(r => r.day_of_week === 0).length
+    const c1 = rows.filter(r => r.day_of_week === 1).length
+    expect([c0, c1].sort()).toEqual([3, 4])
+    // 각 날 gap 없이(0..n-1)
+    for (const d of days) {
+      const slots = rows.filter(r => r.day_of_week === d).map(r => r.slot).sort((a, b) => a - b)
+      expect(slots).toEqual(slots.map((_, i) => i))
+    }
+    // 표시 내용
+    expect(rows[0].external_name).toBe('리코더')
+    expect(rows[0].subject_name).toBe('리코더')
+  })
+
+  it('지정 요일 1개(화)에 다 들어가면 그 날에 몰아서 배치', () => {
+    const res = buildSchedule([makeGrade(3, 4)], [], [], noLunch, [], [], { externalInstructors: [ext({ days: [1] })] })
+    const rows = flatRows(res).filter(r => r.is_external)
+    expect(rows.length).toBe(4)
+    expect(new Set(rows.map(r => r.day_of_week))).toEqual(new Set([1]))
+    expect(rows.map(r => r.slot).sort((a, b) => a - b)).toEqual([0, 1, 2, 3])
+  })
+
+  it('hpc2 연속이면 각 학급 2시간 붙여서 배치', () => {
+    const res = buildSchedule([makeGrade(3, 2)], [], [], noLunch, [], [], { externalInstructors: [ext({ hoursPerClass: 2, consecutive: true, days: [0] })] })
+    const rows = flatRows(res).filter(r => r.is_external)
+    expect(rows.length).toBe(4) // 2학급 × 2시간
+    // 같은 학급 2시간이 연속 슬롯
+    for (const c of [1, 2]) {
+      const slots = rows.filter(r => r.class_num === c).map(r => r.slot).sort((a, b) => a - b)
+      expect(slots.length).toBe(2)
+      expect(slots[1] - slots[0]).toBe(1)
+    }
+  })
+
+  it('외부강사가 점유한 슬롯에는 전담이 배정되지 않는다', () => {
+    const s = makeSubject('s1', '미술', 1)
+    const t = makeTeacher('t1', '미술', [{ subject_id: 's1', grade: 3, class_num: 1, weekly_hours: 1 }])
+    const res = buildSchedule([makeGrade(3, 1)], [s], [t], noLunch, [], [], { externalInstructors: [ext({ grades: [3], days: [0] })] })
+    const rows = flatRows(res)
+    const extCell = rows.find(r => r.is_external && r.class_num === 1)
+    const teacherCell = rows.find(r => r.teacher_id === 't1' && r.class_num === 1)
+    // 같은 (요일,슬롯)에 겹치지 않음
+    if (extCell && teacherCell) {
+      expect(extCell.day_of_week === teacherCell.day_of_week && extCell.slot === teacherCell.slot).toBe(false)
+    }
+  })
+})
+
 // --- Hard Constraint Tests ---
 
 describe('Hard #3: weekly_hours exact match', () => {

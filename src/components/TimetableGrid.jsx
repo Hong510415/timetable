@@ -68,7 +68,12 @@ export default function TimetableGrid({ slots, totalSlots, gradeLunchSlot, teach
                   className={`relative group flex-1 border-r border-gray-100 last:border-r-0 flex flex-col items-center justify-center gap-0 transition-colors
                     ${unassigned ? 'bg-red-500 cursor-pointer' : onCellClick ? 'hover:bg-gray-50 cursor-pointer' : ''}`}
                 >
-                  {teacher && subject ? (
+                  {cell?.is_external ? (
+                    <>
+                      <span className={`${compact ? 'text-[12px]' : 'text-[13px]'} font-semibold text-indigo-700`}>{cell.subject_name || '외부강사'}</span>
+                      <span className="text-[10px] text-indigo-400">{cell.external_name || '외부강사'}</span>
+                    </>
+                  ) : teacher && subject ? (
                     <>
                       <span className={`${compact ? 'text-[12px]' : 'text-[13px]'} font-semibold ${unassigned ? 'text-white' : hasConflict ? 'text-red-600' : 'text-gray-900'}`}>{subject.name}</span>
                       <span className={`text-[10px] ${unassigned ? 'text-red-200' : hasConflict ? 'text-red-400' : 'text-gray-400'}`}>{teacher.code}</span>

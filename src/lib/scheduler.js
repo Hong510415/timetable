@@ -276,6 +276,93 @@ export function buildSchedule(
     classTotalHours[k] = (classTotalHours[k] || 0) + b.size
   }
 
+  // ---------- 3.5 외부강사 사전 고정 배치 ----------
+  // 전담 배치보다 먼저 고정 점유 → 전담이 그 시간을 피함. 전담교사 시수 균형에는 미포함.
+  // 학년(들)의 모든 학급을 gap 없이 몰아서 배치, 넘치면 연속 날 균등 분할.
+  const externalInstructors = options.externalInstructors || []
+  const externalErrors = []
+
+  for (const inst of externalInstructors) {
+    const instGrades = (inst.grades || []).filter(g => gradeConfigs.some(x => x.grade === g))
+    if (!instGrades.length) continue
+    const hpc = Math.max(1, Math.floor(inst.hoursPerClass) || 1)
+    const consecutive = !!inst.consecutive
+
+    // task 목록 (연속이면 학급당 size=hpc 한 덩어리, 아니면 size=1 × hpc)
+    const tasks = []
+    for (const g of instGrades) {
+      const gc = gradeConfigs.find(x => x.grade === g)
+      for (let c = 1; c <= gc.num_classes; c++) {
+        if (hpc >= 2 && !consecutive) {
+          for (let h = 0; h < hpc; h++) tasks.push({ grade: g, classNum: c, size: 1 })
+        } else {
+          tasks.push({ grade: g, classNum: c, size: hpc })
+        }
+      }
+    }
+    if (!tasks.length) continue
+    const totalSize = tasks.reduce((s, t) => s + t.size, 0)
+
+    const availLen = (grade, classNum, day) => (gradeClassSlots[grade]?.[classNum]?.[day]?.size || 0)
+
+    // 사용할 요일 결정
+    let daysToUse
+    if (inst.days && inst.days.length) {
+      daysToUse = [...inst.days].sort((a, b) => a - b)
+    } else {
+      // 자동: 하루 용량(관련 학년 가용 슬롯 최대치) 기준 최소 연속 일수, 월부터
+      const dayCap = Math.max(1, ...instGrades.flatMap(g => [0, 1, 2, 3, 4].map(d => availLen(g, 1, d))))
+      const nDays = Math.max(1, Math.min(5, Math.ceil(totalSize / dayCap)))
+      daysToUse = []
+      for (let d = 0; d < nDays; d++) daysToUse.push(d)
+    }
+
+    // 균등 분배: 각 task를 용량 내에서 부하가 가장 적은 날에 배정
+    const buckets = daysToUse.map(() => [])
+    const load = daysToUse.map(() => 0)
+    for (const task of tasks) {
+      let best = -1
+      for (let i = 0; i < daysToUse.length; i++) {
+        const cap = availLen(task.grade, task.classNum, daysToUse[i])
+        if (load[i] + task.size <= cap && (best === -1 || load[i] < load[best])) best = i
+      }
+      if (best === -1) { externalErrors.push({ name: inst.name, grade: task.grade, classNum: task.classNum }); continue }
+      buckets[best].push(task)
+      load[best] += task.size
+    }
+
+    // 각 날에 gap 없이(연속) 배치
+    for (let i = 0; i < daysToUse.length; i++) {
+      const day = daysToUse[i]
+      const instDayUsed = new Set() // 이 강사가 이 날 점유한 슬롯
+      let ptr = 0
+      for (const task of buckets[i]) {
+        const av = gradeClassSlots[task.grade]?.[task.classNum]?.[day]
+        if (!av) { externalErrors.push({ name: inst.name, grade: task.grade, classNum: task.classNum }); continue }
+        let start = -1
+        for (let s = ptr; s + task.size <= totalSlots; s++) {
+          let ok = true
+          for (let k = 0; k < task.size; k++) {
+            if (!av.has(s + k) || instDayUsed.has(s + k)) { ok = false; break }
+          }
+          if (ok) { start = s; break }
+        }
+        if (start === -1) { externalErrors.push({ name: inst.name, grade: task.grade, classNum: task.classNum }); continue }
+        for (let k = 0; k < task.size; k++) {
+          const slot = start + k
+          result[task.grade][task.classNum][day][slot] = {
+            external: true,
+            externalName: inst.name || '외부강사',
+            subjectName: inst.subjectName || '',
+          }
+          av.delete(slot) // 전담 후보에서 제외
+          instDayUsed.add(slot)
+        }
+        ptr = start + task.size
+      }
+    }
+  }
+
   // ---------- 4. 검증 함수 ----------
 
   function findAvailableRoom(subjectId, day, slot, teacherId) {
@@ -847,6 +934,7 @@ export function buildSchedule(
   return {
     result,
     errors: Object.values(errorMap),
+    externalErrors,
     gradeLunchSlot,
     totalSlots,
   }
@@ -864,6 +952,22 @@ export function flattenResult(result, gradeLunchSlot, totalSlots) {
           if (lunchSlot !== undefined && lunchSlot === slot) continue
           const cell = days[day][slot]
           if (!cell) continue
+          if (cell.external) {
+            rows.push({
+              grade,
+              class_num: classNum,
+              day_of_week: day,
+              slot,
+              is_external: true,
+              external_name: cell.externalName || '외부강사',
+              subject_name: cell.subjectName || '',
+              teacher_id: null,
+              subject_id: null,
+              room_id: null,
+              is_unassigned: false,
+            })
+            continue
+          }
           rows.push({
             grade,
             class_num: classNum,

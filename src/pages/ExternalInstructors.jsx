@@ -64,9 +64,9 @@ export default function ExternalInstructors() {
   return (
     <div className="p-4 md:p-10 bg-gray-50 min-h-full">
       <div className="max-w-[900px] flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-6">
-        <h1 className="text-[22px] font-bold">외부강사</h1>
+        <h1 className="text-[22px] font-bold">외부강사 관리</h1>
         <div className="flex flex-wrap gap-2">
-          <ManualModal title="외부강사" sections={MANUAL} />
+          <ManualModal title="외부강사 관리" sections={MANUAL} />
           <button
             onClick={addInstructor}
             className="flex items-center gap-2 h-10 px-3 md:px-4 bg-black text-white text-[13px] font-semibold rounded-sm hover:bg-gray-800 whitespace-nowrap"
