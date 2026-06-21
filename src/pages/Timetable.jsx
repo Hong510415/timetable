@@ -445,6 +445,14 @@ export default function Timetable() {
         />
       )}
 
+      {timetableRows.length > 0 && externalInstructors.length > 0 && (
+        <ExternalUnassignedStats
+          externalInstructors={externalInstructors}
+          gradeConfigs={gradeConfigs}
+          timetableRows={timetableRows}
+        />
+      )}
+
       {teachers.length === 0 && timetableRows.length === 0 ? (
         <div className="text-center py-20 text-gray-300 text-[14px]">
           먼저 전담 과목·교사를 등록하세요. 등록하면 빈 시간표가 나타나 직접 입력할 수 있습니다.
@@ -813,6 +821,48 @@ function UnassignedStats({ teachers, subjects, timetableRows, filterClasses, pla
     <div className={`${placement === 'top' ? 'mb-4' : 'mt-6'} ${hasBoth ? 'flex gap-4 flex-wrap max-w-[1100px]' : ''}`}>
       {deficitRows.length > 0 && renderTable(deficitRows, 'deficit')}
       {surplusRows.length > 0 && renderTable(surplusRows, 'surplus')}
+    </div>
+  )
+}
+
+function ExternalUnassignedStats({ externalInstructors, gradeConfigs, timetableRows }) {
+  const rows = []
+  for (const inst of externalInstructors) {
+    const hpc = Math.max(1, Math.floor(inst.hoursPerClass) || 1)
+    const grades = (inst.grades || []).filter(g => gradeConfigs.some(x => x.grade === g))
+    const target = grades.reduce((s, g) => s + (gradeConfigs.find(gc => gc.grade === g)?.num_classes || 0) * hpc, 0)
+    if (target === 0) continue
+    const scheduled = timetableRows.filter(r => r.is_external && r.external_id === inst.id && !r.is_unassigned).length
+    const deficit = target - scheduled
+    if (deficit > 0) {
+      rows.push({ name: inst.name || '외부강사', subjectName: inst.subjectName || '', target, scheduled, deficit })
+    }
+  }
+  if (rows.length === 0) return null
+
+  return (
+    <div className="mb-4 max-w-[540px]">
+      <div className="bg-white border border-red-200 rounded-sm overflow-hidden">
+        <div className="px-4 py-2.5 border-b border-red-200 bg-red-50 text-[12px] font-semibold text-red-700">
+          외부강사 미배정 ({rows.length}건)
+        </div>
+        <div className="grid bg-gray-50 border-b border-gray-200 text-[11px] font-semibold text-gray-500" style={{ gridTemplateColumns: '1fr 1fr 60px 60px 60px' }}>
+          <div className="px-3 py-2 border-r border-gray-200">강사</div>
+          <div className="px-3 py-2 border-r border-gray-200">과목</div>
+          <div className="px-3 py-2 border-r border-gray-200 text-center">목표</div>
+          <div className="px-3 py-2 border-r border-gray-200 text-center">배정</div>
+          <div className="px-3 py-2 text-center">부족</div>
+        </div>
+        {rows.map((r, i) => (
+          <div key={i} className="grid border-b border-gray-100 last:border-b-0 text-[12px]" style={{ gridTemplateColumns: '1fr 1fr 60px 60px 60px' }}>
+            <div className="px-3 py-2 border-r border-gray-100 font-semibold text-indigo-700">{r.name}</div>
+            <div className="px-3 py-2 border-r border-gray-100">{r.subjectName}</div>
+            <div className="px-3 py-2 border-r border-gray-100 text-center text-gray-600">{r.target}h</div>
+            <div className="px-3 py-2 border-r border-gray-100 text-center text-gray-600">{r.scheduled}h</div>
+            <div className="px-3 py-2 text-center font-bold text-red-600">−{r.deficit}h</div>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
