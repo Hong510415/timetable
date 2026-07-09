@@ -866,9 +866,17 @@ function UnassignedStats({ teachers, subjects, timetableRows, filterClasses, pla
   }
 
   return (
-    <div className={`${placement === 'top' ? 'mb-4' : 'mt-6'} ${hasBoth ? 'flex gap-4 flex-wrap max-w-[1100px]' : ''}`}>
-      {deficitRows.length > 0 && renderTable(deficitRows, 'deficit')}
-      {surplusRows.length > 0 && renderTable(surplusRows, 'surplus')}
+    <div className={`${placement === 'top' ? 'mb-4' : ''} max-w-[1100px]`}>
+      <div className={hasBoth ? 'flex gap-4 flex-wrap' : ''}>
+        {deficitRows.length > 0 && renderTable(deficitRows, 'deficit')}
+        {surplusRows.length > 0 && renderTable(surplusRows, 'surplus')}
+      </div>
+      {deficitRows.length > 0 && (
+        <div className="mt-2 max-w-[760px] text-[11px] text-gray-500 bg-red-50/60 border border-red-100 rounded-sm px-3 py-2 leading-relaxed break-keep">
+          <b className="text-red-600">부족 원인</b>: 해당 교사·학급이 요일별 수업이 몰려 빈 시간이 부족하거나, 특별실 사용 시간·과목 연속(하루 최대 시수) 제약에 막힌 경우입니다.
+          <br /><b className="text-gray-700">해결 방법</b>: ① 전담 배정에서 교사 수를 늘리거나 담당을 조정 → ② 자동 생성 모달에서 과목 연속·하루 최대 시수 완화 → ③ 특별실 사용 불가 시간 축소 → ④ 위 미배정 학급 칸을 직접 클릭해 수동 배치.
+        </div>
+      )}
     </div>
   )
 }

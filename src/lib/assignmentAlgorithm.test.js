@@ -120,3 +120,15 @@ describe('assignment algorithm — minor subject grade splitting', () => {
     expect(result.assignments.length).toBeGreaterThan(0)
   })
 })
+
+describe('assignment algorithm — 교사 고정(preAssigned)', () => {
+  it('preAssigned로 고정된 (과목·학년·반)은 재분배 결과에서 제외된다', () => {
+    const pre = new Set(['eng3_3_1', 'eng3_3_2'])
+    const result = runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assignmentSettings, preAssigned: pre })
+    const leaked = result.assignments.some(a => a.subjectId === 'eng3' && a.grade === 3 && (a.classNums.includes(1) || a.classNums.includes(2)))
+    expect(leaked).toBe(false)
+    // 고정 안 한 반(3~7)은 여전히 배정됨
+    const others = result.assignments.some(a => a.subjectId === 'eng3' && a.grade === 3 && a.classNums.some(c => c >= 3))
+    expect(others).toBe(true)
+  })
+})

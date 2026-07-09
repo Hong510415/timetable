@@ -16,7 +16,9 @@ const MANUAL = [
   {
     title: '수동 편집',
     items: [
-      '자동 배정 후 표에서 각 행을 직접 수정할 수 있습니다 (학년·반·시수 변경, 행 삭제 등).',
+      '자동 배정 후 표에서 각 행을 직접 수정할 수 있습니다 ("편집"에서 담당 반과 학년 변경, 행 삭제 등).',
+      '교사명 옆 "고정"을 체크하면 그 교사의 배정은 유지되고, "자동 배정 실행" 시 나머지 교사만 다시 분배됩니다.',
+      '교사명(예: 34영어)은 표에서 직접 입력·수정할 수 있습니다.',
       '"+ 과목 설정 추가" 버튼으로 새 행을 추가할 수도 있습니다.',
       '시수 부족·초과 등 균형 문제가 있으면 경고가 표시됩니다.',
     ],
@@ -42,13 +44,31 @@ export default function Assignment() {
   const activeAssignments = editedAssignments ?? result?.assignments ?? []
 
   function handleRun() {
+    const lockedTeachers = teachers.filter(t => t.locked)
     if (editedAssignments !== null) {
-      if (!confirm('자동 배정을 재실행하면 수동 수정 내용이 초기화됩니다. 계속하시겠습니까?')) return
+      const msg = lockedTeachers.length
+        ? '자동 배정을 재실행합니다. 고정한 교사의 배정은 유지되고, 나머지만 다시 분배됩니다. 계속하시겠습니까?'
+        : '자동 배정을 재실행하면 수동 수정 내용이 초기화됩니다. 계속하시겠습니까?'
+      if (!confirm(msg)) return
     }
     setRunning(true)
     setTimeout(() => {
-      const r = runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assignmentSettings })
-      setAssignmentResult({ result: r, edited: null })
+      // 고정 교사가 이미 맡은 배정은 유지, 그 학급은 재분배 대상에서 제외
+      const lockedIds = new Set(lockedTeachers.map(t => t.id))
+      const lockedAssigns = activeAssignments.filter(a => lockedIds.has(a.teacherId))
+      const preAssigned = new Set(lockedAssigns.flatMap(a => (a.classNums || []).map(c => `${a.subjectId}_${a.grade}_${c}`)))
+      const freeTeachers = teachers.filter(t => !t.locked)
+      const r = runAssignmentAlgorithm({
+        gradeConfigs, subjects,
+        teachers: freeTeachers.length ? freeTeachers : teachers,
+        assignmentSettings,
+        preAssigned: freeTeachers.length ? preAssigned : undefined,
+      })
+      // 고정 배정을 결과에 합치기
+      const merged = lockedAssigns.length
+        ? { ...r, assignments: [...lockedAssigns, ...r.assignments] }
+        : r
+      setAssignmentResult({ result: merged, edited: null })
       setRunning(false)
     }, 0)
   }
@@ -79,6 +99,16 @@ export default function Assignment() {
       }
       next = [...activeAssignments, newEntry]
     }
+    setAssignmentResult({ result, edited: next })
+  }
+
+  function updateAssignmentGrade(idx, grade, subjectId) {
+    const newSubj = subjects.find(s => s.id === subjectId)
+    const hoursPerClass = newSubj?.weekly_hours ?? activeAssignments[idx]?.hoursPerClass ?? 1
+    const classNums = [1] // 학년 변경 시 1반으로 초기화 → 이후 '편집'에서 담당 반 조정
+    const next = activeAssignments.map((a, i) => i === idx
+      ? { ...a, grade, subjectId, classNums, hoursPerClass, weeklyHours: hoursPerClass * classNums.length, isManual: true }
+      : a)
     setAssignmentResult({ result, edited: next })
   }
 
@@ -259,11 +289,21 @@ export default function Assignment() {
                           <div key={localIdx} className="flex items-center h-10 border-b border-gray-50 last:border-b-0">
                             <div className="w-[110px] flex-shrink-0 px-2 border-r border-gray-100">
                               {localIdx === 0 ? (
-                                <input
-                                  value={teacher.code}
-                                  onChange={e => setTeachers(teachers.map(t => t.id === teacher.id ? { ...t, code: e.target.value } : t))}
-                                  className="w-full h-7 px-2 text-[12px] font-semibold border border-transparent rounded-sm hover:border-gray-200 focus:border-black outline-none"
-                                />
+                                <>
+                                  <input
+                                    value={teacher.code}
+                                    onChange={e => setTeachers(teachers.map(t => t.id === teacher.id ? { ...t, code: e.target.value } : t))}
+                                    className="w-full h-7 px-2 text-[12px] font-semibold border border-transparent rounded-sm hover:border-gray-200 focus:border-black outline-none"
+                                  />
+                                  <label className="flex items-center gap-1 px-2 mt-0.5 text-[10px] text-gray-400 cursor-pointer" title="이 교사의 배정을 고정하고, 자동 배정 시 나머지 교사만 다시 분배합니다.">
+                                    <input
+                                      type="checkbox"
+                                      checked={!!teacher.locked}
+                                      onChange={e => setTeachers(teachers.map(t => t.id === teacher.id ? { ...t, locked: e.target.checked } : t))}
+                                    />
+                                    고정
+                                  </label>
+                                </>
                               ) : ''}
                             </div>
                             <div className="w-[90px] flex-shrink-0 px-3 text-[12px] border-r border-gray-100 flex items-center gap-1">
@@ -282,10 +322,12 @@ export default function Assignment() {
                               <EditClassNumsButton
                                 assignment={a}
                                 gradeConfigs={gradeConfigs}
+                                subjects={subjects}
                                 popupId={`edit-${globalIdx}`}
                                 openPopupId={openPopupId}
                                 setOpenPopupId={setOpenPopupId}
                                 onUpdate={(classNums) => updateAssignment(globalIdx, 'classNums', classNums)}
+                                onUpdateGrade={(grade, subjectId) => updateAssignmentGrade(globalIdx, grade, subjectId)}
                               />
                             </div>
                             <div className="w-[60px] flex-shrink-0 px-3">
@@ -345,13 +387,15 @@ export default function Assignment() {
   )
 }
 
-function EditClassNumsButton({ assignment, gradeConfigs, popupId, openPopupId, setOpenPopupId, onUpdate }) {
+function EditClassNumsButton({ assignment, gradeConfigs, subjects, popupId, openPopupId, setOpenPopupId, onUpdate, onUpdateGrade }) {
   const btnRef = React.useRef(null)
   const [openUp, setOpenUp] = useState(false)
   const gc = gradeConfigs.find(g => g.grade === assignment.grade)
   const allClasses = gc ? Array.from({ length: gc.num_classes }, (_, i) => i + 1) : []
   const [selected, setSelected] = useState(new Set(assignment.classNums))
   const isOpen = openPopupId === popupId
+  // 같은 과목명이 존재하는 학년들 (학년 변경 대상)
+  const availGrades = [...new Set((subjects || []).filter(s => s.name === assignment.subjectName).map(s => s.grade))].sort((a, b) => a - b)
 
   function toggle(c) {
     setSelected(prev => {
@@ -383,6 +427,22 @@ function EditClassNumsButton({ assignment, gradeConfigs, popupId, openPopupId, s
       </button>
       {isOpen && (
       <div className={`absolute right-0 z-20 bg-white border border-gray-200 rounded-sm shadow-lg p-3 min-w-[160px] ${openUp ? 'bottom-full mb-1' : 'top-full mt-1'}`}>
+        {availGrades.length > 1 && onUpdateGrade && (
+          <div className="mb-2">
+            <div className="text-[11px] font-semibold text-gray-600 mb-1">학년 변경</div>
+            <select
+              value={assignment.grade}
+              onChange={e => {
+                const g = Number(e.target.value)
+                const subj = (subjects || []).find(s => s.name === assignment.subjectName && s.grade === g)
+                if (subj) { onUpdateGrade(g, subj.id); setOpenPopupId(null) }
+              }}
+              className="w-full h-7 px-2 border border-gray-300 rounded-sm text-[12px] outline-none focus:border-black bg-white"
+            >
+              {availGrades.map(g => <option key={g} value={g}>{g}학년</option>)}
+            </select>
+          </div>
+        )}
         <div className="text-[11px] font-semibold text-gray-600 mb-2">{assignment.grade}학년 담당 반 선택</div>
         <div className="flex flex-wrap gap-1 mb-2">
           {allClasses.map(c => (

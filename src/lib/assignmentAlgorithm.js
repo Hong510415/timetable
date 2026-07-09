@@ -8,8 +8,10 @@
  * 3. 일반과목으로 나머지 시수 채우기
  * 4. swap으로 균등화하되 학년 분산이 늘어나지 않게
  */
-export function runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assignmentSettings }) {
+export function runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assignmentSettings, preAssigned }) {
   const maxMajor = assignmentSettings?.maxMajorSubjectsPerTeacher ?? 1
+  // 고정 교사가 이미 맡은 (과목·학년·반)은 재분배 대상에서 제외 (자동배정 전 일부 교사 고정 기능)
+  const locked = preAssigned instanceof Set ? preAssigned : new Set(preAssigned || [])
 
   if (!teachers.length) return { assignments: [], warnings: [{ type: 'error', message: '교사가 없습니다.' }], gradeSummary: [], teacherSummary: [] }
   if (!subjects.length) return { assignments: [], warnings: [{ type: 'error', message: '과목이 없습니다.' }], gradeSummary: [], teacherSummary: [] }
@@ -18,14 +20,17 @@ export function runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assig
   for (const subj of subjects) {
     const gc = gradeConfigs.find(g => g.grade === subj.grade)
     if (!gc) continue
+    const classNums = Array.from({ length: gc.num_classes }, (_, i) => i + 1)
+      .filter(c => !locked.has(`${subj.id}_${subj.grade}_${c}`))
+    if (classNums.length === 0) continue // 모든 반이 고정 교사에게 배정됨
     units.push({
       subjectId: subj.id,
       subjectName: subj.name,
       grade: subj.grade,
       is_major: subj.is_major,
       hoursPerClass: subj.weekly_hours,
-      totalHours: subj.weekly_hours * gc.num_classes,
-      classNums: Array.from({ length: gc.num_classes }, (_, i) => i + 1),
+      totalHours: subj.weekly_hours * classNums.length,
+      classNums,
     })
   }
 
