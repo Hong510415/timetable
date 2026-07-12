@@ -8,7 +8,7 @@ function getSlotLabel(slot, lunchSlot) {
   return `${slot + 1}교시`
 }
 
-export function exportTimetableByClass(slots, gradeConfigs, teachers, subjects, gradeLunchSlot, totalSlots) {
+export function exportTimetableByClass(slots, gradeConfigs, teachers, subjects, gradeLunchSlot, totalSlots, fileSuffix = '') {
   const wb = XLSX.utils.book_new()
 
   for (const gc of gradeConfigs) {
@@ -45,10 +45,10 @@ export function exportTimetableByClass(slots, gradeConfigs, teachers, subjects, 
     }
   }
 
-  XLSX.writeFile(wb, '학급별전담시간표.xlsx')
+  XLSX.writeFile(wb, `학급별전담시간표${fileSuffix}.xlsx`)
 }
 
-export function exportTimetableByTeacher(slots, teachers, subjects, gradeConfigs, gradeLunchSlot, totalSlots, externalInstructors = []) {
+export function exportTimetableByTeacher(slots, teachers, subjects, gradeConfigs, gradeLunchSlot, totalSlots, externalInstructors = [], fileSuffix = '') {
   const wb = XLSX.utils.book_new()
 
   for (const teacher of teachers) {
@@ -91,10 +91,10 @@ export function exportTimetableByTeacher(slots, teachers, subjects, gradeConfigs
     XLSX.utils.book_append_sheet(wb, ws, sheetName)
   }
 
-  XLSX.writeFile(wb, '교사별전담시간표.xlsx')
+  XLSX.writeFile(wb, `교사별전담시간표${fileSuffix}.xlsx`)
 }
 
-export function exportRoomTimetable(rooms, roomSlots, gradeConfigs, gradeLunchSlot, totalSlots) {
+export function exportRoomTimetable(rooms, roomSlots, gradeConfigs, gradeLunchSlot, totalSlots, fileSuffix = '') {
   const wb = XLSX.utils.book_new()
   const slots = totalSlots || 6
 
@@ -112,5 +112,5 @@ export function exportRoomTimetable(rooms, roomSlots, gradeConfigs, gradeLunchSl
     ws['!cols'] = [{ wch: 6 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }]
     XLSX.utils.book_append_sheet(wb, ws, room.name)
   }
-  XLSX.writeFile(wb, '특별실시간표.xlsx')
+  XLSX.writeFile(wb, `특별실시간표${fileSuffix}.xlsx`)
 }

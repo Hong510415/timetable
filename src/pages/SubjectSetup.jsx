@@ -15,6 +15,14 @@ const MANUAL = [
     ],
   },
   {
+    title: '1년/1학기/2학기 구분 (학기제 ON)',
+    items: [
+      '학교 설정에서 ‘학기별 배정 사용’을 켜면 과목마다 1년·1학기·2학기를 선택하는 칸이 나타납니다.',
+      '1학기 또는 2학기만 하는 과목은 담임·전담 시수 요약에 0.5배로 계산되어 반영됩니다 (예: 1학기 주 3시간 → 연간 환산 1.5시간).',
+      '같은 과목의 1·2학기 수업은 전담 배정에서 같은 교사에게 묶이고, 시간표에서 같은 요일·교시에 짝으로 배치됩니다.',
+    ],
+  },
+  {
     title: '편성안 비교 (A안·B안·C안)',
     items: [
       '세 가지 안을 만들어 학년별 담임 시수·전담 총 시수를 비교할 수 있습니다.',
@@ -29,7 +37,7 @@ const GRADES = [1, 2, 3, 4, 5, 6]
 
 export default function SubjectSetup() {
   const { state, updatePlanSubjects, setActivePlanTab, applyPlan, setAssignmentSettings, addPlanSlot, removePlanSlot } = useApp()
-  const { subjects, gradeConfigs, assignmentSettings, subjectPlans, teachers } = state
+  const { subjects, gradeConfigs, assignmentSettings, subjectPlans, teachers, semesterMode } = state
   const { plans, activeTabId, appliedPlanId, appliedAt } = subjectPlans
   const visiblePlans = plans.filter(p => p.visible)
   const [showComparison, setShowComparison] = useState(false)
@@ -321,6 +329,17 @@ export default function SubjectSetup() {
                       <option>일반</option>
                       <option>주요</option>
                     </select>
+                    {semesterMode && (
+                      <select
+                        value={s.semester || 'year'}
+                        onChange={e => updateSubject(s.id, 'semester', e.target.value)}
+                        className="h-9 px-2 border border-gray-200 rounded-sm text-[13px] outline-none focus:border-black bg-white"
+                      >
+                        <option value="year">1년</option>
+                        <option value="1">1학기</option>
+                        <option value="2">2학기</option>
+                      </select>
+                    )}
                     <button
                       onClick={() => removeSubject(s.id)}
                       className="text-[12px] text-red-400 hover:text-red-600 px-2 h-9"

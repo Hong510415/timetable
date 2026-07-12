@@ -16,27 +16,33 @@ export function runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assig
   if (!teachers.length) return { assignments: [], warnings: [{ type: 'error', message: '교사가 없습니다.' }], gradeSummary: [], teacherSummary: [] }
   if (!subjects.length) return { assignments: [], warnings: [{ type: 'error', message: '과목이 없습니다.' }], gradeSummary: [], teacherSummary: [] }
 
-  const units = []
+  const allUnits = []
   for (const subj of subjects) {
     const gc = gradeConfigs.find(g => g.grade === subj.grade)
     if (!gc) continue
     const classNums = Array.from({ length: gc.num_classes }, (_, i) => i + 1)
       .filter(c => !locked.has(`${subj.id}_${subj.grade}_${c}`))
     if (classNums.length === 0) continue // 모든 반이 고정 교사에게 배정됨
-    units.push({
+    // 학기 과목(1·2학기)은 연간 기준 절반이므로 균형 계산엔 0.5 가중값(hoursPerClass) 사용,
+    // 실제 주당 시수(realHpc)는 출력용으로 별도 보관. 미설정 시 factor=1 → 기존과 완전 동일.
+    const factor = (subj.semester === '1' || subj.semester === '2') ? 0.5 : 1
+    const wHpc = subj.weekly_hours * factor
+    allUnits.push({
       subjectId: subj.id,
       subjectName: subj.name,
       grade: subj.grade,
       is_major: subj.is_major,
-      hoursPerClass: subj.weekly_hours,
-      totalHours: subj.weekly_hours * classNums.length,
+      semester: subj.semester || 'year',
+      hoursPerClass: wHpc,          // 균형 계산용 (가중)
+      realHpc: subj.weekly_hours,   // 출력용 (실제 시수)
+      totalHours: wHpc * classNums.length,
       classNums,
     })
   }
 
-  if (!units.length) return { assignments: [], warnings: [{ type: 'error', message: '배정 가능한 과목이 없습니다.' }], gradeSummary: [], teacherSummary: [] }
+  if (!allUnits.length) return { assignments: [], warnings: [{ type: 'error', message: '배정 가능한 과목이 없습니다.' }], gradeSummary: [], teacherSummary: [] }
 
-  const totalDedicated = units.reduce((s, u) => s + u.totalHours, 0)
+  const totalDedicated = allUnits.reduce((s, u) => s + u.totalHours, 0)
   const targetHours = Math.round(totalDedicated / teachers.length)
 
   const ts = teachers.map(t => ({
@@ -46,6 +52,8 @@ export function runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assig
     majorSubjectNames: new Set(),
     assignments: [], // { subjectId, subjectName, grade, classNums, hoursPerClass, is_major }
   }))
+
+  const units = allUnits // 학기 과목도 일반 분배를 그대로 거침 (주요과목 배치가 꼬이지 않게)
 
   function addClasses(teacher, unit, classNums) {
     if (classNums.length === 0) return
@@ -58,7 +66,9 @@ export function runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assig
         subjectName: unit.subjectName,
         grade: unit.grade,
         classNums: [...classNums].sort((a, b) => a - b),
-        hoursPerClass: unit.hoursPerClass,
+        hoursPerClass: unit.hoursPerClass, // 가중값(균형용)
+        realHpc: unit.realHpc,             // 실제 시수(출력용)
+        semester: unit.semester,
         is_major: unit.is_major,
       })
       if (unit.is_major) teacher.majorSubjectNames.add(unit.subjectName)
@@ -547,6 +557,25 @@ export function runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assig
     }
   }
 
+  // 크로스-스왑은 행을 교체(병합 X)하므로, 한 교사가 같은 (과목·학년)을
+  // 여러 행으로 갖게 될 수 있다. 이후 Step H(반 번호 인접화)는 교사당 한 행만
+  // 재정렬하므로 남은 행의 반 번호가 어긋나 중복·누락을 유발한다 → 행 병합으로 정규화.
+  for (const t of ts) {
+    const byKey = new Map()
+    const merged = []
+    for (const a of t.assignments) {
+      const k = `${a.subjectId}_${a.grade}`
+      if (byKey.has(k)) {
+        const ex = byKey.get(k)
+        ex.classNums = [...new Set([...ex.classNums, ...a.classNums])].sort((x, y) => x - y)
+      } else {
+        const copy = { ...a, classNums: [...a.classNums] }
+        byKey.set(k, copy)
+        merged.push(copy)
+      }
+    }
+    t.assignments = merged
+  }
   const issues = detectMultiGradeMinor()
   if (issues.size > 0) {
     const originalSnap = snapshotState()
@@ -604,6 +633,57 @@ export function runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assig
     }
   }
 
+
+  // ── 학기 과목 한 교사에게 모으기 (같은 이름=한 교사) ──
+  // 정상 분배로 흩어진 학기 과목을 최소 시수 교사에게 모은다. (미설정 시 학기 과목 없어 무동작)
+  const semSubjectNames = [...new Set(units.filter(u => u.semester === '1' || u.semester === '2').map(u => u.subjectName))]
+  for (const name of semSubjectNames) {
+    const holders = ts.filter(t => t.assignments.some(a => a.subjectName === name))
+    if (holders.length === 0) continue
+    const main = ts.slice().sort((a, b) => a.hours - b.hours)[0]
+    for (const other of holders) {
+      if (other === main) continue
+      const moving = other.assignments.filter(a => a.subjectName === name)
+      for (const a of moving) {
+        const unit = units.find(u => u.subjectId === a.subjectId && u.grade === a.grade)
+        if (!unit) continue
+        const cls = [...a.classNums]
+        removeClasses(other, unit, cls)
+        addClasses(main, unit, cls)
+      }
+    }
+  }
+
+
+  // ── 편차 보정: 학기 과목을 모으며 생긴 시수 편차를, 학기 구분 안 된 일반과목만 옮겨 완화 ──
+  // (학기 과목·주요과목은 건드리지 않고, 연간 일반과목 한 반씩 이동)
+  // 학기 과목이 있을 때만 동작 → 학기제 OFF면 기존 배정과 완전히 동일.
+  if (semSubjectNames.length > 0) {
+    const isMovable = (a) => !a.is_major && (a.semester !== '1' && a.semester !== '2')
+    for (let iter = 0; iter < 200; iter++) {
+      const sorted = ts.slice().sort((a, b) => a.hours - b.hours)
+      const low = sorted[0]
+      if (sorted[sorted.length - 1].hours - low.hours <= 1) break
+      // 초과 교사들(시수 큰 순)에서 기부 가능한 연간 일반과목 한 반 찾기
+      let moved = false
+      for (let i = sorted.length - 1; i > 0; i--) {
+        const donor = sorted[i]
+        if (donor.hours - low.hours <= 1) break
+        const cand = donor.assignments.filter(isMovable).sort((a, b) => a.hoursPerClass - b.hoursPerClass)[0]
+        if (!cand) continue
+        const unit = units.find(u => u.subjectId === cand.subjectId && u.grade === cand.grade)
+        if (!unit || unit.hoursPerClass > donor.hours - low.hours) continue // 이동 시 역전
+        const classToMove = cand.classNums[cand.classNums.length - 1]
+        removeClasses(donor, unit, [classToMove])
+        addClasses(low, unit, [classToMove])
+        moved = true
+        break
+      }
+      if (!moved) break
+    }
+  }
+
+
   // 결과 변환
   const assignments = []
   for (const t of ts) {
@@ -615,8 +695,9 @@ export function runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assig
         subjectName: a.subjectName,
         grade: a.grade,
         classNums: [...a.classNums],
-        weeklyHours: a.hoursPerClass * a.classNums.length,
-        hoursPerClass: a.hoursPerClass,
+        weeklyHours: (a.realHpc ?? a.hoursPerClass) * a.classNums.length, // 실제 시수
+        hoursPerClass: a.realHpc ?? a.hoursPerClass,
+        semester: a.semester,
         isManual: false,
       })
     }
@@ -625,7 +706,8 @@ export function runAssignmentAlgorithm({ gradeConfigs, subjects, teachers, assig
   // ── Step F: 경고 ──────────────────────────────────────────────────
   const gradeSummary = gradeConfigs.map(gc => {
     const weeklyTotal = gc.periods_mon + gc.periods_tue + gc.periods_wed + gc.periods_thu + gc.periods_fri
-    const dedicatedHours = subjects.filter(s => s.grade === gc.grade).reduce((sum, s) => sum + s.weekly_hours, 0)
+    const dedicatedHours = subjects.filter(s => s.grade === gc.grade)
+      .reduce((sum, s) => sum + s.weekly_hours * ((s.semester === '1' || s.semester === '2') ? 0.5 : 1), 0)
     return { grade: gc.grade, dedicatedHours, homeRoomHours: weeklyTotal - dedicatedHours }
   })
 

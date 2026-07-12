@@ -30,6 +30,13 @@ const MANUAL = [
     items: ['특별실별 시간표를 엑셀 파일로 내보낼 수 있습니다.'],
   },
   {
+    title: '1·2학기 구분 보기',
+    items: [
+      '학교 설정에서 "학기별 배정 사용"을 켜면 상단에 1학기·2학기 전환 버튼이 나타납니다.',
+      '선택한 학기의 특별실 사용 현황만 표시되며, 엑셀도 학기별로 나눠 다운로드됩니다.',
+    ],
+  },
+  {
     title: '점심시간 분리 배정',
     items: ['점심시간 분리 배정 시 특별실 시간표, 전담교사 시간표는 7교시 형식으로 제시됩니다.'],
   },
@@ -39,7 +46,10 @@ const DAY_LABELS = ['월', '화', '수', '목', '금']
 
 export default function RoomTimetable() {
   const { state, setTimetableSlots } = useApp()
-  const { rooms, gradeConfigs, lunchConfig, timetableSlots, roomBlockedSlots, teachers, subjects } = state
+  const { rooms, gradeConfigs, lunchConfig, timetableSlots, roomBlockedSlots, teachers, subjects, semesterMode } = state
+  const [semesterView, setSemesterView] = useState('1') // 1·2학기 보기 (학기제 ON일 때)
+  // 학기 필터: OFF면 모두, ON이면 연간+선택 학기
+  const passesSem = (r) => !semesterMode || !r.semester || r.semester === 'year' || r.semester === semesterView
   const allClassesList = gradeConfigs.flatMap(gc =>
     Array.from({ length: gc.num_classes }, (_, i) => ({ grade: gc.grade, classNum: i + 1 })),
   )
@@ -87,7 +97,7 @@ export default function RoomTimetable() {
   }
 
   const exportData = timetableSlots
-    .filter(s => s.room_id && !s.is_unassigned)
+    .filter(s => s.room_id && !s.is_unassigned && passesSem(s))
     .map(s => ({
       room_id: s.room_id,
       day_of_week: s.day_of_week,
@@ -104,8 +114,21 @@ export default function RoomTimetable() {
         <h1 className="text-[22px] font-bold">특별실 시간표</h1>
         <div className="flex flex-wrap gap-2">
           <ManualModal title="특별실 시간표" sections={MANUAL} />
+          {semesterMode && (
+            <div className="flex border border-indigo-200 bg-white rounded-sm w-fit">
+              {[{ key: '1', label: '1학기' }, { key: '2', label: '2학기' }].map(s => (
+                <button
+                  key={s.key}
+                  onClick={() => setSemesterView(s.key)}
+                  className={`px-4 h-10 text-[13px] transition-colors ${semesterView === s.key ? 'bg-indigo-600 text-white font-semibold' : 'text-indigo-500 hover:bg-indigo-50'}`}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          )}
           <button
-            onClick={() => exportRoomTimetable(rooms, exportData, gradeConfigs, gradeLunchSlot, totalSlots)}
+            onClick={() => exportRoomTimetable(rooms, exportData, gradeConfigs, gradeLunchSlot, totalSlots, semesterMode ? `_${semesterView}학기` : '')}
             className="flex items-center gap-2 h-10 px-3 md:px-4 border border-gray-300 text-[13px] rounded-sm hover:bg-gray-50 whitespace-nowrap"
           >
             <Download size={14} />엑셀 다운로드
@@ -137,6 +160,7 @@ export default function RoomTimetable() {
                 teachers={teachers}
                 subjects={subjects}
                 onCellClick={handleCellClick}
+                passesSem={passesSem}
               />
             ))}
           </div>
@@ -160,8 +184,8 @@ export default function RoomTimetable() {
   )
 }
 
-function RoomGrid({ room, totalSlots, timetableSlots, roomBlockedSlots, teachers, subjects, onCellClick }) {
-  const roomSlots = timetableSlots.filter(s => s.room_id === room.id && !s.is_unassigned)
+function RoomGrid({ room, totalSlots, timetableSlots, roomBlockedSlots, teachers, subjects, onCellClick, passesSem }) {
+  const roomSlots = timetableSlots.filter(s => s.room_id === room.id && !s.is_unassigned && (!passesSem || passesSem(s)))
   const grid = {}
   for (let d = 0; d < 5; d++) {
     grid[d] = {}

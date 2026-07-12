@@ -25,6 +25,14 @@ const MANUAL = [
       '점심시간 분리 배정 시 특별실 시간표, 전담교사 시간표는 7교시 형식으로 제시됩니다.',
     ],
   },
+  {
+    title: '학기별 배정 사용 (1·2학기)',
+    items: [
+      '‘교사 설정’ 탭 하단에서 켤 수 있습니다.',
+      '켜면 학기별로 전담 배정을 다르게 할 수 있습니다. 전담 과목 설정에서 과목마다 1년/1학기/2학기를 지정하고, 전담 배정·시간표·특별실 시간표를 1·2학기로 나눠 볼 수 있습니다.',
+      '끄면 모든 기능이 기존(연간 기준)과 동일하게 동작합니다.',
+    ],
+  },
 ]
 
 const DAYS = ['월', '화', '수', '목', '금']
@@ -32,8 +40,8 @@ const GRADES = [1, 2, 3, 4, 5, 6]
 const DAY_KEYS = ['periods_mon', 'periods_tue', 'periods_wed', 'periods_thu', 'periods_fri']
 
 export default function SchoolSetup() {
-  const { state, setSchoolName, setGradeConfigs, setLunchConfig, setTeachers } = useApp()
-  const { schoolName, gradeConfigs, lunchConfig, teachers } = state
+  const { state, setSchoolName, setGradeConfigs, setLunchConfig, setTeachers, setSemesterMode } = useApp()
+  const { schoolName, gradeConfigs, lunchConfig, teachers, semesterMode } = state
   const [tab, setTab] = useState('grade')
 
   function updateGrade(grade, field, value) {
@@ -243,6 +251,18 @@ export default function SchoolSetup() {
               className="w-24 h-10 text-center border border-gray-300 rounded-sm text-[18px] font-bold outline-none focus:border-black"
             />
             <span className="text-[14px] text-gray-500">명</span>
+          </div>
+
+          <div className="mt-6 pt-5 border-t border-gray-100">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={!!semesterMode}
+                onChange={e => setSemesterMode(e.target.checked)}
+              />
+              <span className="text-[14px] font-semibold text-gray-700">학기별 배정 사용 (1·2학기 구분)</span>
+            </label>
+            <p className="text-[12px] text-gray-400 mt-1.5 break-keep">학기별 배정 사용을 켜면 학기별로 전담 배정을 다르게 할 수 있습니다.</p>
           </div>
         </div>
       )}

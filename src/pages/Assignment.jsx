@@ -30,6 +30,14 @@ const MANUAL = [
       '⚠ 재적용 시 기존에 생성된 시간표가 초기화됩니다.',
     ],
   },
+  {
+    title: '학기 과목 배정 (학기제 ON)',
+    items: [
+      '1·2학기로 구분한 과목은 일단 정상 배정한 뒤, 같은 과목을 한 교사에게 묶습니다.',
+      '학기 과목은 시수 요약에 0.5배로 반영되고, 시수 편차가 크면 학기 구분이 없는 연간 일반과목만 조정해 균형을 맞춥니다.',
+      '행 옆 배지로 1학기/2학기가 표시됩니다.',
+    ],
+  },
 ]
 
 export default function Assignment() {
@@ -95,6 +103,7 @@ export default function Assignment() {
       const newEntry = {
         teacherId, teacherCode, subjectId, subjectName, grade, classNums,
         weeklyHours: hoursPerClass * classNums.length, hoursPerClass,
+        semester: subjects.find(s => s.id === subjectId)?.semester || 'year',
         isManual: true, isMajor,
       }
       next = [...activeAssignments, newEntry]
@@ -103,11 +112,27 @@ export default function Assignment() {
   }
 
   function updateAssignmentGrade(idx, grade, subjectId) {
+    const target = activeAssignments[idx]
+    if (!target) return
     const newSubj = subjects.find(s => s.id === subjectId)
-    const hoursPerClass = newSubj?.weekly_hours ?? activeAssignments[idx]?.hoursPerClass ?? 1
+    const hoursPerClass = newSubj?.weekly_hours ?? target.hoursPerClass ?? 1
+    const semester = newSubj?.semester || 'year'
+    // 같은 교사가 이미 이 과목·학년을 담당하는 행이 있으면 중복 행을 만들지 않고 병합
+    const dupIdx = activeAssignments.findIndex((a, i) =>
+      i !== idx && a.teacherId === target.teacherId && a.subjectId === subjectId && a.grade === grade)
+    if (dupIdx !== -1) {
+      const merged = [...new Set([...activeAssignments[dupIdx].classNums, 1])].sort((a, b) => a - b)
+      const next = activeAssignments
+        .map((a, i) => i === dupIdx
+          ? { ...a, classNums: merged, weeklyHours: a.hoursPerClass * merged.length, isManual: true }
+          : a)
+        .filter((_, i) => i !== idx)
+      setAssignmentResult({ result, edited: next })
+      return
+    }
     const classNums = [1] // 학년 변경 시 1반으로 초기화 → 이후 '편집'에서 담당 반 조정
     const next = activeAssignments.map((a, i) => i === idx
-      ? { ...a, grade, subjectId, classNums, hoursPerClass, weeklyHours: hoursPerClass * classNums.length, isManual: true }
+      ? { ...a, grade, subjectId, classNums, hoursPerClass, weeklyHours: hoursPerClass * classNums.length, semester, isManual: true }
       : a)
     setAssignmentResult({ result, edited: next })
   }
@@ -136,7 +161,8 @@ export default function Assignment() {
 
   const totalDedicated = subjects.reduce((sum, s) => {
     const gc = gradeConfigs.find(g => g.grade === s.grade)
-    return sum + (gc ? s.weekly_hours * gc.num_classes : 0)
+    const f = (s.semester === '1' || s.semester === '2') ? 0.5 : 1
+    return sum + (gc ? s.weekly_hours * gc.num_classes * f : 0)
   }, 0)
   const targetHours = teachers.length ? Math.round(totalDedicated / teachers.length) : 0
 
@@ -229,7 +255,7 @@ export default function Assignment() {
               <div className="w-[60px] flex-shrink-0 px-3 py-2.5">삭제</div>
             </div>
 
-            {teachers.map(teacher => {
+            {teachers.map((teacher, tIdx) => {
               const teacherAssigns = activeAssignments
                 .filter(a => a.teacherId === teacher.id)
                 .slice()
@@ -240,7 +266,7 @@ export default function Assignment() {
                   if (a.grade !== b.grade) return a.grade - b.grade
                   return (a.subjectName || '').localeCompare(b.subjectName || '')
                 })
-              const totalH = teacherAssigns.reduce((s, a) => s + a.weeklyHours, 0)
+              const totalH = teacherAssigns.reduce((s, a) => s + a.weeklyHours * ((a.semester === '1' || a.semester === '2') ? 0.5 : 1), 0)
               const isOver = totalH > targetHours + 3
               const isUnder = totalH < targetHours - 3 && totalH > 0
               return (
@@ -250,6 +276,7 @@ export default function Assignment() {
                       <div className="w-[110px] flex-shrink-0 px-2 border-r border-gray-100">
                         <input
                           value={teacher.code}
+                          placeholder={`교사${tIdx + 1}`}
                           onChange={e => setTeachers(teachers.map(t => t.id === teacher.id ? { ...t, code: e.target.value } : t))}
                           className="w-full h-7 px-2 text-[12px] font-semibold border border-transparent rounded-sm hover:border-gray-200 focus:border-black outline-none"
                         />
@@ -287,25 +314,26 @@ export default function Assignment() {
                               : a.classNums.map(c => `${c}반`).join(', ')
                         return (
                           <div key={localIdx} className="flex items-center h-10 border-b border-gray-50 last:border-b-0">
-                            <div className="w-[110px] flex-shrink-0 px-2 border-r border-gray-100">
-                              {localIdx === 0 ? (
-                                <>
+                            {localIdx === 0 ? (
+                              <div className="w-[110px] flex-shrink-0 px-2 border-r border-gray-100 flex flex-col justify-center gap-0.5">
+                                <input
+                                  value={teacher.code}
+                                  placeholder={`교사${tIdx + 1}`}
+                                  onChange={e => setTeachers(teachers.map(t => t.id === teacher.id ? { ...t, code: e.target.value } : t))}
+                                  className="w-full h-6 px-2 text-[12px] font-semibold border border-transparent rounded-sm hover:border-gray-200 focus:border-black outline-none"
+                                />
+                                <label className="flex items-center gap-1 px-2 text-[10px] leading-none text-gray-400 cursor-pointer w-fit" title="이 교사의 배정을 고정하고, 자동 배정 시 나머지 교사만 다시 분배합니다.">
                                   <input
-                                    value={teacher.code}
-                                    onChange={e => setTeachers(teachers.map(t => t.id === teacher.id ? { ...t, code: e.target.value } : t))}
-                                    className="w-full h-7 px-2 text-[12px] font-semibold border border-transparent rounded-sm hover:border-gray-200 focus:border-black outline-none"
+                                    type="checkbox"
+                                    checked={!!teacher.locked}
+                                    onChange={e => setTeachers(teachers.map(t => t.id === teacher.id ? { ...t, locked: e.target.checked } : t))}
                                   />
-                                  <label className="flex items-center gap-1 px-2 mt-0.5 text-[10px] text-gray-400 cursor-pointer" title="이 교사의 배정을 고정하고, 자동 배정 시 나머지 교사만 다시 분배합니다.">
-                                    <input
-                                      type="checkbox"
-                                      checked={!!teacher.locked}
-                                      onChange={e => setTeachers(teachers.map(t => t.id === teacher.id ? { ...t, locked: e.target.checked } : t))}
-                                    />
-                                    고정
-                                  </label>
-                                </>
-                              ) : ''}
-                            </div>
+                                  고정
+                                </label>
+                              </div>
+                            ) : (
+                              <div className="w-[110px] flex-shrink-0 border-r border-gray-100" />
+                            )}
                             <div className="w-[90px] flex-shrink-0 px-3 text-[12px] border-r border-gray-100 flex items-center gap-1">
                               {a.subjectName}
                               {a.isManual && <span className="text-blue-400 text-[10px]">✎</span>}
@@ -313,7 +341,10 @@ export default function Assignment() {
                             <div className="w-[60px] flex-shrink-0 px-3 text-[12px] border-r border-gray-100">{a.grade}학년</div>
                             <div className="flex-1 px-3 text-[12px] border-r border-gray-100 flex items-center gap-2">
                               <span>{classDisplay} ({a.classNums.length}반)</span>
-                              <span className="text-gray-400">{a.weeklyHours}h</span>
+                              {(a.semester === '1' || a.semester === '2') && (
+                                <span className="text-[10px] px-1 rounded bg-indigo-50 text-indigo-500">{a.semester}학기</span>
+                              )}
+                              <span className="text-gray-400">{a.weeklyHours * ((a.semester === '1' || a.semester === '2') ? 0.5 : 1)}h</span>
                             </div>
                             <div className={`w-[80px] flex-shrink-0 px-3 text-[12px] font-bold border-r border-gray-100 ${localIdx === 0 && (isOver || isUnder) ? 'text-yellow-700' : 'text-gray-900'}`}>
                               {localIdx === 0 ? `${totalH}h` : ''}
@@ -435,7 +466,7 @@ function EditClassNumsButton({ assignment, gradeConfigs, subjects, popupId, open
               onChange={e => {
                 const g = Number(e.target.value)
                 const subj = (subjects || []).find(s => s.name === assignment.subjectName && s.grade === g)
-                if (subj) { onUpdateGrade(g, subj.id); setOpenPopupId(null) }
+                if (subj) { onUpdateGrade(g, subj.id); setSelected(new Set([1])) }
               }}
               className="w-full h-7 px-2 border border-gray-300 rounded-sm text-[12px] outline-none focus:border-black bg-white"
             >
@@ -601,7 +632,8 @@ function computeWarnings(assignments, gradeConfigs, subjects, teacherCount) {
   const warnings = []
   const totalDedicated = subjects.reduce((sum, s) => {
     const gc = gradeConfigs.find(g => g.grade === s.grade)
-    return sum + (gc ? s.weekly_hours * gc.num_classes : 0)
+    const f = (s.semester === '1' || s.semester === '2') ? 0.5 : 1
+    return sum + (gc ? s.weekly_hours * gc.num_classes * f : 0)
   }, 0)
   const targetHours = teacherCount ? Math.round(totalDedicated / teacherCount) : 0
 

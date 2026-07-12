@@ -34,7 +34,16 @@ const MANUAL = [
     title: '보기 전환',
     items: [
       '교사별 보기: 교사 단위로 주간 시간표 확인.',
-      '학급별 보기: 학년·반을 선택해 해당 학급들의 전담 시간표 확인. 여러 학급 동시 표시 가능.',
+      '학급별 보기: 학년·반을 선택해 해당 학급들의 전담 시간표 확인. 여러 학급 동시 표시 가능 ("전체 선택"·"전체 해제" 지원).',
+    ],
+  },
+  {
+    title: '1·2학기 구분 보기 (학기제 ON)',
+    items: [
+      '학교 설정에서 ‘학기별 배정 사용’을 켜면 보기 버튼 옆에 1학기·2학기 전환 버튼이 나타납니다.',
+      '선택한 학기의 수업만 표시됩니다 (연간 과목·외부강사는 항상 표시).',
+      '교사별·학급별 엑셀도 현재 보는 학기 기준으로 나눠 다운로드됩니다 (파일명에 학기 표시).',
+      '서로 다른 학기(1·2학기) 수업이 같은 시간에 놓여도 중복(빨간색)으로 표시되지 않습니다 — 의도된 학기 짝배치입니다.',
     ],
   },
   {
@@ -109,12 +118,13 @@ const GRADES = [1, 2, 3, 4, 5, 6]
 
 export default function Timetable() {
   const { state, setTimetableSlots } = useApp()
-  const { gradeConfigs, subjects, teachers, lunchConfig, timetableSlots: timetableRows, rooms, roomBlockedSlots, externalInstructors } = state
+  const { gradeConfigs, subjects, teachers, lunchConfig, timetableSlots: timetableRows, rooms, roomBlockedSlots, externalInstructors, semesterMode } = state
 
   const [generating, setGenerating] = useState(false)
   const [swapCell, setSwapCell] = useState(null) // { teacherId, day, slot, rowId }
   // (이전 errors state 제거 — 미배정 표시는 UnassignedStats가 timetableRows에서 직접 계산해서 실시간 동기화됨)
   const [tab, setTab] = useState('teacher')
+  const [semesterView, setSemesterView] = useState('1') // 1·2학기 보기 (학기제 ON일 때)
   const [showGenerateModal, setShowGenerateModal] = useState(false)
   const [generateOptions, setGenerateOptions] = useState({ subjectSettings: {} })
   const [selectedClasses, setSelectedClasses] = useState([])
@@ -140,6 +150,14 @@ export default function Timetable() {
 
   function deselectAllClasses() {
     setSelectedClasses([])
+  }
+
+  function selectAllClasses() {
+    const all = []
+    for (const cfg of gradeConfigs) {
+      for (let i = 1; i <= cfg.num_classes; i++) all.push({ grade: cfg.grade, classNum: i })
+    }
+    setSelectedClasses(all.sort((a, b) => a.grade - b.grade || a.classNum - b.classNum))
   }
   const [selectedTeacher, setSelectedTeacher] = useState(teachers[0]?.id || null)
   const [editModal, setEditModal] = useState(null)
@@ -249,13 +267,16 @@ export default function Timetable() {
     setGenerating(false)
   }
 
+  // 학기 필터: 학기제 OFF면 모두, ON이면 연간+선택 학기(외부강사는 항상)
+  const passesSem = (r) => !semesterMode || !r.semester || r.semester === 'year' || r.semester === semesterView || r.is_external
+
   function getSlotsForClass(grade, classNum) {
     const daySlots = {}
     for (let d = 0; d < 5; d++) {
       daySlots[d] = {}
-      const relevant = timetableRows.filter(r => r.grade === grade && r.class_num === classNum && r.day_of_week === d)
+      const relevant = timetableRows.filter(r => r.grade === grade && r.class_num === classNum && r.day_of_week === d && passesSem(r))
       for (const r of relevant) {
-        daySlots[d][r.slot] = { teacher_id: r.teacher_id, subject_id: r.subject_id, is_unassigned: r.is_unassigned, room_id: r.room_id, id: r.id, is_external: r.is_external, external_id: r.external_id, external_name: r.external_name, subject_name: r.subject_name }
+        daySlots[d][r.slot] = { teacher_id: r.teacher_id, subject_id: r.subject_id, is_unassigned: r.is_unassigned, room_id: r.room_id, id: r.id, is_external: r.is_external, external_id: r.external_id, external_name: r.external_name, subject_name: r.subject_name, semester: r.semester, grade: r.grade, class_num: r.class_num }
       }
     }
     return daySlots
@@ -265,9 +286,9 @@ export default function Timetable() {
     const daySlots = {}
     for (let d = 0; d < 5; d++) {
       daySlots[d] = {}
-      const relevant = timetableRows.filter(r => r.teacher_id === teacherId && r.day_of_week === d)
+      const relevant = timetableRows.filter(r => r.teacher_id === teacherId && r.day_of_week === d && passesSem(r))
       for (const r of relevant) {
-        daySlots[d][r.slot] = { teacher_id: r.teacher_id, subject_id: r.subject_id, is_unassigned: r.is_unassigned, label: `${r.grade}학년 ${r.class_num}반`, grade: r.grade, class_num: r.class_num, room_id: r.room_id, id: r.id }
+        daySlots[d][r.slot] = { teacher_id: r.teacher_id, subject_id: r.subject_id, is_unassigned: r.is_unassigned, label: `${r.grade}학년 ${r.class_num}반`, grade: r.grade, class_num: r.class_num, room_id: r.room_id, id: r.id, semester: r.semester }
       }
     }
     return daySlots
@@ -451,14 +472,14 @@ export default function Timetable() {
           <ManualModal title="전담 시간표" sections={MANUAL} />
           <button
             title="현재 시간표를 교사 단위 엑셀 파일로 내려받습니다."
-            onClick={() => exportTimetableByTeacher(timetableRows, teachers, subjects, gradeConfigs, gradeLunchSlot, totalSlots, externalInstructors)}
+            onClick={() => exportTimetableByTeacher(semesterMode ? timetableRows.filter(passesSem) : timetableRows, teachers, subjects, gradeConfigs, gradeLunchSlot, totalSlots, externalInstructors, semesterMode ? `_${semesterView}학기` : '')}
             className="flex items-center gap-2 h-10 px-3 md:px-4 border border-gray-300 text-[13px] rounded-sm hover:bg-gray-50 whitespace-nowrap"
           >
             <Download size={14} />교사별 엑셀
           </button>
           <button
             title="현재 시간표를 학급 단위 엑셀 파일로 내려받습니다."
-            onClick={() => exportTimetableByClass(timetableRows, gradeConfigs, teachers, subjects, gradeLunchSlot, totalSlots)}
+            onClick={() => exportTimetableByClass(semesterMode ? timetableRows.filter(passesSem) : timetableRows, gradeConfigs, teachers, subjects, gradeLunchSlot, totalSlots, semesterMode ? `_${semesterView}학기` : '')}
             className="flex items-center gap-2 h-10 px-3 md:px-4 border border-gray-300 text-[13px] rounded-sm hover:bg-gray-50 whitespace-nowrap"
           >
             <Download size={14} />학급별 엑셀
@@ -502,16 +523,31 @@ export default function Timetable() {
         </div>
       ) : (
         <>
-          <div className="flex border border-gray-200 bg-white rounded-sm w-fit mb-5">
-            {[{ key: 'teacher', label: '교사별 보기' }, { key: 'class', label: '학급별 보기' }].map(t => (
-              <button
-                key={t.key}
-                onClick={() => { setTab(t.key); setSwapCell(null) }}
-                className={`px-5 h-[42px] text-[13px] transition-colors ${tab === t.key ? 'bg-black text-white font-semibold' : 'text-gray-400 hover:bg-gray-50'}`}
-              >
-                {t.label}
-              </button>
-            ))}
+          <div className="flex items-center gap-3 flex-wrap mb-5">
+            <div className="flex border border-gray-200 bg-white rounded-sm w-fit">
+              {[{ key: 'teacher', label: '교사별 보기' }, { key: 'class', label: '학급별 보기' }].map(t => (
+                <button
+                  key={t.key}
+                  onClick={() => { setTab(t.key); setSwapCell(null) }}
+                  className={`px-5 h-[42px] text-[13px] transition-colors ${tab === t.key ? 'bg-black text-white font-semibold' : 'text-gray-400 hover:bg-gray-50'}`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+            {semesterMode && (
+              <div className="flex border border-indigo-200 bg-white rounded-sm w-fit">
+                {[{ key: '1', label: '1학기' }, { key: '2', label: '2학기' }].map(s => (
+                  <button
+                    key={s.key}
+                    onClick={() => { setSemesterView(s.key); setSwapCell(null) }}
+                    className={`px-4 h-[42px] text-[13px] transition-colors ${semesterView === s.key ? 'bg-indigo-600 text-white font-semibold' : 'text-indigo-500 hover:bg-indigo-50'}`}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {tab === 'class' && (
@@ -524,6 +560,7 @@ export default function Timetable() {
                   onSelectGrade={selectAllInGrade}
                   onDeselectGrade={(g) => setSelectedClasses(prev => prev.filter(c => c.grade !== g))}
                   onDeselectAll={deselectAllClasses}
+                  onSelectAll={selectAllClasses}
                 />
               </div>
 
@@ -717,7 +754,7 @@ function ExternalEditModal({ modal, instructor, gradeConfigs, onSave, onDelete, 
   )
 }
 
-function ClassPicker({ gradeConfigs, selectedClasses, onToggle, onSelectGrade, onDeselectGrade, onDeselectAll }) {
+function ClassPicker({ gradeConfigs, selectedClasses, onToggle, onSelectGrade, onDeselectGrade, onDeselectAll, onSelectAll }) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
 
@@ -751,7 +788,10 @@ function ClassPicker({ gradeConfigs, selectedClasses, onToggle, onSelectGrade, o
         <div className="absolute top-full left-0 mt-1 z-30 w-[420px] bg-white border border-gray-200 rounded-sm shadow-lg p-3 flex flex-col gap-2">
           <div className="flex items-center justify-between">
             <span className="text-[12px] font-semibold text-gray-500">학급 선택 ({selectedClasses.length})</span>
-            <button onClick={onDeselectAll} className="text-[11px] px-2 h-6 border border-gray-300 rounded-sm hover:bg-gray-50">전체 해제</button>
+            <div className="flex gap-1">
+              <button onClick={onSelectAll} className="text-[11px] px-2 h-6 border border-gray-300 rounded-sm hover:bg-gray-50">전체 선택</button>
+              <button onClick={onDeselectAll} className="text-[11px] px-2 h-6 border border-gray-300 rounded-sm hover:bg-gray-50">전체 해제</button>
+            </div>
           </div>
           {[1,2,3,4,5,6].map(g => {
             const cfg = gradeConfigs.find(c => c.grade === g)
@@ -951,9 +991,17 @@ function TeacherTimetableGrid({ slots, totalSlots, gradeLunchSlot, gradeConfigs,
     return validCount > periods
   }
 
+  // 학기가 겹치는지: 연간(year)은 모두와 겹치고, 1학기·2학기는 서로 겹치지 않음
+  const semOverlap = (a, b) => {
+    const sa = a || 'year', sb = b || 'year'
+    if (sa === 'year' || sb === 'year') return true
+    return sa === sb
+  }
+
   function getConflicts(cell, day, slot) {
     if (!cell || !timetableRows) return []
     // 같은 (학년·반·요일·교시)에 다른 수업(전담 또는 외부강사)이 있으면 충돌
+    // 단, 서로 다른 학기(1학기·2학기)는 같은 시간에 놓여도 충돌 아님 (의도된 학기 짝배치)
     return timetableRows.filter(r =>
       !r.is_unassigned &&
       (r.teacher_id || r.is_external) &&
@@ -961,7 +1009,8 @@ function TeacherTimetableGrid({ slots, totalSlots, gradeLunchSlot, gradeConfigs,
       r.class_num === cell.class_num &&
       r.day_of_week === day &&
       r.slot === slot &&
-      r.id !== cell.id
+      r.id !== cell.id &&
+      semOverlap(r.semester, cell.semester)
     )
   }
 

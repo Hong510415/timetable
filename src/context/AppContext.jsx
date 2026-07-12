@@ -16,6 +16,7 @@ export function AppProvider({ children }) {
     setSchoolName: (v) => dispatch({ type: 'SET_SCHOOL_NAME', payload: v }),
     setGradeConfigs: (v) => dispatch({ type: 'SET_GRADE_CONFIGS', payload: v }),
     setLunchConfig: (v) => dispatch({ type: 'SET_LUNCH_CONFIG', payload: v }),
+    setSemesterMode: (v) => dispatch({ type: 'SET_SEMESTER_MODE', payload: v }),
     setSubjects: (v) => dispatch({ type: 'SET_SUBJECTS', payload: v }),
     setTeachers: (v) => dispatch({ type: 'SET_TEACHERS', payload: v }),
     setRooms: (v) => dispatch({ type: 'SET_ROOMS', payload: v }),

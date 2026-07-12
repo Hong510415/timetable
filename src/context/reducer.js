@@ -51,6 +51,7 @@ function rawReducer(state, action) {
     case 'SET_SCHOOL_NAME': return { ...state, schoolName: action.payload }
     case 'SET_GRADE_CONFIGS': return { ...state, gradeConfigs: action.payload }
     case 'SET_LUNCH_CONFIG': return { ...state, lunchConfig: action.payload }
+    case 'SET_SEMESTER_MODE': return { ...state, semesterMode: action.payload }
     case 'SET_SUBJECTS': return { ...state, subjects: action.payload }
     case 'SET_TEACHERS': return { ...state, teachers: action.payload }
     case 'SET_ROOMS': return { ...state, rooms: action.payload }

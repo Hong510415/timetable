@@ -18,11 +18,16 @@ export function subjectsEqualByContent(a, b) {
   return true
 }
 
+// 학기 과목(1·2학기)은 연간 기준 담임 시수에서 절반(0.5)만 차감
+export function subjectHourFactor(s) {
+  return (s && (s.semester === '1' || s.semester === '2')) ? 0.5 : 1
+}
+
 export function getDedicatedHoursForGrade(planSubjects, grade) {
   if (!Array.isArray(planSubjects)) return 0
   return planSubjects
     .filter(s => s.grade === grade)
-    .reduce((sum, s) => sum + (Number(s.weekly_hours) || 0), 0)
+    .reduce((sum, s) => sum + (Number(s.weekly_hours) || 0) * subjectHourFactor(s), 0)
 }
 
 export function getWeeklyTotalForGrade(gradeConfigs, grade) {
@@ -52,7 +57,7 @@ export function getTotalDedicatedHours(planSubjects, gradeConfigs) {
   return planSubjects.reduce((sum, s) => {
     const config = (gradeConfigs || []).find(c => c.grade === s.grade)
     const numClasses = Number(config?.num_classes) || 0
-    return sum + (Number(s.weekly_hours) || 0) * numClasses
+    return sum + (Number(s.weekly_hours) || 0) * numClasses * subjectHourFactor(s)
   }, 0)
 }
 

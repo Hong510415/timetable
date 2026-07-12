@@ -134,11 +134,21 @@ export function buildSchedule(
   }
 
   const blocks = [] // { teacherId, subjectId, grade, classNum, type: 'pair'|'single', blockIdx, totalBlocks, isMajor, generalPriority }
+  const subjSemester = (id) => subjects.find(s => s.id === id)?.semester || 'year'
+  // 학기 과목(1·2학기)은 일반 블록에서 제외하고 페어링용으로 별도 수집 (교사별 시간당 단위)
+  const semByTeacher = {} // teacherId → { s1: [{subjectId,grade,classNum}], s2: [...] }
 
   for (const teacher of teachers) {
     for (const a of teacher.teacher_assignments || []) {
       const wh = a.weekly_hours || 0
       if (wh <= 0) continue
+      const sem = subjSemester(a.subject_id)
+      if (sem === '1' || sem === '2') {
+        if (!semByTeacher[teacher.id]) semByTeacher[teacher.id] = { s1: [], s2: [] }
+        const arr = sem === '1' ? semByTeacher[teacher.id].s1 : semByTeacher[teacher.id].s2
+        for (let h = 0; h < wh; h++) arr.push({ subjectId: a.subject_id, grade: a.grade, classNum: a.class_num })
+        continue
+      }
       const maxSD = getMaxSameDay(a.subject_id)
       const usePair = maxSD >= 2 && wh >= 2
       const pairCount = usePair ? Math.floor(wh / 2) : 0
@@ -379,6 +389,75 @@ export function buildSchedule(
         if (placeTaskOnDay(task, d)) { placed = true; break }
       }
       if (!placed) externalErrors.push({ name: inst.name, grade: task.grade, classNum: task.classNum })
+    }
+  }
+
+  // ---------- 3.7 학기(1·2학기) 페어 배치 ----------
+  // 같은 교사의 1학기 수업과 2학기 수업을 같은 (요일,교시)에 묶어 배치 (하드규칙).
+  // 반 순서대로 자동 페어링. 전담 배치보다 먼저 슬롯을 점유해 전담이 그 시간을 피함.
+  const semErrors = []
+  function pickSemRoom(subjectId, day, slot, teacherId) {
+    const eligible = subjectRooms[subjectId]
+    if (!eligible) return null // 일반 교실 (방 불필요)
+    for (const room of eligible) {
+      if (roomBlockedMap[room.id]?.has(`${day}-${slot}`)) continue
+      if (roomOccupied[room.id][day].has(slot)) continue
+      if (room.teacherIds && !room.teacherIds.includes(teacherId)) continue
+      return room.id
+    }
+    return false // 방 필요한데 없음
+  }
+  for (const teacherId of Object.keys(semByTeacher)) {
+    const { s1, s2 } = semByTeacher[teacherId]
+    const sortFn = (a, b) => a.grade - b.grade || a.classNum - b.classNum
+    s1.sort(sortFn); s2.sort(sortFn)
+    const n = Math.max(s1.length, s2.length)
+    // 같은 (과목·학년) 페어는 같은 요일에 모으기 위한 클러스터 요일 기억
+    const groupDay = {} // `${subjectId}_${grade}` → 직전 배치 요일
+    for (let i = 0; i < n; i++) {
+      const u1 = s1[i] || null
+      const u2 = s2[i] || null
+      // 클러스터 우선: 이 그룹(u1 기준, 없으면 u2)이 쓰던 요일을 맨 앞에, 그다음 적게 쓴 요일 순
+      const gu = u1 || u2
+      const gkey = `${gu.subjectId}_${gu.grade}`
+      const byLoad = [0, 1, 2, 3, 4].sort((da, db) => (teacherDayCount[teacherId]?.[da] || 0) - (teacherDayCount[teacherId]?.[db] || 0))
+      const clusterDay = groupDay[gkey]
+      const dayOrder = clusterDay != null
+        ? [clusterDay, ...byLoad.filter(d => d !== clusterDay)]
+        : byLoad
+      let best = null
+      outer: for (const day of dayOrder) {
+        for (let slot = 0; slot < totalSlots; slot++) {
+          if (teacherOccupied[teacherId]?.[day]?.has(slot)) continue
+          if (u1 && !gradeClassSlots[u1.grade]?.[u1.classNum]?.[day]?.has(slot)) continue
+          if (u2 && !gradeClassSlots[u2.grade]?.[u2.classNum]?.[day]?.has(slot)) continue
+          const r1 = u1 ? pickSemRoom(u1.subjectId, day, slot, teacherId) : null
+          const r2 = u2 ? pickSemRoom(u2.subjectId, day, slot, teacherId) : null
+          if (r1 === false || r2 === false) continue // 방 필요한데 없음
+          best = { day, slot, r1: r1 || undefined, r2: r2 || undefined }
+          break outer
+        }
+      }
+      if (!best) { if (u1) semErrors.push(u1); if (u2) semErrors.push(u2); continue }
+      const { day, slot, r1, r2 } = best
+      groupDay[gkey] = day // 이 그룹의 클러스터 요일 갱신
+      teacherOccupied[teacherId][day].add(slot)
+      teacherDayCount[teacherId] = teacherDayCount[teacherId] || [0, 0, 0, 0, 0]
+      teacherDayCount[teacherId][day]++
+      if (!teacherSlotGrade[teacherId]) teacherSlotGrade[teacherId] = Array.from({ length: 5 }, () => ({}))
+      if (!teacherSlotSubject[teacherId]) teacherSlotSubject[teacherId] = Array.from({ length: 5 }, () => ({}))
+      for (const [u, sem, room] of [[u1, '1', r1], [u2, '2', r2]]) {
+        if (!u) continue
+        result[u.grade][u.classNum][day][slot] = { teacherId, subjectId: u.subjectId, roomId: room, semester: sem }
+        gradeClassSlots[u.grade][u.classNum][day].delete(slot)
+        if (room) roomOccupied[room][day].add(slot)
+        const ck = `${u.grade}_${u.classNum}`
+        if (!classDayCount[ck]) classDayCount[ck] = [0, 0, 0, 0, 0]
+        classDayCount[ck][day]++
+      }
+      const track = u1 || u2
+      teacherSlotGrade[teacherId][day][slot] = track.grade
+      teacherSlotSubject[teacherId][day][slot] = track.subjectId
     }
   }
 
@@ -954,6 +1033,7 @@ export function buildSchedule(
     result,
     errors: Object.values(errorMap),
     externalErrors,
+    semErrors,
     gradeLunchSlot,
     totalSlots,
   }
@@ -996,6 +1076,7 @@ export function flattenResult(result, gradeLunchSlot, totalSlots) {
             teacher_id: cell.teacherId,
             subject_id: cell.subjectId,
             room_id: cell.roomId || null,
+            semester: cell.semester || 'year',
             is_unassigned: false,
           })
         }

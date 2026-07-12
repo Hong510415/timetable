@@ -16,6 +16,7 @@ export const initialState = {
     periods_fri: 5,
   })),
   lunchConfig: { split_lunch: false, lunch_groups: [] },
+  semesterMode: false, // 학기별 배정 사용 여부
   subjects: [],
   teachers: [],
   rooms: [],

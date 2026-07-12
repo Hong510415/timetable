@@ -11,7 +11,15 @@ export default function TimetableGrid({ slots, totalSlots, gradeLunchSlot, teach
     return `${slot + 1}교시`
   }
 
+  // 학기가 겹치는지: 연간(year)은 모두와 겹치고, 1학기·2학기는 서로 겹치지 않음
+  const semOverlap = (a, b) => {
+    const sa = a || 'year', sb = b || 'year'
+    if (sa === 'year' || sb === 'year') return true
+    return sa === sb
+  }
+
   // 같은 교사가 같은 day/slot에서 다른 학급도 가르치고 있으면 충돌
+  // 단, 서로 다른 학기(1학기·2학기)는 같은 시간에 놓여도 충돌 아님 (의도된 학기 짝배치)
   function getConflicts(cell, day, slot) {
     if (!cell || !timetableRows || !cell.teacher_id) return []
     return timetableRows.filter(r =>
@@ -21,7 +29,8 @@ export default function TimetableGrid({ slots, totalSlots, gradeLunchSlot, teach
       r.teacher_id === cell.teacher_id &&
       r.day_of_week === day &&
       r.slot === slot &&
-      !(r.grade === grade && r.class_num === classNum)
+      !(r.grade === grade && r.class_num === classNum) &&
+      semOverlap(r.semester, cell.semester)
     )
   }
 
