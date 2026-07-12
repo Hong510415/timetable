@@ -89,7 +89,11 @@ export default function Layout({ children }) {
             <b className="text-gray-500"> 저장(엑셀 내보내기)</b>로 정기적으로 백업하세요.
           </p>
           <a
-            href={typeof window !== 'undefined' && window.location.protocol === 'file:' ? 'user-manual.pdf' : '/user-manual.pdf'}
+            href={
+              __MANUAL_PDF_DATAURI__
+                ? __MANUAL_PDF_DATAURI__ // 오프라인 빌드: HTML에 내장된 PDF (file://에서도 다운로드 가능)
+                : (typeof window !== 'undefined' && window.location.protocol === 'file:' ? 'user-manual.pdf' : '/user-manual.pdf')
+            }
             download="시간표_자동_작성_사용자_매뉴얼.pdf"
             className="flex items-center gap-2 h-9 px-3 border border-gray-300 rounded-sm text-[12px] text-gray-500 hover:bg-gray-50 w-full"
           >
