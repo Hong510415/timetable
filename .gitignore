@@ -6,3 +6,6 @@ submission
 
 backups/
 dist/assets/
+
+# 인수인계 폴더(로컬 산출물, 소스 스냅샷 포함)
+전담시간표_프로그램_이양/
