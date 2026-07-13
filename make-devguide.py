@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""개발자 인수인계 안내 PDF 생성기 — 전담 시간표 자동 작성 프로그램"""
+"""개발자 인수인계 안내 PDF 생성기 — 초등학교 전담 시간표 자동 생성 프로그램"""
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import cm
@@ -26,7 +26,7 @@ def b(items):
                         bulletType='bullet', bulletFontName='Malgun', bulletFontSize=9, leftIndent=12)
 
 s = []
-s.append(Paragraph("전담 시간표 자동 작성 프로그램", title_style))
+s.append(Paragraph("초등학교 전담 시간표 자동 생성 프로그램", title_style))
 s.append(Paragraph("개발자 인수인계 안내서", h1))
 s.append(Paragraph("작성: 처인초등학교 홍기현 · 문서 버전 2026-07 (학기제 반영)", cap))
 s.append(Spacer(1, 0.3*cm))

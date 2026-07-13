@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""사용자 매뉴얼 PDF 생성기 — 시간표 자동 작성 웹앱"""
+"""사용자 매뉴얼 PDF 생성기 — 초등학교 전담 시간표 자동 생성 프로그램"""
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import cm
@@ -68,7 +68,7 @@ def kv_table(rows, col_widths=(4.2*cm, 11.5*cm)):
 story = []
 
 # 표지
-story.append(Paragraph("시간표 자동 작성 웹앱", title_style))
+story.append(Paragraph("초등학교 전담 시간표 자동 생성 프로그램", title_style))
 story.append(Paragraph("사용자 매뉴얼", h1_style))
 story.append(Spacer(1, 0.5*cm))
 story.append(Paragraph("초등학교 전담교사 시간표를 자동으로 생성·편집하는 웹 도구입니다. "
@@ -415,7 +415,7 @@ out_path = "public/user-manual.pdf"
 doc = SimpleDocTemplate(out_path, pagesize=A4,
                         leftMargin=2*cm, rightMargin=2*cm,
                         topMargin=2*cm, bottomMargin=2*cm,
-                        title="시간표 자동 작성 사용자 매뉴얼")
+                        title="초등학교 전담 시간표 자동 생성 프로그램 사용자 매뉴얼")
 
 def add_page_number(canvas_obj, doc):
     canvas_obj.saveState()

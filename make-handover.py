@@ -42,7 +42,7 @@ shutil.copytree(ROOT, src_out, ignore=ignore)
 
 # 최상위 안내문
 with open(os.path.join(OUT, '0_먼저_읽어주세요.txt'), 'w', encoding='utf-8') as f:
-    f.write('전담 시간표 자동 작성 프로그램 — 인수인계 폴더\n')
+    f.write('초등학교 전담 시간표 자동 생성 프로그램 — 인수인계 폴더\n')
     f.write('작성: 처인초등학교 홍기현 / 2026-07 (학기제 반영)\n\n')
     f.write('[구성]\n')
     f.write(' 1_프로그램_실행(오프라인) : index.html 더블클릭으로 바로 실행\n')

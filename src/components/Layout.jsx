@@ -130,7 +130,7 @@ export default function Layout({ children }) {
       <aside className="hidden md:flex w-[220px] bg-white border-r border-gray-200 flex-col py-7 flex-shrink-0">
         <div className="flex items-center gap-2 px-6 pb-4">
           <span className="text-[18px] leading-none">🗓️</span>
-          <span className="text-[13px] font-bold text-gray-900">시간표 자동 작성</span>
+          <span className="text-[13px] font-bold text-gray-900">초등학교 전담 시간표 자동 생성 프로그램</span>
         </div>
         <div className="h-px bg-gray-200 mb-3" />
         {renderNav()}
@@ -146,7 +146,7 @@ export default function Layout({ children }) {
           <Menu size={20} />
         </button>
         <span className="text-[16px] leading-none">🗓️</span>
-        <span className="text-[13px] font-bold text-gray-900">시간표 자동 작성</span>
+        <span className="text-[13px] font-bold text-gray-900">초등학교 전담 시간표 자동 생성 프로그램</span>
       </header>
 
       {/* Mobile drawer */}
@@ -157,7 +157,7 @@ export default function Layout({ children }) {
             <div className="flex items-center justify-between px-6 pb-4">
               <div className="flex items-center gap-2">
                 <span className="text-[16px] leading-none">🗓️</span>
-                <span className="text-[13px] font-bold text-gray-900">시간표 자동 작성</span>
+                <span className="text-[13px] font-bold text-gray-900">초등학교 전담 시간표 자동 생성 프로그램</span>
               </div>
               <button
                 onClick={() => setMenuOpen(false)}
