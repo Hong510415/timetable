@@ -30,7 +30,7 @@ shutil.copy(os.path.join(ROOT, '_devguide.pdf'), os.path.join(OUT, '3_개발자_
 # 4) 소스코드 스냅샷 (비밀정보·빌드산출물 제외)
 src_out = os.path.join(OUT, '4_소스코드')
 EXCLUDE_DIRS = {'node_modules', '.git', 'dist-offline', '.vercel', '전담시간표_프로그램_이양',
-                '.vite', 'coverage'}
+                '.vite', 'coverage', 'submission'}  # submission: 개인정보 담긴 옛 제출본 제외
 EXCLUDE_FILES = {'.env.local', '_devguide.pdf'}
 def ignore(dirpath, names):
     ig = set()
@@ -43,7 +43,7 @@ shutil.copytree(ROOT, src_out, ignore=ignore)
 # 최상위 안내문
 with open(os.path.join(OUT, '0_먼저_읽어주세요.txt'), 'w', encoding='utf-8') as f:
     f.write('초등학교 전담 시간표 자동 생성 프로그램 — 인수인계 폴더\n')
-    f.write('작성: 처인초등학교 홍기현 / 2026-07 (학기제 반영)\n\n')
+    f.write('문서 버전 2026-07 (학기제 반영)\n\n')
     f.write('[구성]\n')
     f.write(' 1_프로그램_실행(오프라인) : index.html 더블클릭으로 바로 실행\n')
     f.write(' 2_사용자_매뉴얼.pdf        : 일반 사용자용 사용법\n')

@@ -28,7 +28,7 @@ def b(items):
 s = []
 s.append(Paragraph("초등학교 전담 시간표 자동 생성 프로그램", title_style))
 s.append(Paragraph("개발자 인수인계 안내서", h1))
-s.append(Paragraph("작성: 처인초등학교 홍기현 · 문서 버전 2026-07 (학기제 반영)", cap))
+s.append(Paragraph("문서 버전 2026-07 (학기제 반영)", cap))
 s.append(Spacer(1, 0.3*cm))
 s.append(Paragraph("이 문서는 프로그램을 이어받아 유지·보수·배포할 개발자를 위한 기술 안내입니다. "
                    "일반 사용자는 함께 제공된 ‘사용자 매뉴얼(PDF)’과 프로그램 안의 각 탭 ‘매뉴얼’ 버튼을 참고하세요.", body))
